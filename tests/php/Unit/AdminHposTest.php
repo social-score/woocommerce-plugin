@@ -18,6 +18,16 @@ class AdminHposTest extends TestCase {
 		$this->assertSame( 'shop_order', Check_Panels::order_screen_id() );
 	}
 
+	/**
+	 * @runInSeparateProcess
+	 * @preserveGlobalState disabled
+	 */
+	public function test_order_screen_id_under_hpos_without_the_admin_function() {
+		OrderUtil::$hpos = true;
+		$this->assertSame( 'woocommerce_page_wc-orders', Check_Panels::order_screen_id() );
+		OrderUtil::$hpos = false;
+	}
+
 	public function test_meta_box_registered_on_the_right_screen() {
 		Functions\when( 'wc_get_page_screen_id' )->alias( fn( $t ) => 'woocommerce_page_wc-orders' );
 		$screens = array();

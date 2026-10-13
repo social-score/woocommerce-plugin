@@ -106,7 +106,7 @@ namespace {
 				'id' => 1, 'customer_id' => 0, 'billing_email' => '', 'billing_phone' => '', 'billing_first_name' => '',
 				'billing_last_name' => '', 'billing_city' => '', 'billing_postcode' => '', 'billing_country' => '',
 				'shipping_city' => '', 'shipping_postcode' => '', 'shipping_country' => '', 'total' => 0, 'currency' => 'EUR',
-				'created' => 1700000000, 'items' => array(),
+				'created' => 1700000000, 'items' => array(), 'status' => 'processing',
 			);
 		}
 		public function __call( $name, $args ) {

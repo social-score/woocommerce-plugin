@@ -105,6 +105,10 @@ class Sync {
 	 * @return void
 	 */
 	public function queue_customer( $user_id ) {
+		$user = get_userdata( (int) $user_id );
+		if ( ! $user || ! in_array( 'customer', (array) $user->roles, true ) ) {
+			return; // Admins and shop managers are not customers.
+		}
 		self::queue_unique( self::HOOK_CUSTOMER, array( (int) $user_id, false, 0 ) );
 	}
 
@@ -199,7 +203,7 @@ class Sync {
 			return;
 		}
 		$order = wc_get_order( (int) $order_id );
-		if ( ! $order || ! ( $order instanceof \WC_Order ) ) {
+		if ( ! $order || ! ( $order instanceof \WC_Order ) || in_array( $order->get_status(), array( 'auto-draft', 'checkout-draft', 'trash' ), true ) ) {
 			return;
 		}
 

@@ -4,3 +4,4 @@
 /.phpunit.result.cache
 /.wp-env/
 *.zip
+/dist/

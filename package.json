@@ -9,7 +9,8 @@
 		"start": "wp-scripts start",
 		"test": "wp-scripts test-unit-js --config jest.config.js",
 		"typecheck": "tsc --noEmit",
-		"gen:messages": "node scripts/gen-messages.mjs node_modules/@socialscore/plugin-core/dist/messages.d.ts includes/class-messages.php"
+		"gen:messages": "node scripts/gen-messages.mjs node_modules/@socialscore/plugin-core/dist/messages.d.ts includes/class-messages.php",
+		"dist": "npm run build && node scripts/dist.mjs"
 	},
 	"dependencies": {
 		"@socialscore/plugin-core": "file:vendor-js/socialscore-plugin-core-0.1.0.tgz",

@@ -41,9 +41,9 @@ class Check_Panels {
 	 */
 	public static function order_screen_id() {
 		if ( class_exists( '\Automattic\WooCommerce\Utilities\OrderUtil' )
-			&& \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled()
-			&& function_exists( 'wc_get_page_screen_id' ) ) {
-			return wc_get_page_screen_id( 'shop-order' );
+			&& \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled() ) {
+			// wc_get_page_screen_id() is only loaded in wp-admin; the literal is what it returns for orders.
+			return function_exists( 'wc_get_page_screen_id' ) ? wc_get_page_screen_id( 'shop-order' ) : 'woocommerce_page_wc-orders';
 		}
 		return 'shop_order';
 	}

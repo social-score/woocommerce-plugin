@@ -90,6 +90,24 @@ class SyncTest extends TestCase {
 		$this->assertTrue( true );
 	}
 
+	public function test_profile_update_queues_customers_only() {
+		$this->connect_store();
+		Functions\when( 'as_has_scheduled_action' )->justReturn( false );
+		Functions\when( 'get_userdata' )->alias( fn( $id ) => (object) array( 'roles' => 1 === $id ? array( 'administrator' ) : array( 'customer' ) ) );
+		Functions\expect( 'as_enqueue_async_action' )->once()->with( 'socialscore_sync_customer', array( 2, false, 0 ), 'socialscore' );
+		$sync = new Sync();
+		$sync->queue_customer( 1 );
+		$sync->queue_customer( 2 );
+		$this->assertTrue( true );
+	}
+
+	public function test_draft_orders_are_not_synced() {
+		$this->connect_store();
+		Functions\when( 'wc_get_order' )->justReturn( new \WC_Order( array( 'status' => 'checkout-draft' ) ) );
+		( new Sync() )->handle_order( 5 );
+		$this->assertSame( array(), $this->http );
+	}
+
 	public function test_hooks_registered() {
 		\Brain\Monkey\Actions\expectAdded( 'woocommerce_new_order' )->once();
 		\Brain\Monkey\Actions\expectAdded( 'woocommerce_update_order' )->once();

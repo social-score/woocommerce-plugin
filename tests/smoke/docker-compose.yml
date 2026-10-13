@@ -1,0 +1,74 @@
+# WordPress + WooCommerce smoke: activates the plugin with WP_DEBUG on and runs the connect/sync/check flow
+# against a mock SocialScore API. Run from the repo root after `npm run dist` (the release layout is what runs):
+#   docker compose -f tests/smoke/docker-compose.yml run --rm smoke; docker compose -f tests/smoke/docker-compose.yml down -v
+name: socialscore-smoke
+x-wp-env: &wp-env
+  WORDPRESS_DB_HOST: db
+  WORDPRESS_DB_USER: wp
+  WORDPRESS_DB_PASSWORD: wp
+  WORDPRESS_DB_NAME: wp
+  WORDPRESS_DEBUG: "1"
+  WORDPRESS_CONFIG_EXTRA: |
+    define( 'WP_DEBUG_DISPLAY', false );
+    define( 'WP_DEBUG_LOG', '/shared/debug.log' );
+    define( 'SOCIALSCORE_API_BASE', 'http://mockapi:8099' );
+services:
+  init:
+    image: busybox:1.36
+    command: chmod 777 /shared
+    volumes:
+      - shared:/shared
+  db:
+    image: mariadb:10.11
+    environment:
+      MARIADB_DATABASE: wp
+      MARIADB_USER: wp
+      MARIADB_PASSWORD: wp
+      MARIADB_ROOT_PASSWORD: root
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 3s
+      retries: 30
+  mockapi:
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    image: php:8.2-cli
+    command: php -S 0.0.0.0:8099 /smoke/mock-api.php
+    volumes:
+      - ./:/smoke:ro
+      - shared:/shared
+  wordpress:
+    image: wordpress:php8.2-apache
+    depends_on:
+      db:
+        condition: service_healthy
+      init:
+        condition: service_completed_successfully
+    environment: *wp-env
+    volumes:
+      - wp:/var/www/html
+      - ../../dist/socialscore:/var/www/html/wp-content/plugins/socialscore:ro
+      - shared:/shared
+  smoke:
+    image: wordpress:cli-php8.2
+    user: "33:33"
+    depends_on:
+      db:
+        condition: service_healthy
+      wordpress:
+        condition: service_started
+      mockapi:
+        condition: service_started
+    environment:
+      <<: *wp-env
+      WP_CLI_CACHE_DIR: /tmp/wpcli-cache
+    volumes:
+      - wp:/var/www/html
+      - ../../dist/socialscore:/var/www/html/wp-content/plugins/socialscore:ro
+      - ./:/smoke:ro
+      - shared:/shared
+    entrypoint: ["sh", "/smoke/run.sh"]
+volumes:
+  wp:
+  shared:
