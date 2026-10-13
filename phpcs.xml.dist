@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<ruleset name="SocialScore">
+	<description>WordPress-Extra and PHP compatibility for SocialScore for WooCommerce.</description>
+	<file>socialscore.php</file>
+	<file>uninstall.php</file>
+	<file>includes</file>
+	<arg name="extensions" value="php"/>
+	<arg value="ps"/>
+	<arg name="colors"/>
+
+	<rule ref="WordPress-Extra"/>
+	<rule ref="PHPCompatibilityWP"/>
+	<config name="testVersion" value="7.4-"/>
+	<config name="minimum_wp_version" value="6.4"/>
+
+	<rule ref="WordPress.WP.I18n">
+		<properties>
+			<property name="text_domain" type="array">
+				<element value="socialscore"/>
+			</property>
+		</properties>
+	</rule>
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+		<properties>
+			<property name="prefixes" type="array">
+				<element value="socialscore"/>
+				<element value="SocialScore"/>
+				<element value="SOCIALSCORE"/>
+			</property>
+		</properties>
+	</rule>
+</ruleset>

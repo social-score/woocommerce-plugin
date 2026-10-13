@@ -1,0 +1,169 @@
+<?php
+namespace SocialScore\Tests\Unit;
+
+use Brain\Monkey\Functions;
+use SocialScore\Sync;
+use SocialScore\Tests\TestCase;
+
+class SyncTest extends TestCase {
+
+	private function ok() {
+		return array( 'status' => 200, 'data' => null, 'retry_after' => null );
+	}
+
+	public function test_push_in_batches_chunks_at_500() {
+		$sizes = array();
+		$rows  = array_map( fn( $i ) => array( 'external_id' => (string) $i ), range( 1, 1201 ) );
+		$res   = Sync::push_in_batches(
+			function ( $chunk ) use ( &$sizes ) {
+				$sizes[] = count( $chunk );
+				return $this->ok();
+			},
+			$rows
+		);
+		$this->assertSame( array( 500, 500, 201 ), $sizes );
+		$this->assertSame( 200, $res['status'] );
+	}
+
+	public function test_push_in_batches_stops_at_first_failure_and_handles_empty() {
+		$calls = 0;
+		$res   = Sync::push_in_batches(
+			function () use ( &$calls ) {
+				++$calls;
+				return array( 'status' => 500, 'data' => null, 'retry_after' => null );
+			},
+			array_fill( 0, 900, array( 'x' => 1 ) )
+		);
+		$this->assertSame( 1, $calls );
+		$this->assertSame( 500, $res['status'] );
+		$this->assertNull( Sync::push_in_batches( fn() => $this->ok(), array() ) );
+	}
+
+	public function test_retry_delay_backoff_429_and_give_up() {
+		$err429 = array( 'status' => 429, 'data' => null, 'retry_after' => 900 );
+		$this->assertSame( 900, Sync::retry_delay( $err429, 0 ), '429 honours Retry-After when longer than the backoff' );
+		$this->assertSame( 300, Sync::retry_delay( array( 'status' => 429, 'data' => null, 'retry_after' => 1 ), 1 ) );
+		$this->assertSame( 60, Sync::retry_delay( array( 'status' => 503, 'data' => null, 'retry_after' => null ), 0 ) );
+		$this->assertSame( 1800, Sync::retry_delay( new \WP_Error( 'x', 'down' ), 2 ) );
+		$this->assertNull( Sync::retry_delay( array( 'status' => 400, 'data' => null, 'retry_after' => null ), 0 ) );
+		$this->assertNull( Sync::retry_delay( array( 'status' => 402, 'data' => null, 'retry_after' => null ), 0 ) );
+		$this->assertNull( Sync::retry_delay( array( 'status' => 503, 'data' => null, 'retry_after' => null ), Sync::MAX_ATTEMPTS - 1 ) );
+	}
+
+	public function test_settle_reschedules_with_attempt_counter() {
+		Functions\expect( 'as_schedule_single_action' )->once()->andReturnUsing(
+			function ( $ts, $hook, $args, $group ) {
+				$this->assertEqualsWithDelta( time() + 60, $ts, 2 );
+				$this->assertSame( 'socialscore_sync_order', $hook );
+				$this->assertSame( array( 77, 1 ), $args );
+				$this->assertSame( 'socialscore', $group );
+			}
+		);
+		$this->assertFalse( Sync::settle( array( 'status' => 500, 'data' => null, 'retry_after' => null ), 'socialscore_sync_order', array( 77 ), 0 ) );
+		$this->assertTrue( Sync::settle( $this->ok(), 'socialscore_sync_order', array( 77 ), 0 ) );
+	}
+
+	public function test_settle_does_not_reschedule_client_errors() {
+		Functions\expect( 'as_schedule_single_action' )->never();
+		Functions\when( 'wc_get_logger' )->justReturn( new class { public function warning() {} } );
+		$this->assertFalse( Sync::settle( array( 'status' => 422, 'data' => null, 'retry_after' => null ), 'h', array( 1 ), 0 ) );
+	}
+
+	public function test_queue_skips_when_not_connected_paused_or_already_queued() {
+		Functions\expect( 'as_enqueue_async_action' )->never();
+		Sync::queue_unique( 'socialscore_sync_order', array( 1, 0 ) ); // Not connected.
+
+		$this->connect_store();
+		Sync::pause();
+		Sync::queue_unique( 'socialscore_sync_order', array( 1, 0 ) );
+		Sync::resume();
+		Functions\when( 'as_has_scheduled_action' )->justReturn( true );
+		Sync::queue_unique( 'socialscore_sync_order', array( 1, 0 ) );
+		$this->assertTrue( true );
+	}
+
+	public function test_queue_enqueues_async_in_group_when_connected() {
+		$this->connect_store();
+		Functions\when( 'as_has_scheduled_action' )->justReturn( false );
+		Functions\expect( 'as_enqueue_async_action' )->once()->with( 'socialscore_sync_order', array( 5, 0 ), 'socialscore' );
+		( new Sync() )->queue_order( 5 );
+		$this->assertTrue( true );
+	}
+
+	public function test_hooks_registered() {
+		\Brain\Monkey\Actions\expectAdded( 'woocommerce_new_order' )->once();
+		\Brain\Monkey\Actions\expectAdded( 'woocommerce_update_order' )->once();
+		\Brain\Monkey\Actions\expectAdded( 'woocommerce_created_customer' )->once();
+		\Brain\Monkey\Actions\expectAdded( 'profile_update' )->once();
+		\Brain\Monkey\Actions\expectAdded( 'socialscore_sync_order' )->once();
+		\Brain\Monkey\Actions\expectAdded( 'socialscore_sync_customer' )->once();
+		\Brain\Monkey\Actions\expectAdded( 'socialscore_import' )->once();
+		( new Sync() )->register();
+		$this->assertTrue( true );
+	}
+
+	public function test_order_sync_pushes_customer_then_order_and_enriches() {
+		$this->connect_store();
+		$order = new \WC_Order( array( 'id' => 9, 'billing_email' => 'a@b.bg', 'total' => 10, 'created' => time() ) );
+		Functions\when( 'wc_get_order' )->justReturn( $order );
+		$this->http_responder = fn() => self::response( 200, array() );
+		( new Sync() )->handle_order( 9 );
+		$this->assertStringEndsWith( '/stores/42/customers:batch', $this->http[0]['url'] );
+		$this->assertStringEndsWith( '/stores/42/orders:batch', $this->http[1]['url'] );
+		$this->assertSame( 'sk_test_secret_key', $this->http[1]['args']['headers']['X-API-KEY'] );
+		$this->assertSame( '9', json_decode( $this->http[1]['args']['body'], true )['orders'][0]['external_id'] );
+	}
+
+	public function test_order_sync_429_schedules_retry_without_checking() {
+		$this->connect_store();
+		$order = new \WC_Order( array( 'id' => 9, 'billing_email' => 'a@b.bg', 'created' => time() ) );
+		Functions\when( 'wc_get_order' )->justReturn( $order );
+		$this->http_responder = fn() => self::response( 429, '', array( 'retry-after' => '600' ) );
+		Functions\expect( 'as_schedule_single_action' )->once()->andReturnUsing(
+			function ( $ts, $hook, $args ) {
+				$this->assertEqualsWithDelta( time() + 600, $ts, 2 );
+				$this->assertSame( array( 9, 1 ), $args );
+			}
+		);
+		( new Sync() )->handle_order( 9 );
+		$this->assertCount( 1, $this->http, 'orders are not pushed after the customer batch was refused' );
+	}
+
+	/**
+	 * Import paging: full page continues, short customers page moves to orders, short orders page finishes.
+	 */
+	public function test_import_page_transitions() {
+		$this->connect_store();
+		$this->http_responder = fn() => self::response( 200, array() );
+		$enqueued = array();
+		Functions\when( 'as_enqueue_async_action' )->alias( function ( $hook, $args ) use ( &$enqueued ) { $enqueued[] = $args; } );
+		Functions\when( 'get_users' )->alias(
+			function ( $a ) {
+				$GLOBALS['ss_customers'] = array();
+				$ids = $a['paged'] < 2 ? range( 1, 500 ) : array( 501, 502 );
+				foreach ( $ids as $id ) {
+					$GLOBALS['ss_customers'][ $id ] = array( 'id' => $id, 'email' => "u$id@x.bg" );
+				}
+				return $ids;
+			}
+		);
+		$sync = new Sync();
+		$sync->handle_import( 'customers', 1, 0 );
+		$sync->handle_import( 'customers', 2, 0 );
+		$this->assertSame( array( array( 'customers', 2, 0 ), array( 'orders', 1, 0 ) ), $enqueued );
+		$this->assertSame( 502, $this->options['socialscore_sync_state']['customers'] );
+		$this->assertSame( 'no', $this->autoload['socialscore_sync_state'] );
+
+		Functions\when( 'wc_get_orders' )->justReturn( array( new \WC_Order( array( 'id' => 5, 'billing_email' => 'o@x.bg' ) ) ) );
+		$sync->handle_import( 'orders', 1, 0 );
+		$this->assertSame( 'done', $this->options['socialscore_sync_state']['status'] );
+		$this->assertSame( 1, $this->options['socialscore_sync_state']['orders'] );
+		$this->assertCount( 2, $enqueued, 'finished: nothing more queued' );
+	}
+
+	public function test_unschedule_all_uses_group() {
+		Functions\expect( 'as_unschedule_all_actions' )->once()->with( '', array(), 'socialscore' );
+		Sync::unschedule_all();
+		$this->assertTrue( true );
+	}
+}
