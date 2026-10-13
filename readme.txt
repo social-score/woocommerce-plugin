@@ -56,6 +56,8 @@ No. The first request to SocialScore happens after you press Connect.
 
 The admin screens are built with `@wordpress/scripts`. The readable source is in `src/js` in the plugin folder. The shared interface packages (`@socialscore/ui`, `@socialscore/plugin-core`) are included unpacked in the `vendor-js` folder of the plugin; the original TypeScript source of each is embedded in its source map (`dist/index.js.map`, field `sourcesContent`). To rebuild, run `npm ci && npm run build` in the plugin folder.
 
+React and ReactDOM are not part of the plugin: the screens use the copies WordPress ships (script handles `react` and `react-dom`, listed in `build/*.asset.php`). WordPress 6.4 (React 18.2) is enough; the shared packages need React 18.2 or newer. `react/jsx-runtime`, which WordPress registers only from 6.6, is provided by the small shim `src/js/jsx-runtime-shim.ts` on top of WordPress's `react`.
+
 = Which permission do I need? =
 
 The `manage_woocommerce` capability (Shop manager and Administrator).
