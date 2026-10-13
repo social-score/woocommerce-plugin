@@ -16,7 +16,8 @@ export interface HostConfig {
 export function proxyUrl(restUrl: string, path: string): string {
 	const clean = path.startsWith('/') ? path : `/${path}`;
 	if (restUrl.includes('?')) {
-		return restUrl + encodeURI(clean).replace('?', '&');
+		// plugin-core already encodes the id segments; WordPress decodes `rest_route` once.
+		return restUrl + clean.replace('?', '&');
 	}
 	return restUrl.replace(/\/$/, '') + clean;
 }

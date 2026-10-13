@@ -21,7 +21,7 @@ class ConnectTest extends TestCase {
 		parse_str( $parts['query'], $q );
 		$this->assertSame( 'https://api.socialscore.io/api/v2/stores/connect', $parts['scheme'] . '://' . $parts['host'] . $parts['path'] );
 		$this->assertSame( 'woocommerce', $q['platform'] );
-		$this->assertSame( 'https://shop.test', $q['shop'] );
+		$this->assertSame( 'shop.test', $q['shop'], 'the bare domain, not a URL' );
 		$this->assertSame( 'https://shop.test/wp-admin/admin-post.php?action=socialscore_connect_callback', $q['redirect_uri'] );
 		$this->assertSame( 'S256', $q['code_challenge_method'] );
 		$this->assertGreaterThanOrEqual( 32, strlen( $q['state'] ) );
@@ -76,6 +76,8 @@ class ConnectTest extends TestCase {
 		$this->assertCount( 1, $this->http );
 		$this->assertSame( 'https://api.socialscore.io/api/v2/stores/token', $this->http[0]['url'] );
 		$body = json_decode( $this->http[0]['args']['body'], true );
+		$this->assertEqualsCanonicalizing( array( 'grant_type', 'code', 'code_verifier' ), array_keys( $body ), 'only the fields the API accepts' );
+		$this->assertSame( 'authorization_code', $body['grant_type'] );
 		$this->assertSame( 'the-code', $body['code'] );
 		$this->assertSame( $verifier, $body['code_verifier'] );
 		$this->assertArrayNotHasKey( 'X-API-KEY', $this->http[0]['args']['headers'] );

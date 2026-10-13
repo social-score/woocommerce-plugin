@@ -36,3 +36,14 @@ ss_assert( 200 === wp_remote_retrieve_response_code( $yes ) && false === strpos(
 $key_leak = array_filter( array_keys( wp_remote_retrieve_headers( $yes )->getAll() ), fn( $h ) => false !== stripos( $h, 'api-key' ) );
 ss_assert( array() === $key_leak, 'no key header in the proxy response' );
 
+
+// An encoded guest id must pass the allow-list on plain and pretty permalinks (the mock API answers 404 for the profile itself).
+$guest = rawurlencode( 'guest-' . sha1( 'a@b.bg' ) );
+foreach ( array(
+	'plain'  => 'http://wordpress/?rest_route=/socialscore/v1/proxy/api/v2/stores/st_1/customers/' . $guest . '/profile',
+	'pretty' => 'http://wordpress/wp-json/socialscore/v1/proxy/api/v2/stores/st_1/customers/' . rawurlencode( 'guest:abc' ) . '/profile',
+) as $label => $guest_url ) {
+	$res  = wp_remote_get( $guest_url, array( 'cookies' => $cookies, 'timeout' => 60, 'headers' => array( 'X-WP-Nonce' => $nonce ) ) );
+	$code = is_wp_error( $res ) ? $res->get_error_message() : wp_remote_retrieve_response_code( $res );
+	ss_assert( ! is_wp_error( $res ) && false === strpos( wp_remote_retrieve_body( $res ), 'socialscore_path_not_allowed' ) && false !== strpos( wp_remote_retrieve_body( $res ), 'not_found' ), "encoded guest id is forwarded to the API ($label permalinks, HTTP $code)" );
+}

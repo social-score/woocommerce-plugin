@@ -84,19 +84,18 @@ class Api_Client {
 	/**
 	 * Exchanges the connect code for a store key (PKCE).
 	 *
-	 * @param string $code         Authorization code.
-	 * @param string $verifier     PKCE code verifier.
-	 * @param string $redirect_uri The redirect URI used to start the flow.
+	 * @param string $code     Authorization code.
+	 * @param string $verifier PKCE code verifier.
 	 * @return array|\WP_Error
 	 */
-	public function exchange_token( $code, $verifier, $redirect_uri ) {
+	public function exchange_token( $code, $verifier ) {
 		return $this->send(
 			'POST',
 			'/api/v2/stores/token',
 			array(
+				'grant_type'    => 'authorization_code',
 				'code'          => $code,
 				'code_verifier' => $verifier,
-				'redirect_uri'  => $redirect_uri,
 			)
 		);
 	}

@@ -13,8 +13,8 @@
 		"dist": "npm run build && node scripts/dist.mjs"
 	},
 	"dependencies": {
-		"@socialscore/plugin-core": "file:vendor-js/socialscore-plugin-core-0.1.0.tgz",
-		"@socialscore/ui": "file:vendor-js/socialscore-ui-0.1.0.tgz",
+		"@socialscore/plugin-core": "file:vendor-js/socialscore-plugin-core",
+		"@socialscore/ui": "file:vendor-js/socialscore-ui",
 		"react": "18.3.1",
 		"react-dom": "18.3.1"
 	},

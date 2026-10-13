@@ -80,7 +80,7 @@ class Connect {
 		return add_query_arg(
 			array(
 				'platform'              => Config::PLATFORM,
-				'shop'                  => home_url(),
+				'shop'                  => (string) wp_parse_url( home_url(), PHP_URL_HOST ),
 				'redirect_uri'          => self::redirect_uri(),
 				'state'                 => $state,
 				'code_challenge'        => $challenge,
@@ -173,7 +173,7 @@ class Connect {
 		}
 
 		$client   = new Api_Client();
-		$response = $client->exchange_token( $code, $pending['verifier'], self::redirect_uri() );
+		$response = $client->exchange_token( $code, $pending['verifier'] );
 		if ( is_wp_error( $response ) || $response['status'] < 200 || $response['status'] > 299 ) {
 			return 'exchange';
 		}

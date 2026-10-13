@@ -172,8 +172,17 @@ class SyncTest extends TestCase {
 		$this->assertSame( 502, $this->options['socialscore_sync_state']['customers'] );
 		$this->assertSame( 'no', $this->autoload['socialscore_sync_state'] );
 
-		Functions\when( 'wc_get_orders' )->justReturn( array( new \WC_Order( array( 'id' => 5, 'billing_email' => 'o@x.bg' ) ) ) );
+		$order_args = null;
+		Functions\when( 'wc_get_order_statuses' )->justReturn( array( 'wc-pending' => 'Pending', 'wc-processing' => 'Processing', 'wc-completed' => 'Completed', 'wc-checkout-draft' => 'Draft' ) );
+		Functions\when( 'wc_get_orders' )->alias(
+			function ( $args ) use ( &$order_args ) {
+				$order_args = $args;
+				return array( new \WC_Order( array( 'id' => 5, 'billing_email' => 'o@x.bg' ) ) );
+			}
+		);
 		$sync->handle_import( 'orders', 1, 0 );
+		$this->assertSame( array( 'wc-pending', 'wc-processing', 'wc-completed' ), $order_args['status'] );
+		$this->assertNotContains( 'checkout-draft', $order_args['status'], 'drafts are never imported' );
 		$this->assertSame( 'done', $this->options['socialscore_sync_state']['status'] );
 		$this->assertSame( 1, $this->options['socialscore_sync_state']['orders'] );
 		$this->assertCount( 2, $enqueued, 'finished: nothing more queued' );

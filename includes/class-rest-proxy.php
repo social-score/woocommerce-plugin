@@ -119,7 +119,8 @@ class Rest_Proxy {
 		}
 
 		$method = strtoupper( $request->get_method() );
-		$path   = '/' . ltrim( (string) $request['path'], '/' );
+		// WordPress hands over the path as sent: an id like guest%3Aabc arrives still encoded.
+		$path = '/' . ltrim( rawurldecode( (string) $request['path'] ), '/' );
 		if ( ! self::is_allowed( $method, $path, Connection::store_id() ) ) {
 			return $this->error( 'socialscore_path_not_allowed', __( 'This request is not allowed.', 'socialscore' ), 403 );
 		}

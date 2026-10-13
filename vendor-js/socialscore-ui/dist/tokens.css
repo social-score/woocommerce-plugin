@@ -1,0 +1,212 @@
+/*
+ * SocialScore design tokens: the single source of truth for colour, type, spacing,
+ * radii, shadows, z-index and breakpoints. Plain CSS custom properties, all prefixed
+ * `--ss-`, so they can live next to a host page's own variables (WordPress admin,
+ * Shopify admin) without clashing. This file sets variables only: no element
+ * selectors, no reset.
+ *
+ * Two levels:
+ *   1. Base palette (`--ss-color-<hue>-<shade>`): raw values, taken from the 2023
+ *      design (the old ThemeColor enum and the BRD mockups), de-duplicated.
+ *   2. Semantic tokens (`--ss-color-<role>`): what a colour is for. Components and
+ *      pages use these; data-viz series may use the palette directly.
+ *
+ * Text tokens meet WCAG 2.1 AA (4.5:1) on the surfaces they are meant for; the
+ * pairs are listed and checked in src/contrast.test.ts (`npm run contrast -w @socialscore/ui`).
+ */
+:root {
+  /* ---- Base palette ---------------------------------------------------- */
+  --ss-color-white: #ffffff;
+  --ss-color-black: #000000;
+
+  --ss-color-gray-50: #f8f8f8;
+  --ss-color-gray-100: #f1f1f1;
+  --ss-color-gray-200: #e0e0e0;
+  --ss-color-gray-300: #d4d4d4;
+  --ss-color-gray-400: #bbbbbb;
+  /* Added for AA: placeholder text (was #9ca3af, 2.5:1 on white). Dark enough for
+     4.5:1 on gray-100 too, where an input can sit on a muted panel. */
+  --ss-color-gray-500: #686e79;
+
+  /* Quiet text and icons on the navy surfaces (side navigation arrow). */
+  --ss-color-navy-200: #c6c7d1;
+  --ss-color-navy-500: #595b7a;
+  --ss-color-navy-700: #414367;
+  --ss-color-navy-900: #111441;
+
+  --ss-color-blue-50: #e6f6ff;
+  --ss-color-blue-100: #dbf0ff;
+  /* Brand blue. 3.0:1 on white: fine for icons, borders, bars; too light for text. */
+  --ss-color-blue-500: #0d99ff;
+  /* Added for AA: blue-500 with OKLCH lightness lowered until white text and
+     link text on gray-100 reach 4.5:1. */
+  --ss-color-blue-700: #0271c0;
+  --ss-color-blue-800: #0061af;
+
+  --ss-color-violet-200: #cfbefb;
+  --ss-color-violet-300: #a794e2;
+  --ss-color-violet-400: #9780f5;
+  --ss-color-violet-500: #836ee1;
+  /* Added for AA: violet-400 darkened for text (links, required marks). */
+  --ss-color-violet-600: #755bcc;
+  --ss-color-violet-700: #63549c;
+
+  --ss-color-teal-200: #89dbdb;
+  /* The old enum had #2bc8c9 and #2bc7c8 under two names; merged into one. */
+  --ss-color-teal-400: #2bc7c8;
+  --ss-color-teal-700: #298181;
+
+  --ss-color-sage-300: #99bfbe;
+  --ss-color-sage-500: #77aaa9;
+
+  --ss-color-red-500: #fe504f;
+  /* Added for AA: error text. */
+  --ss-color-red-600: #d5222d;
+
+  --ss-color-orange-400: #ff9841;
+  /* Added for AA: warning text. */
+  --ss-color-orange-700: #a95900;
+
+  /* ---- Semantic: surfaces --------------------------------------------- */
+  --ss-color-surface-page: var(--ss-color-gray-100);
+  --ss-color-surface: var(--ss-color-white);
+  --ss-color-surface-subtle: var(--ss-color-gray-50);
+  --ss-color-surface-muted: var(--ss-color-gray-100);
+  --ss-color-surface-strong: var(--ss-color-gray-300);
+  --ss-color-surface-emphasis: var(--ss-color-gray-400);
+  --ss-color-surface-inverse: var(--ss-color-navy-900);
+  --ss-color-surface-inverse-subtle: var(--ss-color-navy-700);
+
+  /* ---- Semantic: accent and actions ------------------------------------ */
+  /* Accent: decoration (icons, borders, bars). Action: filled controls with text. */
+  --ss-color-accent: var(--ss-color-blue-500);
+  --ss-color-accent-subtle: var(--ss-color-blue-100);
+  --ss-color-accent-faint: var(--ss-color-blue-50);
+  --ss-color-action: var(--ss-color-blue-700);
+  --ss-color-action-hover: var(--ss-color-blue-800);
+  --ss-color-disabled: var(--ss-color-gray-400);
+
+  /* ---- Semantic: text --------------------------------------------------- */
+  --ss-color-text-primary: var(--ss-color-navy-900);
+  --ss-color-text-secondary: var(--ss-color-navy-700);
+  --ss-color-text-muted: var(--ss-color-navy-500);
+  --ss-color-text-inverse: var(--ss-color-white);
+  --ss-color-text-inverse-muted: var(--ss-color-navy-200);
+  --ss-color-text-on-action: var(--ss-color-white);
+  --ss-color-text-link: var(--ss-color-blue-700);
+  --ss-color-text-highlight: var(--ss-color-violet-600);
+  --ss-color-text-placeholder: var(--ss-color-gray-500);
+
+  /* ---- Semantic: borders ------------------------------------------------ */
+  --ss-color-border: var(--ss-color-gray-200);
+  --ss-color-border-control: var(--ss-color-gray-300);
+  --ss-color-border-strong: var(--ss-color-gray-400);
+  --ss-color-border-selected: var(--ss-color-navy-900);
+  --ss-color-border-inverse: var(--ss-color-white);
+  --ss-color-border-accent: var(--ss-color-blue-500);
+  --ss-color-border-highlight: var(--ss-color-violet-400);
+
+  /* ---- Semantic: status (fill for bars/dots/borders, -text for words) --- */
+  --ss-color-success: var(--ss-color-teal-400);
+  --ss-color-success-text: var(--ss-color-teal-700);
+  --ss-color-warning: var(--ss-color-orange-400);
+  --ss-color-warning-text: var(--ss-color-orange-700);
+  --ss-color-error: var(--ss-color-red-500);
+  --ss-color-error-text: var(--ss-color-red-600);
+
+  /* ---- Semantic: signal levels Strong / Medium / Weak (BRD 7.1) --------- */
+  /* Same order the score bars already use: violet high, orange middle, red low. */
+  --ss-color-level-strong: var(--ss-color-violet-400);
+  --ss-color-level-strong-text: var(--ss-color-violet-600);
+  --ss-color-level-medium: var(--ss-color-orange-400);
+  --ss-color-level-medium-text: var(--ss-color-orange-700);
+  --ss-color-level-weak: var(--ss-color-red-500);
+  --ss-color-level-weak-text: var(--ss-color-red-600);
+
+  /* ---- Semantic: locked section (content gated by plan) ----------------- */
+  /* No mockup exists yet; built from existing values, to be confirmed by design. */
+  --ss-color-locked-surface: var(--ss-color-gray-50);
+  --ss-color-locked-border: var(--ss-color-gray-300);
+  --ss-color-locked-text: var(--ss-color-navy-500);
+  --ss-color-locked-overlay: rgb(17 20 65 / 0.7);
+
+  /* ---- Focus ------------------------------------------------------------ */
+  /* 3:1 or better against white, gray-100 and navy-900 (WCAG 1.4.11). */
+  --ss-color-focus-ring: var(--ss-color-blue-700);
+  --ss-focus-ring-width: 2px;
+  --ss-focus-ring-offset: 2px;
+
+  /* ---- Typography -------------------------------------------------------- */
+  --ss-font-sans: Inter, sans-serif;
+
+  /* Named by role, smallest first. Values are the 2023 design's sizes. */
+  --ss-font-size-micro: 0.625rem; /* 10px */
+  --ss-font-size-caption: 0.875rem; /* 14px */
+  --ss-font-size-body: 1rem; /* 16px */
+  --ss-font-size-body-lg: 1.125rem; /* 18px */
+  --ss-font-size-subtitle: 1.25rem; /* 20px */
+  --ss-font-size-title-sm: 1.3rem; /* 20.8px, h5 */
+  --ss-font-size-title: 1.5rem; /* 24px */
+  --ss-font-size-title-lg: 1.75rem; /* 28px */
+  --ss-font-size-display-sm: 2rem; /* 32px */
+  --ss-font-size-display: 2.25rem; /* 36px, h1 */
+  --ss-font-size-display-lg: 2.625rem; /* 42px */
+
+  --ss-font-weight-thin: 100;
+  --ss-font-weight-extralight: 200;
+  --ss-font-weight-light: 300;
+  --ss-font-weight-normal: 400;
+  --ss-font-weight-medium: 500;
+  --ss-font-weight-semibold: 600;
+  --ss-font-weight-bold: 700;
+  --ss-font-weight-extrabold: 800;
+  --ss-font-weight-black: 900;
+
+  /* ---- Spacing ------------------------------------------------------------ */
+  /* One unit; every spacing step is a multiple of it (Tailwind `p-4` = 4 units). */
+  --ss-space-unit: 0.25rem;
+
+  /* ---- Radii -------------------------------------------------------------- */
+  --ss-radius-xs: 0.125rem;
+  --ss-radius-sm: 0.25rem;
+  --ss-radius-md: 0.375rem;
+  --ss-radius-lg: 0.5rem;
+  --ss-radius-xl: 0.75rem;
+  --ss-radius-2xl: 1rem;
+  --ss-radius-3xl: 1.5rem;
+  --ss-radius-4xl: 2rem; /* the rounded corner of the side navigation */
+  --ss-radius-full: 9999px;
+
+  /* ---- Shadows ------------------------------------------------------------ */
+  --ss-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --ss-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  /* Even glow on all sides: tooltips and floating cards. */
+  --ss-shadow-all: 0px 0px 20px rgba(0, 0, 0, 0.15);
+
+  /* ---- Layout sizes -------------------------------------------------------- */
+  /* Fixed widths and heights that carry a design decision. Anything else uses the
+     spacing scale (`w-96`, `max-w-125`); theme.css exposes these as `w-nav`, `max-w-form`. */
+  --ss-size-nav: 18.75rem; /* 300px, side navigation expanded */
+  --ss-size-nav-collapsed: 10rem; /* 160px, side navigation collapsed */
+  --ss-size-form: 25rem; /* 400px, a single-column form */
+  --ss-size-dropzone-tall: 20rem; /* 320px, FileDropzone size="tall" */
+  --ss-size-chart-panel: 39.0625rem; /* 625px, one Compare section with a chart and its table */
+
+  /* ---- Z-index ------------------------------------------------------------ */
+  --ss-z-base: 0;
+  --ss-z-raised: 10;
+  --ss-z-dropdown: 20;
+  --ss-z-sticky: 30;
+  --ss-z-overlay: 40;
+  --ss-z-modal: 50;
+  --ss-z-toast: 60;
+
+  /* ---- Breakpoints (Tailwind defaults) ------------------------------------ */
+  /* For reading from JS only: CSS media queries cannot use custom properties,
+     so theme.css repeats these values as literals. */
+  --ss-breakpoint-sm: 40rem;
+  --ss-breakpoint-md: 48rem;
+  --ss-breakpoint-lg: 64rem;
+  --ss-breakpoint-xl: 80rem;
+  --ss-breakpoint-2xl: 96rem;
+}

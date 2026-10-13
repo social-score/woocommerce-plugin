@@ -55,6 +55,7 @@ abstract class TestCase extends PHPUnitTestCase {
 				'wp_json_encode'        => static function ( $d ) { return json_encode( $d ); },
 				'untrailingslashit'     => static function ( $t ) { return rtrim( $t, '/' ); },
 				'home_url'              => static function () { return 'https://shop.test'; },
+				'wp_parse_url'          => static function ( $url, $component = -1 ) { return parse_url( $url, $component ); },
 				'admin_url'             => static function ( $p = '' ) { return 'https://shop.test/wp-admin/' . $p; },
 				'rest_url'              => static function ( $p = '' ) { return 'https://shop.test/wp-json/' . $p; },
 				'wp_create_nonce'       => static function () { return 'nonce123'; },

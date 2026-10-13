@@ -50,7 +50,7 @@ class RestProxyTest extends TestCase {
 			'estimate'            => array( 'GET', '/api/v2/stores/42/settings/estimate', true ),
 			'overview'            => array( 'GET', '/api/v2/stores/42/overview', true ),
 			'customers list'      => array( 'GET', '/api/v2/stores/42/customers', true ),
-			'customer profile'    => array( 'GET', '/api/v2/stores/42/customers/guest:abc123/profile', true ),
+			'customer profile'    => array( 'GET', '/api/v2/stores/42/customers/guest-abc123/profile', true ),
 			'order profile'       => array( 'GET', '/api/v2/stores/42/orders/1001/profile', true ),
 			'check'               => array( 'POST', '/api/v2/stores/42/checks', true ),
 			'segments'            => array( 'GET', '/api/v2/segments', true ),
@@ -62,6 +62,21 @@ class RestProxyTest extends TestCase {
 			'wrong method'        => array( 'POST', '/api/v2/stores/42/overview', false ),
 			'unknown'             => array( 'GET', '/api/v2/admin/users', false ),
 		);
+	}
+
+	public function test_encoded_guest_id_from_the_browser_is_forwarded_decoded() {
+		$this->connect_store();
+		$this->http_responder = fn() => self::response( 200, array( 'ok' => true ) );
+		$res = ( new Rest_Proxy() )->handle( $this->request( 'GET', '/api/v2/stores/42/customers/guest%3Aabc/profile' ) );
+		$this->assertSame( 200, $res->get_status() );
+		$this->assertStringEndsWith( '/stores/42/customers/guest:abc/profile', $this->http[0]['url'] );
+	}
+
+	public function test_encoded_traversal_is_still_refused() {
+		$this->connect_store();
+		$res = ( new Rest_Proxy() )->handle( $this->request( 'GET', '/api/v2/stores/42/customers/%2e%2e/%2e%2e/keys/profile' ) );
+		$this->assertSame( 403, $res->get_status() );
+		$this->assertSame( array(), $this->http );
 	}
 
 	public function test_not_connected_is_409_and_sends_nothing() {

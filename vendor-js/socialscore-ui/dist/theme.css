@@ -1,0 +1,180 @@
+/*
+ * Tailwind CSS 4 theme for SocialScore. Maps the tokens in tokens.css onto Tailwind's
+ * theme namespaces, so utilities resolve to `var(--ss-…)` and tokens.css stays the
+ * only place values live. Import after `tailwindcss` and tokens.css:
+ *
+ *   @import 'tailwindcss';
+ *   @import '@socialscore/ui/tokens.css';
+ *   @import '@socialscore/ui/theme.css';
+ *
+ * Each `--*-*: initial` drops Tailwind's default scale for that namespace, so a class
+ * outside the tokens (`bg-red-600`, `text-sm`, `rounded-5xl`) generates nothing.
+ *
+ * Utilities this gives:
+ *   bg-<surface|action|…>, text-<primary|link|…>, border-<default|control|…>  semantic
+ *   bg-/text-/fill-/border-<hue>-<shade>                                       palette (data viz)
+ *   text-<micro|caption|body|body-lg|subtitle|title-sm|title|title-lg|display-sm|display|display-lg>
+ */
+@theme inline {
+  /* ---- Palette: bg-violet-400, fill-blue-500, … ---------------------------- */
+  --color-*: initial;
+  /* Reset here, before --text-color-*, so it cannot clear them. */
+  --text-*: initial;
+  --color-white: var(--ss-color-white);
+  --color-black: var(--ss-color-black);
+  --color-gray-50: var(--ss-color-gray-50);
+  --color-gray-100: var(--ss-color-gray-100);
+  --color-gray-200: var(--ss-color-gray-200);
+  --color-gray-300: var(--ss-color-gray-300);
+  --color-gray-400: var(--ss-color-gray-400);
+  --color-gray-500: var(--ss-color-gray-500);
+  --color-navy-200: var(--ss-color-navy-200);
+  --color-navy-500: var(--ss-color-navy-500);
+  --color-navy-700: var(--ss-color-navy-700);
+  --color-navy-900: var(--ss-color-navy-900);
+  --color-blue-50: var(--ss-color-blue-50);
+  --color-blue-100: var(--ss-color-blue-100);
+  --color-blue-500: var(--ss-color-blue-500);
+  --color-blue-700: var(--ss-color-blue-700);
+  --color-blue-800: var(--ss-color-blue-800);
+  --color-violet-200: var(--ss-color-violet-200);
+  --color-violet-300: var(--ss-color-violet-300);
+  --color-violet-400: var(--ss-color-violet-400);
+  --color-violet-500: var(--ss-color-violet-500);
+  --color-violet-600: var(--ss-color-violet-600);
+  --color-violet-700: var(--ss-color-violet-700);
+  --color-teal-200: var(--ss-color-teal-200);
+  --color-teal-400: var(--ss-color-teal-400);
+  --color-teal-700: var(--ss-color-teal-700);
+  --color-sage-300: var(--ss-color-sage-300);
+  --color-sage-500: var(--ss-color-sage-500);
+  --color-red-500: var(--ss-color-red-500);
+  --color-red-600: var(--ss-color-red-600);
+  --color-orange-400: var(--ss-color-orange-400);
+  --color-orange-700: var(--ss-color-orange-700);
+
+  /* ---- Semantic backgrounds: bg-surface, bg-action, … ----------------------- */
+  --background-color-page: var(--ss-color-surface-page);
+  --background-color-surface: var(--ss-color-surface);
+  --background-color-surface-subtle: var(--ss-color-surface-subtle);
+  --background-color-surface-muted: var(--ss-color-surface-muted);
+  --background-color-surface-strong: var(--ss-color-surface-strong);
+  --background-color-surface-emphasis: var(--ss-color-surface-emphasis);
+  --background-color-inverse: var(--ss-color-surface-inverse);
+  --background-color-inverse-subtle: var(--ss-color-surface-inverse-subtle);
+  --background-color-accent: var(--ss-color-accent);
+  --background-color-accent-subtle: var(--ss-color-accent-subtle);
+  --background-color-accent-faint: var(--ss-color-accent-faint);
+  --background-color-action: var(--ss-color-action);
+  --background-color-action-hover: var(--ss-color-action-hover);
+  --background-color-disabled: var(--ss-color-disabled);
+  --background-color-success: var(--ss-color-success);
+  --background-color-warning: var(--ss-color-warning);
+  --background-color-error: var(--ss-color-error);
+  --background-color-level-strong: var(--ss-color-level-strong);
+  --background-color-level-medium: var(--ss-color-level-medium);
+  --background-color-level-weak: var(--ss-color-level-weak);
+  --background-color-locked: var(--ss-color-locked-surface);
+  --background-color-locked-overlay: var(--ss-color-locked-overlay);
+
+  /* ---- Semantic text: text-primary, text-link, … ---------------------------- */
+  --text-color-primary: var(--ss-color-text-primary);
+  --text-color-secondary: var(--ss-color-text-secondary);
+  --text-color-muted: var(--ss-color-text-muted);
+  --text-color-inverse: var(--ss-color-text-inverse);
+  --text-color-inverse-muted: var(--ss-color-text-inverse-muted);
+  --text-color-on-action: var(--ss-color-text-on-action);
+  --text-color-link: var(--ss-color-text-link);
+  --text-color-highlight: var(--ss-color-text-highlight);
+  --text-color-placeholder: var(--ss-color-text-placeholder);
+  --text-color-success: var(--ss-color-success-text);
+  --text-color-warning: var(--ss-color-warning-text);
+  --text-color-error: var(--ss-color-error-text);
+  --text-color-level-strong: var(--ss-color-level-strong-text);
+  --text-color-level-medium: var(--ss-color-level-medium-text);
+  --text-color-level-weak: var(--ss-color-level-weak-text);
+  --text-color-locked: var(--ss-color-locked-text);
+
+  /* ---- Semantic borders: border-default, divide-strong, … ------------------- */
+  --border-color-default: var(--ss-color-border);
+  --border-color-control: var(--ss-color-border-control);
+  --border-color-strong: var(--ss-color-border-strong);
+  --border-color-selected: var(--ss-color-border-selected);
+  --border-color-inverse: var(--ss-color-border-inverse);
+  --border-color-accent: var(--ss-color-border-accent);
+  --border-color-highlight: var(--ss-color-border-highlight);
+  --border-color-success: var(--ss-color-success);
+  --border-color-warning: var(--ss-color-warning);
+  --border-color-error: var(--ss-color-error);
+  --border-color-locked: var(--ss-color-locked-border);
+  --border-color-focus: var(--ss-color-focus-ring);
+
+  /* ---- Typography ------------------------------------------------------------ */
+  --font-*: initial;
+  --font-sans: var(--ss-font-sans);
+
+  --text-micro: var(--ss-font-size-micro);
+  --text-caption: var(--ss-font-size-caption);
+  --text-body: var(--ss-font-size-body);
+  --text-body-lg: var(--ss-font-size-body-lg);
+  --text-subtitle: var(--ss-font-size-subtitle);
+  --text-title-sm: var(--ss-font-size-title-sm);
+  --text-title: var(--ss-font-size-title);
+  --text-title-lg: var(--ss-font-size-title-lg);
+  --text-display-sm: var(--ss-font-size-display-sm);
+  --text-display: var(--ss-font-size-display);
+  --text-display-lg: var(--ss-font-size-display-lg);
+
+  --font-weight-*: initial;
+  --font-weight-thin: var(--ss-font-weight-thin);
+  --font-weight-extralight: var(--ss-font-weight-extralight);
+  --font-weight-light: var(--ss-font-weight-light);
+  --font-weight-normal: var(--ss-font-weight-normal);
+  --font-weight-medium: var(--ss-font-weight-medium);
+  --font-weight-semibold: var(--ss-font-weight-semibold);
+  --font-weight-bold: var(--ss-font-weight-bold);
+  --font-weight-extrabold: var(--ss-font-weight-extrabold);
+  --font-weight-black: var(--ss-font-weight-black);
+
+  /* ---- Spacing, radii, shadows, z-index ----------------------------------- */
+  --spacing: var(--ss-space-unit);
+
+  --radius-*: initial;
+  --radius: var(--ss-radius-sm);
+  --radius-xs: var(--ss-radius-xs);
+  --radius-sm: var(--ss-radius-sm);
+  --radius-md: var(--ss-radius-md);
+  --radius-lg: var(--ss-radius-lg);
+  --radius-xl: var(--ss-radius-xl);
+  --radius-2xl: var(--ss-radius-2xl);
+  --radius-3xl: var(--ss-radius-3xl);
+  --radius-4xl: var(--ss-radius-4xl);
+
+  --shadow-*: initial;
+  --shadow-md: var(--ss-shadow-md);
+  --shadow-lg: var(--ss-shadow-lg);
+  --shadow-all: var(--ss-shadow-all);
+
+  /* Named widths: w-nav, w-nav-collapsed, w-form, max-w-form. Container sizes keep
+     Tailwind's defaults (max-w-sm, max-w-xl, …). */
+  --container-nav: var(--ss-size-nav);
+  --container-nav-collapsed: var(--ss-size-nav-collapsed);
+  --container-form: var(--ss-size-form);
+
+  --z-index-base: var(--ss-z-base);
+  --z-index-raised: var(--ss-z-raised);
+  --z-index-dropdown: var(--ss-z-dropdown);
+  --z-index-sticky: var(--ss-z-sticky);
+  --z-index-overlay: var(--ss-z-overlay);
+  --z-index-modal: var(--ss-z-modal);
+  --z-index-toast: var(--ss-z-toast);
+
+  /* Literal on purpose: media queries cannot read custom properties.
+     Keep equal to --ss-breakpoint-* in tokens.css. */
+  --breakpoint-*: initial;
+  --breakpoint-sm: 40rem;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+  --breakpoint-2xl: 96rem;
+}

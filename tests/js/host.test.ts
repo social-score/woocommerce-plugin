@@ -13,6 +13,12 @@ describe('proxyUrl', () => {
 		);
 	});
 
+	it('does not encode an already encoded id a second time (plain permalinks)', () => {
+		expect(proxyUrl('https://shop.test/?rest_route=/socialscore/v1/proxy', '/api/v2/stores/4/customers/guest%3Aabc/profile')).toBe(
+			'https://shop.test/?rest_route=/socialscore/v1/proxy/api/v2/stores/4/customers/guest%3Aabc/profile'
+		);
+	});
+
 	it('works with plain permalinks (?rest_route=)', () => {
 		expect(proxyUrl('https://shop.test/?rest_route=/socialscore/v1/proxy', '/api/v2/stores/4/customers?page=2')).toBe(
 			'https://shop.test/?rest_route=/socialscore/v1/proxy/api/v2/stores/4/customers&page=2'

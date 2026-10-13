@@ -33,15 +33,17 @@ docker run --rm -v "$PWD":/app -w /app composer:2 sh -c "composer install && ven
 docker run --rm -v "$PWD":/app -w /app node:20 sh -c "npm ci && npm run build && npm test"
 
 # WordPress + WooCommerce smoke on the release layout (activate, HPOS, connect/sync/check flow against a mock API,
-# uninstall, Plugin Check, PHP log must be clean)
+# uninstall, Plugin Check, PHP log must be clean). Needs `npm run dist` first.
+npm run dist && docker compose -f tests/smoke/docker-compose.yml run --rm smoke; docker compose -f tests/smoke/docker-compose.yml down -v
 
 ```
 
-`vendor-js/` holds the tarballs of `@socialscore/ui` and `@socialscore/plugin-core` (consumed with `file:`) until
-GitHub Packages publishing exists. After updating them run `npm run gen:messages` to refresh
+`vendor-js/` holds `@socialscore/ui` and `@socialscore/plugin-core` unpacked from `npm pack` (consumed with `file:`;
+unpacked because Plugin Check refuses compressed files in the zip) until GitHub Packages publishing exists. To update
+one, extract the new tarball over its folder, then run `npm install` and `npm run gen:messages` to refresh
 `includes/class-messages.php`, the translatable catalogue of the shared screens.
 
 ## Release zip
 
 `.distignore` lists what is left out. The built `build/` folder must be present; the readable source stays in
-`src/js` as WordPress.org requires.
+`src/js` and `vendor-js/` ships too, so the zip can be rebuilt (`npm ci && npm run build`) as WordPress.org requires.

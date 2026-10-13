@@ -304,6 +304,7 @@ class Sync {
 			$orders = wc_get_orders(
 				array(
 					'type'    => 'shop_order',
+					'status'  => self::importable_statuses(),
 					'limit'   => Config::BATCH_SIZE,
 					'paged'   => $page,
 					'orderby' => 'ID',
@@ -340,6 +341,16 @@ class Sync {
 		if ( $next && function_exists( 'as_enqueue_async_action' ) ) {
 			as_enqueue_async_action( self::HOOK_IMPORT, $next, Config::ACTION_GROUP );
 		}
+	}
+
+	/**
+	 * Order statuses the import reads. WooCommerce Blocks adds `checkout-draft` (abandoned block checkouts)
+	 * to wc_get_order_statuses(), and the default query returns it too, so it is removed here.
+	 *
+	 * @return string[]
+	 */
+	public static function importable_statuses() {
+		return array_values( array_diff( array_keys( wc_get_order_statuses() ), array( 'wc-checkout-draft', 'wc-auto-draft' ) ) );
 	}
 
 	/**

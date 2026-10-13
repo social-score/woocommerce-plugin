@@ -12,6 +12,5 @@ phpcs.xml.dist
 phpunit.xml.dist
 jest.config.js
 scripts
-vendor-js
 .phpunit.result.cache
 .wp-env

@@ -1,0 +1,136 @@
+/* Class selectors only: this file loads inside host admin pages (WP admin, Shopify). */
+.ss-pc-dashboard,
+.ss-pc-profile,
+.ss-pc-overview,
+.ss-pc-panel {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--ss-space-unit) * 4);
+  font-family: var(--ss-font-sans);
+  color: var(--ss-color-text-primary);
+}
+
+.ss-pc-heading {
+  margin: 0;
+  font-size: var(--ss-font-size-title-sm);
+  font-weight: var(--ss-font-weight-semibold);
+}
+
+.ss-pc-profile-head,
+.ss-pc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--ss-space-unit) * 3);
+}
+
+.ss-pc-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: calc(var(--ss-space-unit) * 4);
+}
+
+.ss-pc-stat {
+  margin: 0;
+  font-size: var(--ss-font-size-title);
+  font-weight: var(--ss-font-weight-semibold);
+}
+
+.ss-pc-text,
+.ss-pc-status {
+  margin: 0 0 calc(var(--ss-space-unit) * 3);
+  font-size: var(--ss-font-size-body);
+}
+
+.ss-pc-muted {
+  color: var(--ss-color-text-muted);
+  font-size: var(--ss-font-size-caption);
+}
+
+.ss-pc-signals,
+.ss-pc-labels {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--ss-space-unit) * 2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ss-pc-labels {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.ss-pc-signal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--ss-space-unit) * 2);
+}
+
+.ss-pc-signal-label {
+  font-size: var(--ss-font-size-caption);
+}
+
+.ss-pc-signal-value {
+  font-weight: var(--ss-font-weight-semibold);
+}
+
+.ss-pc-fields {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--ss-space-unit) * 3);
+  margin: 0;
+}
+
+.ss-pc-field-label {
+  margin: 0;
+  font-size: var(--ss-font-size-caption);
+  color: var(--ss-color-text-secondary);
+}
+
+.ss-pc-field-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--ss-space-unit) * 2);
+  margin: 0;
+}
+
+.ss-pc-field-value {
+  font-size: var(--ss-font-size-body);
+}
+
+.ss-pc-field-meta {
+  flex-basis: 100%;
+  font-size: var(--ss-font-size-caption);
+  color: var(--ss-color-text-muted);
+}
+
+.ss-pc-triggers {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--ss-space-unit) * 2);
+  margin: 0 0 calc(var(--ss-space-unit) * 4);
+  padding: 0;
+  border: 0;
+}
+
+.ss-pc-cost,
+.ss-pc-error {
+  margin-bottom: calc(var(--ss-space-unit) * 4);
+  padding: calc(var(--ss-space-unit) * 3);
+  border-radius: var(--ss-radius-2xl);
+  background-color: var(--ss-color-surface-muted);
+  font-size: var(--ss-font-size-body);
+}
+
+.ss-pc-error {
+  border: 1px solid var(--ss-color-error);
+  color: var(--ss-color-error-text);
+}
+
+.ss-pc-error-text {
+  margin: 0 0 calc(var(--ss-space-unit) * 2);
+}

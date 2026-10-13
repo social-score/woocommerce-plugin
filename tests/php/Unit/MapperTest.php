@@ -18,15 +18,29 @@ class MapperTest extends TestCase {
 	}
 
 	public function test_guest_external_id_is_hash_of_normalized_email() {
-		$this->assertSame( 'guest:' . sha1( 'guest@example.com' ), Mapper::customer_external_id( 0, ' Guest@Example.com ' ) );
+		$this->assertSame( 'guest-' . sha1( 'guest@example.com' ), Mapper::customer_external_id( 0, ' Guest@Example.com ' ) );
 		$this->assertSame( '', Mapper::customer_external_id( 0, '' ) );
 		$this->assertSame( '15', Mapper::customer_external_id( 15, 'x@y.z' ) );
+	}
+
+	public function test_guest_ids_survive_url_encoding() {
+		$id = Mapper::customer_external_id( 0, 'a@b.bg' );
+		$this->assertSame( $id, rawurlencode( $id ) );
+		$this->assertSame( 'guest-order-77', Mapper::customer_external_id( 0, '', 77 ) );
+	}
+
+	public function test_order_without_account_and_email_still_names_a_customer() {
+		$order = $this->order( array( 'billing_email' => '' ) );
+		$row   = Mapper::order( $order );
+		$this->assertSame( 'guest-order-1001', $row['customer_external_id'] );
+		$customer = Mapper::customer_from_order( $order );
+		$this->assertSame( 'guest-order-1001', $customer['external_id'] );
 	}
 
 	public function test_order_row() {
 		$row = Mapper::order( $this->order() );
 		$this->assertSame( '1001', $row['external_id'] );
-		$this->assertSame( 'guest:' . sha1( 'guest@example.com' ), $row['customer_external_id'] );
+		$this->assertSame( 'guest-' . sha1( 'guest@example.com' ), $row['customer_external_id'] );
 		$this->assertSame( 120.5, $row['total'] );
 		$this->assertSame( 'EUR', $row['currency'] );
 		$this->assertSame( '2023-11-14T22:13:20+00:00', $row['placed_at'] );
@@ -45,7 +59,7 @@ class MapperTest extends TestCase {
 		$row = Mapper::customer_from_order( $this->order() );
 		$this->assertSame( 'Guest@Example.com', $row['email'] );
 		$this->assertSame( 'Ana', $row['first_name'] );
-		$this->assertSame( array(), Mapper::customer_from_order( $this->order( array( 'billing_email' => '' ) ) ) );
+		$this->assertSame( array(), Mapper::customer_from_order( $this->order( array( 'billing_email' => '', 'id' => 0 ) ) ) );
 	}
 
 	public function test_customers_from_orders_are_unique() {

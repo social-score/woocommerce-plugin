@@ -15,9 +15,14 @@ function ss_log() {
 	return array_map( fn( $l ) => json_decode( $l, true ), $lines );
 }
 function ss_run_queue() {
-	for ( $i = 0; $i < 5; $i++ ) {
-		$runner = \ActionScheduler::runner();
-		$runner->run();
+	// Chained actions (the import) are queued while the runner works, so run until nothing is pending.
+	for ( $i = 0; $i < 20; $i++ ) {
+		\ActionScheduler::runner()->run();
+		$pending = as_get_scheduled_actions( array( 'group' => 'socialscore', 'status' => \ActionScheduler_Store::STATUS_PENDING ), 'ids' );
+		if ( ! $pending ) {
+			break;
+		}
+		sleep( 1 );
 	}
 }
 
@@ -32,6 +37,19 @@ $old = wc_create_order( array( 'customer_id' => $customer_id ) );
 $old->set_billing_email( 'old@example.test' );
 $old->set_total( 30 );
 $old->save();
+
+// An abandoned block checkout (draft) and a manual order with no account and no email.
+$draft = wc_create_order();
+$draft->set_billing_email( 'draft@example.test' );
+$draft->set_total( 5 );
+$draft->set_status( 'checkout-draft' );
+$draft->save();
+ss_assert( 'checkout-draft' === wc_get_order( $draft->get_id() )->get_status(), 'the draft order really is checkout-draft' );
+$manual = wc_create_order();
+$manual->set_total( 7 );
+$manual->save();
+$GLOBALS['ss_draft_id']  = $draft->get_id();
+$GLOBALS['ss_manual_id'] = $manual->get_id();
 
 // Connect: start (state + PKCE), then the callback with a code.
 $url = Connect::begin( 1 );
@@ -51,6 +69,18 @@ ss_assert( in_array( '/api/v2/stores/st_1/customers:batch', $paths, true ), 'imp
 ss_assert( in_array( '/api/v2/stores/st_1/orders:batch', $paths, true ), 'import pushed orders' );
 $state = get_option( 'socialscore_sync_state' );
 ss_assert( 'done' === $state['status'], 'import state is done' );
+$sent_orders = array();
+$sent_emails = array();
+foreach ( ss_log() as $row ) {
+	foreach ( (array) ( $row['body']['orders'] ?? array() ) as $o ) {
+		$sent_orders[ $o['external_id'] ] = $o;
+	}
+	foreach ( (array) ( $row['body']['customers'] ?? array() ) as $c ) {
+		$sent_emails[] = $c['email'] ?? '';
+	}
+}
+ss_assert( ! isset( $sent_orders[ (string) $GLOBALS['ss_draft_id'] ] ) && ! in_array( 'draft@example.test', $sent_emails, true ), 'import skips checkout-draft orders and their customers' );
+ss_assert( isset( $sent_orders[ (string) $GLOBALS['ss_manual_id'] ] ) && '' !== $sent_orders[ (string) $GLOBALS['ss_manual_id'] ]['customer_external_id'], 'order without account and email still carries customer_external_id' );
 foreach ( ss_log() as $row ) {
 	if ( 'POST' === $row['method'] && false !== strpos( $row['path'], ':batch' ) ) {
 		ss_assert( 'sk_mock_secret' === $row['key'], 'batch carries the store key header' );

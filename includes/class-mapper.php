@@ -15,18 +15,23 @@ defined( 'ABSPATH' ) || exit;
 class Mapper {
 
 	/**
-	 * Our id of a customer: the user id, or a hash of the email for guests.
+	 * Our id of a customer: the user id, or a hash of the email for guests. The guest id has only
+	 * letters, digits and a dash so it survives URL encoding unchanged.
 	 *
-	 * @param int    $user_id User id, 0 for guests.
-	 * @param string $email   Billing email.
+	 * @param int    $user_id  User id, 0 for guests.
+	 * @param string $email    Billing email.
+	 * @param int    $order_id Order id; a guest without email is then identified by the order.
 	 * @return string Empty when the customer cannot be identified.
 	 */
-	public static function customer_external_id( $user_id, $email ) {
+	public static function customer_external_id( $user_id, $email, $order_id = 0 ) {
 		if ( (int) $user_id > 0 ) {
 			return (string) (int) $user_id;
 		}
 		$email = strtolower( trim( (string) $email ) );
-		return '' === $email ? '' : 'guest:' . sha1( $email );
+		if ( '' !== $email ) {
+			return 'guest-' . sha1( $email );
+		}
+		return (int) $order_id > 0 ? 'guest-order-' . (int) $order_id : '';
 	}
 
 	/**
@@ -84,10 +89,10 @@ class Mapper {
 	 * Row for customers:batch built from an order's billing data (guests and fallback).
 	 *
 	 * @param \WC_Order $order Order.
-	 * @return array Empty when the order has no way to identify the customer.
+	 * @return array Empty when the order cannot be identified.
 	 */
 	public static function customer_from_order( $order ) {
-		$external_id = self::customer_external_id( $order->get_customer_id(), $order->get_billing_email() );
+		$external_id = self::customer_external_id( $order->get_customer_id(), $order->get_billing_email(), $order->get_id() );
 		if ( '' === $external_id ) {
 			return array();
 		}
@@ -131,7 +136,7 @@ class Mapper {
 		return self::compact_row(
 			array(
 				'external_id'          => (string) $order->get_id(),
-				'customer_external_id' => self::customer_external_id( $order->get_customer_id(), $order->get_billing_email() ),
+				'customer_external_id' => self::customer_external_id( $order->get_customer_id(), $order->get_billing_email(), $order->get_id() ),
 				'total'                => (float) $order->get_total(),
 				'currency'             => $order->get_currency(),
 				'placed_at'            => self::iso( $order->get_date_created() ),

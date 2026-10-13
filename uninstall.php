@@ -26,3 +26,14 @@ if ( function_exists( 'as_unschedule_all_actions' ) ) {
 
 delete_metadata( 'user', 0, '_socialscore_labels', '', true );
 delete_metadata( 'user', 0, '_socialscore_checked', '', true );
+
+// Order meta: classic post meta, and the HPOS meta table when it exists.
+delete_post_meta_by_key( '_socialscore_labels' );
+delete_post_meta_by_key( '_socialscore_checked' );
+global $wpdb;
+$socialscore_orders_meta = $wpdb->prefix . 'wc_orders_meta';
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $socialscore_orders_meta ) ) ) === $socialscore_orders_meta ) {
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+	$wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE meta_key IN (%s, %s)', $socialscore_orders_meta, '_socialscore_labels', '_socialscore_checked' ) );
+}

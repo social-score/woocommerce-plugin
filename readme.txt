@@ -54,7 +54,7 @@ No. The first request to SocialScore happens after you press Connect.
 
 = Where is the source of the JavaScript? =
 
-The admin screens are built with `@wordpress/scripts`. The readable source is in `src/js` in the plugin folder and in the public repository at https://github.com/social-score/woocommerce-plugin. Build with `npm ci && npm run build`. The shared interface packages (`@socialscore/ui`, `@socialscore/plugin-core`) are vendored as tarballs in the `vendor-js` folder of that repository.
+The admin screens are built with `@wordpress/scripts`. The readable source is in `src/js` in the plugin folder. The shared interface packages (`@socialscore/ui`, `@socialscore/plugin-core`) are included unpacked in the `vendor-js` folder of the plugin; the original TypeScript source of each is embedded in its source map (`dist/index.js.map`, field `sourcesContent`). To rebuild, run `npm ci && npm run build` in the plugin folder.
 
 = Which permission do I need? =
 

@@ -27,15 +27,18 @@ if ( ! in_array( "socialscore/socialscore.php", $c["compatible"], true ) ) { exi
 
 echo "== functional flow against the mock API"
 $WP eval-file /smoke/flow.php || fail "flow.php failed"
+$WP rewrite structure "/%postname%/" --hard
 $WP eval-file /smoke/http.php || fail "http.php failed"
 $WP eval-file /smoke/flow-end.php || fail "flow-end.php failed"
 
 echo "== deactivate unschedules, uninstall removes data"
 $WP eval 'SocialScore\Connection::save( "st_2", "sk_x" ); as_enqueue_async_action( "socialscore_sync_order", array( 1, 0 ), "socialscore" ); update_option( "socialscore_sync_state", array( "status" => "done" ), false );'
+ORDER_ID=$($WP eval '$o = wc_create_order(); $o->update_meta_data( "_socialscore_labels", array( "x" ) ); $o->update_meta_data( "_socialscore_checked", 1 ); $o->save(); echo $o->get_id();')
 $WP plugin deactivate socialscore
 $WP eval 'if ( function_exists( "as_get_scheduled_actions" ) && as_get_scheduled_actions( array( "group" => "socialscore", "status" => ActionScheduler_Store::STATUS_PENDING ), "ids" ) ) { exit( 1 ); } echo "no pending actions\n";' || fail "deactivation left scheduled actions"
 $WP plugin uninstall socialscore --skip-delete
 $WP eval 'if ( false !== get_option( "socialscore_connection" ) || false !== get_option( "socialscore_sync_state" ) ) { exit( 1 ); } echo "options removed\n";' || fail "uninstall left options"
+$WP eval '$o = wc_get_order( '"$ORDER_ID"' ); if ( $o->get_meta( "_socialscore_labels" ) || $o->get_meta( "_socialscore_checked" ) ) { exit( 1 ); } echo "order meta removed\n";' || fail "uninstall left order meta"
 
 echo "== Plugin Check (WordPress.org checks) on the release layout"
 $WP plugin install plugin-check --activate >/dev/null 2>&1 || fail "could not install plugin-check"
