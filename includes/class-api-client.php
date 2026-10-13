@@ -86,9 +86,10 @@ class Api_Client {
 	 *
 	 * @param string $code     Authorization code.
 	 * @param string $verifier PKCE code verifier.
+	 * @param string $redirect_uri The redirect_uri sent with the connect request (RFC 6749 section 4.1.3).
 	 * @return array|\WP_Error
 	 */
-	public function exchange_token( $code, $verifier ) {
+	public function exchange_token( $code, $verifier, $redirect_uri ) {
 		return $this->send(
 			'POST',
 			'/api/v2/stores/token',
@@ -96,6 +97,7 @@ class Api_Client {
 				'grant_type'    => 'authorization_code',
 				'code'          => $code,
 				'code_verifier' => $verifier,
+				'redirect_uri'  => $redirect_uri,
 			)
 		);
 	}

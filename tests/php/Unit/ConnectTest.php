@@ -31,6 +31,24 @@ class ConnectTest extends TestCase {
 		$this->assertSame( Connect::challenge( $pending['verifier'] ), $q['code_challenge'] );
 	}
 
+	public function test_shop_is_the_home_host_and_redirect_uri_comes_from_the_admin_url() {
+		Functions\when( 'home_url' )->justReturn( 'https://www.shop.test' );
+		Functions\when( 'admin_url' )->alias( fn( $p = '' ) => 'https://wp.shop.test/wp-admin/' . $p );
+		parse_str( (string) parse_url( Connect::begin( 7 ), PHP_URL_QUERY ), $q );
+		$this->assertSame( 'www.shop.test', $q['shop'] );
+		$this->assertSame( 'https://wp.shop.test/wp-admin/admin-post.php?action=socialscore_connect_callback', $q['redirect_uri'] );
+	}
+
+	public function test_token_request_repeats_the_redirect_uri_stored_at_connect() {
+		Functions\when( 'admin_url' )->alias( fn( $p = '' ) => 'https://wp.shop.test/wp-admin/' . $p );
+		$state = $this->started_state();
+		Functions\when( 'admin_url' )->alias( fn( $p = '' ) => 'https://changed.test/wp-admin/' . $p );
+		$this->http_responder = fn() => self::response( 200, array( 'store_id' => 'st_9', 'api_key' => 'sk_new_key' ) );
+		Functions\when( 'as_enqueue_async_action' )->justReturn( 1 );
+		$this->assertSame( 'connected', ( new Connect() )->complete( $state, 'c', '', 7 ) );
+		$this->assertSame( 'https://wp.shop.test/wp-admin/admin-post.php?action=socialscore_connect_callback', json_decode( $this->http[0]['args']['body'], true )['redirect_uri'] );
+	}
+
 	public function test_nothing_is_sent_before_connect() {
 		Connect::begin( 1 );
 		$this->assertSame( array(), $this->http );
@@ -76,7 +94,8 @@ class ConnectTest extends TestCase {
 		$this->assertCount( 1, $this->http );
 		$this->assertSame( 'https://api.socialscore.io/api/v2/stores/token', $this->http[0]['url'] );
 		$body = json_decode( $this->http[0]['args']['body'], true );
-		$this->assertEqualsCanonicalizing( array( 'grant_type', 'code', 'code_verifier' ), array_keys( $body ), 'only the fields the API accepts' );
+		$this->assertEqualsCanonicalizing( array( 'grant_type', 'code', 'code_verifier', 'redirect_uri' ), array_keys( $body ), 'only the fields the API accepts' );
+		$this->assertSame( 'https://shop.test/wp-admin/admin-post.php?action=socialscore_connect_callback', $body['redirect_uri'], 'same redirect_uri as at connect (RFC 6749 4.1.3)' );
 		$this->assertSame( 'authorization_code', $body['grant_type'] );
 		$this->assertSame( 'the-code', $body['code'] );
 		$this->assertSame( $verifier, $body['code_verifier'] );

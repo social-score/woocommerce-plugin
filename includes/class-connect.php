@@ -72,6 +72,11 @@ class Connect {
 	/**
 	 * The store-connect URL on SocialScore.
 	 *
+	 * `shop` is the storefront host (home_url) and `redirect_uri` lives on the WordPress admin host (admin_url).
+	 * They differ when siteurl and home are on different hosts. The backend accepts a redirect_uri whose host is
+	 * the shop host OR the WordPress admin host recorded at connect (design-api-extras.md, backend contract item 10).
+	 * The same redirect_uri is sent again with the token request, as RFC 6749 section 4.1.3 requires.
+	 *
 	 * @param string $state     Random state.
 	 * @param string $challenge PKCE challenge.
 	 * @return string
@@ -119,8 +124,9 @@ class Connect {
 		set_transient(
 			'socialscore_pkce_' . hash( 'sha256', $state ),
 			array(
-				'verifier' => $verifier,
-				'user_id'  => (int) $user_id,
+				'verifier'     => $verifier,
+				'user_id'      => (int) $user_id,
+				'redirect_uri' => self::redirect_uri(),
 			),
 			self::PKCE_TTL
 		);
@@ -173,12 +179,11 @@ class Connect {
 		}
 
 		$client   = new Api_Client();
-		$response = $client->exchange_token( $code, $pending['verifier'] );
+		$response = $client->exchange_token( $code, $pending['verifier'], isset( $pending['redirect_uri'] ) ? (string) $pending['redirect_uri'] : self::redirect_uri() );
 		if ( is_wp_error( $response ) || $response['status'] < 200 || $response['status'] > 299 ) {
 			return 'exchange';
 		}
 		$data = $response['data'];
-		// needs backend: the token response shape is not pinned in the contract; {store_id, api_key} is assumed.
 		if ( ! is_array( $data ) || empty( $data['store_id'] ) || empty( $data['api_key'] ) ) {
 			return 'exchange';
 		}
