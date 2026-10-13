@@ -59,7 +59,7 @@ class SyncTest extends TestCase {
 
 	public function test_rejected_items_are_logged_without_personal_data() {
 		$lines = array();
-		Functions\when( 'wc_get_logger' )->justReturn( new class( $lines ) { public function __construct( private array &$l ) {} public function warning( $m ) { $this->l[] = $m; } } );
+		Functions\when( 'wc_get_logger' )->justReturn( new class( $lines ) { private $l; public function __construct( array &$l ) { $this->l = &$l; } public function warning( $m ) { $this->l[] = $m; } } );
 		Sync::log_rejected( array( 'status' => 200, 'data' => array( 'created' => 1, 'rejected' => array( array( 'index' => 3, 'external_id' => 'c-9', 'reason' => 'invalid_email' ) ) ), 'retry_after' => null ) );
 		$this->assertSame( array( 'API rejected item c-9 (index 3): invalid_email' ), $lines );
 	}
@@ -144,6 +144,45 @@ class SyncTest extends TestCase {
 		$this->assertStringEndsWith( '/stores/42/orders:batch', $this->http[1]['url'] );
 		$this->assertSame( 'sk_test_secret_key', $this->http[1]['args']['headers']['X-API-KEY'] );
 		$this->assertSame( '9', json_decode( $this->http[1]['args']['body'], true )['orders'][0]['external_id'] );
+	}
+
+	private function order_flow( $orders_body ) {
+		$this->connect_store();
+		$this->transients['socialscore_trigger_settings'] = array(
+			'on_new_account' => false, 'every_account' => false, 'order_new_customer' => false, 'order_any_customer' => true, 'manual_only' => false,
+		);
+		$order = new \WC_Order( array( 'id' => 9, 'billing_email' => 'bad', 'total' => 10, 'created' => time() ) );
+		Functions\when( 'wc_get_order' )->justReturn( $order );
+		Functions\when( 'wc_get_logger' )->justReturn( new class { public function warning() {} } );
+		Functions\when( 'as_has_scheduled_action' )->justReturn( false );
+		$this->http_responder = function ( $url ) use ( $orders_body ) {
+			if ( false !== strpos( $url, 'customers:batch' ) ) {
+				return self::response( 200, array( 'created' => 0, 'rejected' => array( array( 'index' => 0, 'external_id' => 'guest:x', 'reason' => 'invalid_email' ) ) ) );
+			}
+			return self::response( 200, $orders_body );
+		};
+	}
+
+	public function test_order_rejected_inside_a_200_batch_answer_is_not_checked_or_retried() {
+		$this->order_flow( array( 'created' => 0, 'rejected' => array( array( 'index' => 0, 'external_id' => '9', 'reason' => 'customer_not_found' ) ) ) );
+		Functions\expect( 'as_enqueue_async_action' )->never();
+		Functions\expect( 'as_schedule_single_action' )->never();
+		( new Sync() )->handle_order( 9 );
+		$this->assertCount( 2, $this->http );
+	}
+
+	public function test_order_accepted_in_the_batch_answer_still_queues_its_check() {
+		$this->order_flow( array( 'created' => 1, 'rejected' => array() ) );
+		Functions\expect( 'as_enqueue_async_action' )->once()->with( 'socialscore_run_check', array( 'order', '9', 0 ), 'socialscore' );
+		( new Sync() )->handle_order( 9 );
+		$this->assertTrue( true );
+	}
+
+	public function test_has_rejected_only_for_a_non_empty_rejected_list() {
+		$this->assertTrue( Sync::has_rejected( array( 'status' => 200, 'data' => array( 'rejected' => array( array( 'reason' => 'x' ) ) ) ) ) );
+		$this->assertFalse( Sync::has_rejected( array( 'status' => 200, 'data' => array( 'rejected' => array() ) ) ) );
+		$this->assertFalse( Sync::has_rejected( array( 'status' => 200, 'data' => null ) ) );
+		$this->assertFalse( Sync::has_rejected( new \WP_Error( 'x', 'down' ) ) );
 	}
 
 	public function test_order_sync_429_schedules_retry_without_checking() {

@@ -180,6 +180,16 @@ class Sync {
 	}
 
 	/**
+	 * Whether a batch answer set any row aside. Used for single-row pushes, where it means that row failed.
+	 *
+	 * @param array|\WP_Error $response Answer from Api_Client.
+	 * @return bool
+	 */
+	public static function has_rejected( $response ) {
+		return ! is_wp_error( $response ) && is_array( $response['data'] ?? null ) && ! empty( $response['data']['rejected'] ) && is_array( $response['data']['rejected'] );
+	}
+
+	/**
 	 * Logs the items of a batch answer the API set aside (index, id and reason only, no personal data).
 	 *
 	 * @param array|\WP_Error $response Answer from Api_Client.
@@ -254,7 +264,9 @@ class Sync {
 			self::log_rejected( $result );
 		}
 
-		if ( self::settle( $result, self::HOOK_ORDER, array( (int) $order_id ), (int) $attempt ) ) {
+		// A 200 batch answer can still set this order aside (for example customer_not_found after its customer
+		// was rejected). The order is not in SocialScore then, so a check for it would only 404.
+		if ( self::settle( $result, self::HOOK_ORDER, array( (int) $order_id ), (int) $attempt ) && ! self::has_rejected( $result ) ) {
 			Enrichment::after_order_sync( $order );
 		}
 	}
@@ -277,7 +289,7 @@ class Sync {
 		}
 		$result = ( new Api_Client() )->push_customers( array( Mapper::customer( $customer ) ) );
 		self::log_rejected( $result );
-		if ( self::settle( $result, self::HOOK_CUSTOMER, array( (int) $user_id, (bool) $created ), (int) $attempt ) ) {
+		if ( self::settle( $result, self::HOOK_CUSTOMER, array( (int) $user_id, (bool) $created ), (int) $attempt ) && ! self::has_rejected( $result ) ) {
 			Enrichment::after_customer_sync( (int) $user_id, (bool) $created );
 		}
 	}
