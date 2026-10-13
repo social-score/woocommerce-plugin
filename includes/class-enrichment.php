@@ -141,8 +141,9 @@ class Enrichment {
 			Labels::apply_from_check( $kind, $external_id, $response['data'] );
 			return;
 		}
-		// 402 plan_required (Free plan): remember it so updates do not ask again.
-		if ( ! is_wp_error( $response ) && 402 === $response['status'] ) {
+		// 402 plan_required (Free plan): remember it so updates do not ask again. 402 quota_exhausted
+		// is not remembered: a later event asks again once the quota is topped up.
+		if ( ! is_wp_error( $response ) && 402 === $response['status'] && 'plan_required' === Sync::error_code( $response ) ) {
 			if ( 'order' === $kind ) {
 				$order = wc_get_order( (int) $external_id );
 				if ( $order ) {

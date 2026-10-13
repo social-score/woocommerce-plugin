@@ -158,7 +158,42 @@ class Sync {
 		if ( $status >= 500 ) {
 			return $backoff;
 		}
+		// The first request with this idempotency key is still running: try again in a moment.
+		if ( 409 === $status && 'idempotency_in_progress' === self::error_code( $response ) ) {
+			return $backoff;
+		}
 		return null;
+	}
+
+	/**
+	 * The `detail` code of an API error answer, empty when there is none.
+	 *
+	 * @param array|\WP_Error $response Answer from Api_Client.
+	 * @return string
+	 */
+	public static function error_code( $response ) {
+		$detail = is_array( $response ) && is_array( $response['data'] ?? null ) ? ( $response['data']['detail'] ?? null ) : null;
+		if ( is_array( $detail ) ) {
+			$detail = $detail['code'] ?? null;
+		}
+		return is_string( $detail ) ? $detail : '';
+	}
+
+	/**
+	 * Logs the items of a batch answer the API set aside (index, id and reason only, no personal data).
+	 *
+	 * @param array|\WP_Error $response Answer from Api_Client.
+	 * @return void
+	 */
+	public static function log_rejected( $response ) {
+		if ( is_wp_error( $response ) || ! is_array( $response['data'] ?? null ) || empty( $response['data']['rejected'] ) || ! is_array( $response['data']['rejected'] ) ) {
+			return;
+		}
+		foreach ( $response['data']['rejected'] as $item ) {
+			if ( is_array( $item ) ) {
+				self::log( sprintf( 'API rejected item %s (index %s): %s', (string) ( $item['external_id'] ?? '?' ), (string) ( $item['index'] ?? '?' ), (string) ( $item['reason'] ?? '?' ) ) );
+			}
+		}
 	}
 
 	/**
@@ -187,6 +222,7 @@ class Sync {
 			if ( is_wp_error( $result ) || $result['status'] < 200 || $result['status'] > 299 ) {
 				return $result;
 			}
+			self::log_rejected( $result );
 		}
 		return $result;
 	}
@@ -215,6 +251,7 @@ class Sync {
 		}
 		if ( null === $result || ( ! is_wp_error( $result ) && $result['status'] < 300 ) ) {
 			$result = $client->push_orders( array( Mapper::order( $order ) ) );
+			self::log_rejected( $result );
 		}
 
 		if ( self::settle( $result, self::HOOK_ORDER, array( (int) $order_id ), (int) $attempt ) ) {
@@ -239,6 +276,7 @@ class Sync {
 			return;
 		}
 		$result = ( new Api_Client() )->push_customers( array( Mapper::customer( $customer ) ) );
+		self::log_rejected( $result );
 		if ( self::settle( $result, self::HOOK_CUSTOMER, array( (int) $user_id, (bool) $created ), (int) $attempt ) ) {
 			Enrichment::after_customer_sync( (int) $user_id, (bool) $created );
 		}

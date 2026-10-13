@@ -61,6 +61,9 @@ class RestProxyTest extends TestCase {
 			'traversal'           => array( 'GET', '/api/v2/stores/42/customers/../../keys/profile', false ),
 			'wrong method'        => array( 'POST', '/api/v2/stores/42/overview', false ),
 			'unknown'             => array( 'GET', '/api/v2/admin/users', false ),
+			'trailing newline'    => array( 'GET', "/api/v2/stores/42/settings\n", false ),
+			'newline in segments' => array( 'GET', "/api/v2/segments\n", false ),
+			'newline in id'       => array( 'GET', "/api/v2/stores/42/orders/1\n/profile", false ),
 		);
 	}
 

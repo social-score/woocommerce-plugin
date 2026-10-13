@@ -49,6 +49,31 @@ class MapperTest extends TestCase {
 		$this->assertSame( 'BG', $row['shipping_country'] );
 	}
 
+	public function test_values_are_cut_to_what_the_api_accepts() {
+		$items = array();
+		for ( $i = 1; $i <= 205; $i++ ) {
+			$items[] = array( 'product_id' => $i, 'name' => str_repeat( 'ж', 600 ), 'quantity' => 1, 'total' => 5 );
+		}
+		$order = $this->order(
+			array(
+				'items'            => $items,
+				'billing_postcode' => str_repeat( '1', 40 ),
+				'billing_phone'    => str_repeat( '7', 80 ),
+				'shipping_country' => 'Bulgaria',
+				'currency'         => 'EU',
+			)
+		);
+		$row = Mapper::order( $order );
+		$this->assertCount( 200, $row['items'] );
+		$this->assertSame( 512, mb_strlen( $row['items'][0]['name'], 'UTF-8' ) );
+		$this->assertSame( 32, strlen( $row['shipping_postcode'] ) );
+		$this->assertArrayNotHasKey( 'shipping_country', $row );
+		$this->assertArrayNotHasKey( 'currency', $row );
+		$customer = Mapper::customer_from_order( $order );
+		$this->assertSame( 32, strlen( $customer['postcode'] ) );
+		$this->assertSame( 64, strlen( $customer['phone'] ) );
+	}
+
 	public function test_order_items_hold_no_personal_data() {
 		$json = json_encode( Mapper::order( $this->order() )['items'] );
 		$this->assertStringNotContainsString( 'example.com', $json );

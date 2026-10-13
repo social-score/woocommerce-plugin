@@ -50,6 +50,20 @@ class SyncTest extends TestCase {
 		$this->assertNull( Sync::retry_delay( array( 'status' => 503, 'data' => null, 'retry_after' => null ), Sync::MAX_ATTEMPTS - 1 ) );
 	}
 
+	public function test_idempotency_in_progress_is_retried_other_409_is_not() {
+		$busy = array( 'status' => 409, 'data' => array( 'detail' => 'idempotency_in_progress' ), 'retry_after' => null );
+		$pass = array( 'status' => 409, 'data' => array( 'detail' => 'pass_through_mode' ), 'retry_after' => null );
+		$this->assertSame( 60, Sync::retry_delay( $busy, 0 ) );
+		$this->assertNull( Sync::retry_delay( $pass, 0 ) );
+	}
+
+	public function test_rejected_items_are_logged_without_personal_data() {
+		$lines = array();
+		Functions\when( 'wc_get_logger' )->justReturn( new class( $lines ) { public function __construct( private array &$l ) {} public function warning( $m ) { $this->l[] = $m; } } );
+		Sync::log_rejected( array( 'status' => 200, 'data' => array( 'created' => 1, 'rejected' => array( array( 'index' => 3, 'external_id' => 'c-9', 'reason' => 'invalid_email' ) ) ), 'retry_after' => null ) );
+		$this->assertSame( array( 'API rejected item c-9 (index 3): invalid_email' ), $lines );
+	}
+
 	public function test_settle_reschedules_with_attempt_counter() {
 		Functions\expect( 'as_schedule_single_action' )->once()->andReturnUsing(
 			function ( $ts, $hook, $args, $group ) {

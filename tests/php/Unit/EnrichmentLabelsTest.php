@@ -120,10 +120,21 @@ class EnrichmentLabelsTest extends TestCase {
 		Functions\when( 'wc_get_order' )->justReturn( $order );
 		Functions\when( 'wc_get_logger' )->justReturn( new class { public function warning() {} } );
 		Functions\expect( 'as_schedule_single_action' )->never();
-		$this->http_responder = fn() => self::response( 402, array( 'detail' => array( 'code' => 'plan_required' ) ) );
+		$this->http_responder = fn() => self::response( 402, array( 'detail' => 'plan_required' ) );
 		( new Enrichment() )->handle_check( 'order', '9', 0 );
 		$this->assertSame( 'plan_required', $order->meta['_socialscore_checked'] );
 		$this->assertArrayNotHasKey( '_socialscore_labels', $order->meta );
+	}
+
+	public function test_quota_exhausted_is_not_remembered() {
+		$this->connect_store();
+		$order = new \WC_Order( array( 'id' => 9 ) );
+		Functions\when( 'wc_get_order' )->justReturn( $order );
+		Functions\when( 'wc_get_logger' )->justReturn( new class { public function warning() {} } );
+		Functions\expect( 'as_schedule_single_action' )->never();
+		$this->http_responder = fn() => self::response( 402, array( 'detail' => 'quota_exhausted' ) );
+		( new Enrichment() )->handle_check( 'order', '9', 0 );
+		$this->assertArrayNotHasKey( '_socialscore_checked', $order->meta );
 	}
 
 	public function test_trigger_settings_are_cached_from_the_server() {

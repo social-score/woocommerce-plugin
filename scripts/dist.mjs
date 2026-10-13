@@ -15,7 +15,8 @@ rmSync(join(root, 'dist'), { recursive: true, force: true });
 mkdirSync(target, { recursive: true });
 for (const entry of readdirSync(root)) {
 	if (!ignore.has(entry)) {
-		cpSync(join(root, entry), join(target, entry), { recursive: true });
+		// Dev dependencies of the vendored packages (vendor-js/*/node_modules) must never ship.
+		cpSync(join(root, entry), join(target, entry), { recursive: true, filter: (src) => !/(^|\/)node_modules(\/|$)/.test(src) });
 	}
 }
 console.log('dist/socialscore:', readdirSync(target).join(' '));

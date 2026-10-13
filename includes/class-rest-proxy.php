@@ -69,19 +69,19 @@ class Rest_Proxy {
 		$id = '[A-Za-z0-9._:~-]+';
 		return array(
 			'GET'   => array(
-				'#^' . $s . '/settings$#',
-				'#^' . $s . '/settings/estimate$#',
-				'#^' . $s . '/overview$#',
-				'#^' . $s . '/customers$#',
-				'#^' . $s . '/customers/' . $id . '/profile$#',
-				'#^' . $s . '/orders/' . $id . '/profile$#',
-				'#^/api/v2/segments$#',
+				'#^' . $s . '/settings$#D',
+				'#^' . $s . '/settings/estimate$#D',
+				'#^' . $s . '/overview$#D',
+				'#^' . $s . '/customers$#D',
+				'#^' . $s . '/customers/' . $id . '/profile$#D',
+				'#^' . $s . '/orders/' . $id . '/profile$#D',
+				'#^/api/v2/segments$#D',
 			),
 			'PATCH' => array(
-				'#^' . $s . '/settings$#',
+				'#^' . $s . '/settings$#D',
 			),
 			'POST'  => array(
-				'#^' . $s . '/checks$#',
+				'#^' . $s . '/checks$#D',
 			),
 		);
 	}
