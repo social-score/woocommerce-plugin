@@ -1,0 +1,11 @@
+@import '@socialscore/ui/styles.css';
+@import '@socialscore/plugin-core/styles.css';
+
+.socialscore-toast {
+	margin-top: 8px;
+	font-size: 13px;
+}
+
+.socialscore-toast:empty {
+	display: none;
+}
