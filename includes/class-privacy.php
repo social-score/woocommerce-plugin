@@ -11,7 +11,7 @@ defined( 'ABSPATH' ) || exit;
 
 /**
  * Forwards a data request or an erasure request for one email address to the per-customer privacy routes
- * of the SocialScore API. A store that is not connected has sent nothing, so there is nothing to export or erase.
+ * of the SocialScore API. A store that is not connected cannot be asked; the eraser says so, because data sent earlier may still be held.
  */
 class Privacy {
 
@@ -161,8 +161,17 @@ class Privacy {
 				'shipping_city'     => __( 'Shipping city', 'socialscore' ),
 				'shipping_postcode' => __( 'Shipping postcode', 'socialscore' ),
 				'shipping_country'  => __( 'Shipping country', 'socialscore' ),
+				'labels'            => __( 'Check labels', 'socialscore' ),
 			) as $key => $label ) {
-				if ( isset( $order[ $key ] ) && is_scalar( $order[ $key ] ) && '' !== (string) $order[ $key ] ) {
+				if ( 'labels' === $key && is_array( $order[ $key ] ?? null ) ) {
+					$labels = array_filter( array_filter( $order[ $key ], 'is_scalar' ), 'strlen' );
+					if ( $labels ) {
+						$rows[] = array(
+							'name'  => $label,
+							'value' => implode( ', ', array_map( 'strval', $labels ) ),
+						);
+					}
+				} elseif ( isset( $order[ $key ] ) && is_scalar( $order[ $key ] ) && '' !== (string) $order[ $key ] ) {
 					$rows[] = array(
 						'name'  => $label,
 						'value' => (string) $order[ $key ],
@@ -238,6 +247,10 @@ class Privacy {
 				$retained   = true;
 				$messages[] = __( 'SocialScore could not be asked to erase this customer. Run the erasure again later.', 'socialscore' );
 			}
+		} else {
+			// Disconnecting keeps the data at SocialScore until a redact, so "not connected" is not "nothing held".
+			$retained   = true;
+			$messages[] = __( 'This store is not connected to SocialScore, so the customer could not be erased there. SocialScore may still hold data from before the store was disconnected; connect the store again and rerun the erasure, or contact SocialScore support.', 'socialscore' );
 		}
 
 		return array(

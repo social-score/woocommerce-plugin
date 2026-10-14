@@ -74,7 +74,11 @@ class PrivacyTest extends TestCase {
 	public function test_erase_and_export_send_nothing_when_not_connected() {
 		$this->user( 15 );
 		$privacy = new Privacy();
-		$this->assertSame( array( 'items_removed' => false, 'items_retained' => false, 'messages' => array(), 'done' => true ), $privacy->erase( 'a@b.bg' ) );
+		$erased  = $privacy->erase( 'a@b.bg' );
+		$this->assertFalse( $erased['items_removed'] );
+		$this->assertTrue( $erased['items_retained'], 'data sent before a disconnect may still be held' );
+		$this->assertCount( 1, $erased['messages'] );
+		$this->assertTrue( $erased['done'] );
 		$this->assertSame( array( 'data' => array(), 'done' => true ), $privacy->export( 'a@b.bg' ) );
 		$this->assertSame( array(), $this->http );
 	}
@@ -87,7 +91,7 @@ class PrivacyTest extends TestCase {
 			array(
 				'store_id' => 42,
 				'customer' => array( 'external_id' => 'guest-x', 'email' => 'a@b.bg', 'first_name' => 'Ivan', 'orders_count' => 3, 'phone' => '' ),
-				'orders'   => array( array( 'external_id' => '1001', 'total' => '59.90', 'currency' => 'EUR', 'items' => array( array( 'product_id' => '9', 'name' => 'Boots', 'quantity' => 2, 'price' => '29.95' ) ) ) ),
+				'orders'   => array( array( 'external_id' => '1001', 'total' => '59.90', 'currency' => 'EUR', 'labels' => array( 'review_before_shipping', 'new_customer' ), 'items' => array( array( 'product_id' => '9', 'name' => 'Boots', 'quantity' => 2, 'price' => '29.95' ) ) ) ),
 				'profile'  => array( 'schema_version' => '2.0' ),
 			)
 		);
@@ -104,6 +108,7 @@ class PrivacyTest extends TestCase {
 		$this->assertArrayNotHasKey( 'Phone', $customer, 'empty values are left out' );
 		$order = array_column( $result['data'][1]['data'], 'value', 'name' );
 		$this->assertSame( '2 x Boots', $order['Items'] );
+		$this->assertSame( 'review_before_shipping, new_customer', $order['Check labels'] );
 		foreach ( $result['data'] as $group ) {
 			foreach ( $group['data'] as $row ) {
 				$this->assertIsString( $row['value'] );

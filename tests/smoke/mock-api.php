@@ -19,7 +19,7 @@ if ( false !== strpos( $path, '/stores/st_gone/' ) ) {
 } elseif ( preg_match( '#/(customers|orders):batch$#', $path, $m ) ) {
 	$ids = array();
 	foreach ( (array) ( $json[ $m[1] ] ?? array() ) as $i => $row ) {
-		$ids[] = array( 'external_id' => $row['external_id'], 'id' => 9000 + (int) $row['external_id'] + $i );
+		$ids[] = array( 'external_id' => $row['external_id'], 'id' => 9000 + (int) $row['external_id'] );
 	}
 	echo json_encode( array( 'created' => count( $ids ), 'updated' => 0, 'rejected' => array(), 'ids' => $ids ) );
 } elseif ( preg_match( '#/customers/([^/]+)/export$#', $path, $m ) ) {
