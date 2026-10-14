@@ -1,7 +1,7 @@
 export { PluginProvider } from './PluginProvider.js';
 export type { PluginProviderProps } from './PluginProvider.js';
 export type { PluginHost } from './host.js';
-export { ApiClient } from './api/client.js';
+export { ApiClient, batchIdMap } from './api/client.js';
 export { ApiError } from './api/errors.js';
 export { messages } from './messages.js';
 export type { MessageKey } from './messages.js';

@@ -1,5 +1,10 @@
 import type { PluginHost } from '../host.js';
-import type { BatchResult, CheckResult, CheckSubject, CostEstimate, CustomerInput, HookCreated, HookInput, OrderInput, Page, CheckedCustomer, Profile, SegmentSummary, StoreOverview, StoreSettingsResponse, TriggerSettings } from '../types/index.js';
+import type { BatchResult, CheckResult, CheckSubject, CostEstimate, CustomerExport, CustomerInput, HookCreated, HookInput, OrderInput, Page, CheckedCustomer, Profile, RedactCustomerResult, RowId, SegmentSummary, StoreOverview, StoreSettingsResponse, TriggerSettings, UninstallResult } from '../types/index.js';
+/**
+ * `external_id` to SocialScore id of the rows a batch stored. Keep it: an `order.created` event carries
+ * our `order_id`, not the shop's order id.
+ */
+export declare function batchIdMap(ids: RowId[]): Map<string, number>;
 export declare function newIdempotencyKey(): string;
 /**
  * Typed calls against the public API v2 (design-public-api.md, design-events.md). Every request
@@ -12,9 +17,15 @@ export declare class ApiClient {
     private request;
     getSettings(): Promise<StoreSettingsResponse>;
     updateSettings(patch: Partial<TriggerSettings>): Promise<StoreSettingsResponse>;
-    /** needs backend: no estimate endpoint in the contract. */
+    /** Only `every_account` has an estimate. `exploresMax` is an upper bound; nothing is run or charged. */
     getCostEstimate(): Promise<CostEstimate>;
-    uninstall(): Promise<void>;
+    /**
+     * The plugin was removed. The store stops being served; its key keeps the two redact routes for 7 days.
+     * With `redact`, the store's customers, orders and the profiles its checks built are deleted now.
+     */
+    uninstall(options?: {
+        redact?: boolean;
+    }): Promise<UninstallResult>;
     pushCustomers(customers: CustomerInput[]): Promise<BatchResult>;
     pushOrders(orders: OrderInput[]): Promise<BatchResult>;
     /**
@@ -26,7 +37,12 @@ export declare class ApiClient {
     getOrderProfile(externalId: string): Promise<Profile>;
     getOverview(): Promise<StoreOverview>;
     listCheckedCustomers(page: number, pageSize: number): Promise<Page<CheckedCustomer>>;
+    /** Ready segments with a size band. A store key may read them; it never writes. */
     listSegments(): Promise<SegmentSummary[]>;
+    /** What SocialScore holds for one customer. 404 `customer_not_found` when the store has none. */
+    exportCustomer(externalId: string): Promise<CustomerExport>;
+    /** Redacts the customer and their orders. Safe to repeat: `customersRedacted` is 0 when nothing is left. */
+    redactCustomer(externalId: string): Promise<RedactCustomerResult>;
     createHook(input: HookInput): Promise<HookCreated>;
     deleteHook(id: string | number): Promise<void>;
     getHookSamples(eventType: string): Promise<unknown>;

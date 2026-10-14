@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const src = readFileSync(process.argv[2], 'utf8');
 const rows = [...src.matchAll(/readonly '([^']+)': "((?:[^"\\]|\\.)*)";/g)];
 if (rows.length < 50) throw new Error('too few messages: ' + rows.length);
+const width = Math.max(...rows.map(([, k]) => k.length)) + 2;
 const php = (s) => s.replace(/\\"/g, '"').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 const out = `<?php
 /**
@@ -28,7 +29,7 @@ class Messages {
 	 */
 	public static function all() {
 		return array(
-${rows.map(([, k, v]) => `\t\t\t'${k}' => __( '${php(v)}', 'socialscore' ),`).join('\n')}
+${rows.map(([, k, v]) => `\t\t\t${("'" + k + "'").padEnd(width)} => __( '${php(v)}', 'socialscore' ),`).join('\n')}
 		);
 	}
 }

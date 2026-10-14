@@ -31,11 +31,14 @@ var D = class extends Error {
 };
 //#endregion
 //#region src/api/client.ts
-function O() {
+function O(e) {
+	return new Map(e.map((e) => [e.externalId, e.id]));
+}
+function k() {
 	let e = globalThis.crypto;
 	return e && typeof e.randomUUID == "function" ? e.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
 }
-async function k(e) {
+async function A(e) {
 	let t = await e.text();
 	if (t) try {
 		return JSON.parse(t);
@@ -43,7 +46,7 @@ async function k(e) {
 		return;
 	}
 }
-function A(e, t) {
+function ee(e, t) {
 	let n = t && typeof t == "object" ? t : {}, r = n.detail && typeof n.detail == "object" ? n.detail : n, i = typeof r.code == "string" ? r.code : typeof n.detail == "string" ? n.detail : void 0, a = typeof r.message == "string" ? r.message : void 0, o = e.headers.get("Retry-After"), s = o !== null && /^\d+$/.test(o) ? Number(o) : void 0;
 	return new D(e.status, i, a, s);
 }
@@ -60,8 +63,8 @@ var j = class {
 			headers: r
 		};
 		n.body !== void 0 && (r["Content-Type"] = "application/json", i.body = JSON.stringify(E(n.body)));
-		let a = await this.host.apiFetch(t, i), o = await k(a);
-		if (!a.ok) throw A(a, o);
+		let a = await this.host.apiFetch(t, i), o = await A(a);
+		if (!a.ok) throw ee(a, o);
 		return T(o);
 	}
 	getSettings() {
@@ -73,8 +76,8 @@ var j = class {
 	getCostEstimate() {
 		return this.request("GET", `${this.storePath}/settings/estimate?trigger=every_account`);
 	}
-	uninstall() {
-		return this.request("DELETE", this.storePath);
+	uninstall(e = {}) {
+		return this.request("DELETE", e.redact ? `${this.storePath}?redact=true` : this.storePath);
 	}
 	pushCustomers(e) {
 		return this.request("POST", `${this.storePath}/customers:batch`, { body: { customers: e } });
@@ -82,7 +85,7 @@ var j = class {
 	pushOrders(e) {
 		return this.request("POST", `${this.storePath}/orders:batch`, { body: { orders: e } });
 	}
-	runCheck(e, t = O()) {
+	runCheck(e, t = k()) {
 		let n = e.orderExternalId === void 0 ? { customerExternalId: e.customerExternalId } : { orderExternalId: e.orderExternalId };
 		return this.request("POST", `${this.storePath}/checks`, {
 			body: n,
@@ -101,8 +104,14 @@ var j = class {
 	listCheckedCustomers(e, t) {
 		return this.request("GET", `${this.storePath}/customers?checked=true&page=${e}&page_size=${t}`);
 	}
-	listSegments() {
-		return this.request("GET", "/api/v2/segments");
+	async listSegments() {
+		return (await this.request("GET", "/api/v2/segments")).items;
+	}
+	exportCustomer(e) {
+		return this.request("GET", `${this.storePath}/customers/${encodeURIComponent(e)}/export`);
+	}
+	redactCustomer(e) {
+		return this.request("DELETE", `${this.storePath}/customers/${encodeURIComponent(e)}`);
 	}
 	createHook(e) {
 		return this.request("POST", "/api/v2/hooks", { body: e });
@@ -160,6 +169,7 @@ var P = {
 	"check.businessBuyerYes": "Business email",
 	"check.businessBuyerNo": "Not detected",
 	"check.noSignals": "No signals available for this profile yet.",
+	"check.replayWithoutProfile": "This is a repeat of an earlier check and your organization stores no profiles. Check again to see the signals.",
 	"check.seeFullProfile": "See full profile",
 	"dashboard.title": "SocialScore",
 	"dashboard.tabs": "SocialScore sections",
@@ -173,28 +183,28 @@ var P = {
 	"overview.riskyOrders": "Risky orders",
 	"overview.riskyOrdersEmpty": "No risky orders so far.",
 	"overview.riskyOrdersCaption": "Orders to review before shipping",
+	"overview.fewerThanFive": "Fewer than 5",
 	"overview.column.order": "Order",
 	"overview.column.placed": "Placed",
 	"overview.column.total": "Total",
-	"overview.column.fraud": "Fraud score",
+	"overview.column.labels": "Labels",
 	"overview.viewOrder": "View profile of order {id}",
 	"profiles.caption": "Checked customers",
 	"profiles.empty": "No customers have been checked yet.",
 	"profiles.column.customer": "Customer",
 	"profiles.column.email": "Email",
-	"profiles.column.orders": "Orders",
-	"profiles.column.health": "Health",
+	"profiles.column.phone": "Phone",
+	"profiles.column.fraud": "Fraud risk",
+	"profiles.column.presence": "Digital presence",
+	"profiles.column.labels": "Labels",
 	"profiles.column.checked": "Checked",
-	"profiles.open": "Open profile of {name}",
+	"profiles.open": "Open profile of {id}",
 	"segments.title": "Segments and audiences",
 	"segments.empty": "No segments yet.",
 	"segments.caption": "Segments",
 	"segments.column.name": "Segment",
-	"segments.column.status": "Status",
 	"segments.column.size": "People",
-	"segments.status.building": "Building",
-	"segments.status.ready": "Ready",
-	"segments.status.failed": "Failed",
+	"segments.sizeBand.small": "Fewer than 5",
 	"segments.editInSocialScore": "This list is read-only here. Create and edit segments and audiences in SocialScore.",
 	"profile.title": "Profile",
 	"profile.loading": "Loading profile...",
@@ -220,13 +230,13 @@ var P = {
 	"settings.status.active": "Connected",
 	"settings.status.disconnected": "Disconnected",
 	"settings.status.uninstalled": "Uninstalled",
+	"settings.disconnectedNote": "The SocialScore member who connected this store is no longer active, so customer details are hidden. Connect the store again.",
 	"settings.trigger.onNewAccount": "On a new account",
 	"settings.trigger.everyAccount": "For every account (including existing ones)",
-	"settings.trigger.abandonedCart": "On a registered customer with an abandoned cart",
 	"settings.trigger.orderNewCustomer": "On an order from a new customer",
 	"settings.trigger.orderAnyCustomer": "On an order from any customer",
 	"settings.trigger.manualOnly": "Manual only (Check button)",
-	"settings.costPreview": "Turning this on will run {count} checks. Repeat customers are served from the profile you already have, at no charge.",
+	"settings.costPreview": "Turning this on will run up to {count} Explores. {reused} customers already have a valid check and cost nothing.",
 	"settings.costLoading": "Counting how many checks this will run...",
 	"settings.costConfirm": "Turn on for every account",
 	"settings.saved": "Settings saved",
@@ -241,49 +251,50 @@ var P = {
 function F(e) {
 	return `profile/${e.kind}/${encodeURIComponent(e.externalId)}`;
 }
-function I(e, t) {
+function te(e, t) {
 	if (e === void 0) return "";
-	if (!t) return String(e);
+	let n = Number(e);
+	if (!t || Number.isNaN(n)) return t ? `${e} ${t}` : String(e);
 	try {
 		return new Intl.NumberFormat(void 0, {
 			style: "currency",
 			currency: t
-		}).format(e);
+		}).format(n);
 	} catch {
 		return `${e} ${t}`;
 	}
 }
-function L(e) {
+function I(e) {
 	if (!e) return "";
 	let t = new Date(e);
 	return Number.isNaN(t.getTime()) ? e : t.toLocaleDateString();
 }
-function R(e) {
+function L(e) {
 	let t = e.replace(/([A-Z])/g, " $1").toLowerCase().trim();
 	return t.charAt(0).toUpperCase() + t.slice(1);
 }
 //#endregion
 //#region src/hooks/usePlugin.ts
-function z() {
+function R() {
 	let e = n(M);
 	if (!e) throw Error("Plugin screens must be rendered inside <PluginProvider>");
 	return e;
 }
-var B = () => z().api, V = () => z().host;
-function H(e, t) {
+var z = () => R().api, B = () => R().host;
+function V(e, t) {
 	return t ? e.replace(/\{(\w+)\}/g, (e, n) => n in t ? String(t[n]) : e) : e;
 }
-function U() {
-	let { host: e } = z();
+function H() {
+	let { host: e } = R();
 	return t((t, n) => {
 		let r = e.t?.(t, n);
-		return r && r !== t ? r : H(P[t], n);
+		return r && r !== t ? r : V(P[t], n);
 	}, [e]);
 }
 //#endregion
 //#region src/components/CheckLabels.tsx
-function W({ labels: e }) {
-	let t = U();
+function U({ labels: e }) {
+	let t = H();
 	return e.length === 0 ? null : /* @__PURE__ */ c("ul", {
 		className: "ss-pc-labels",
 		children: e.map((e) => /* @__PURE__ */ c("li", { children: /* @__PURE__ */ c(u, {
@@ -294,8 +305,8 @@ function W({ labels: e }) {
 }
 //#endregion
 //#region src/components/CheckSignals.tsx
-function G({ profile: e }) {
-	let t = U(), n = e.categories.healthSignals?.fields, r = e.categories.b2b?.fields.isBusinessEmail, i = [
+function W({ profile: e }) {
+	let t = H(), n = e.categories.healthSignals?.fields, r = e.categories.b2b?.fields.isBusinessEmail, i = [
 		{
 			key: "presence",
 			label: t("check.digitalPresence"),
@@ -352,8 +363,8 @@ function G({ profile: e }) {
 }
 //#endregion
 //#region src/hooks/useErrorText.ts
-function K() {
-	let e = U();
+function G() {
+	let e = H();
 	return (t) => {
 		if (t instanceof D) {
 			if (t.status === 402 || t.code === "plan_required") return e("error.planRequired");
@@ -365,8 +376,8 @@ function K() {
 }
 //#endregion
 //#region src/components/ErrorNote.tsx
-function q({ error: e, onRetry: t }) {
-	let n = U(), r = K()(e);
+function K({ error: e, onRetry: t }) {
+	let n = H(), r = G()(e);
 	return /* @__PURE__ */ l("div", {
 		role: "alert",
 		className: "ss-pc-error",
@@ -382,8 +393,8 @@ function q({ error: e, onRetry: t }) {
 }
 //#endregion
 //#region src/screens/CheckPanel.tsx
-function ee({ kind: e, externalId: t }) {
-	let n = B(), r = V(), i = U(), [u, p] = o(!1), [m, h] = o(), [_, v] = o(), y = a(void 0);
+function ne({ kind: e, externalId: t }) {
+	let n = z(), r = B(), i = H(), [u, p] = o(!1), [m, h] = o(), [_, v] = o(), y = a(void 0);
 	return /* @__PURE__ */ c(f, {
 		title: i("check.title"),
 		headingLevel: 3,
@@ -391,8 +402,15 @@ function ee({ kind: e, externalId: t }) {
 		children: /* @__PURE__ */ l("div", {
 			className: "ss-pc-panel",
 			children: [
-				m && /* @__PURE__ */ l(s, { children: [/* @__PURE__ */ c(W, { labels: m.labels }), /* @__PURE__ */ c(G, { profile: m.profile })] }),
-				_ !== void 0 && /* @__PURE__ */ c(q, { error: _ }),
+				m && /* @__PURE__ */ l(s, { children: [
+					/* @__PURE__ */ c(U, { labels: m.labels }),
+					m.profile && /* @__PURE__ */ c(W, { profile: m.profile }),
+					m.replayWithoutProfile && /* @__PURE__ */ c("p", {
+						className: "ss-pc-muted",
+						children: i("check.replayWithoutProfile")
+					})
+				] }),
+				_ !== void 0 && /* @__PURE__ */ c(K, { error: _ }),
 				u && /* @__PURE__ */ c(g, { label: i("check.checking") }),
 				/* @__PURE__ */ l("div", {
 					className: "ss-pc-actions",
@@ -400,7 +418,7 @@ function ee({ kind: e, externalId: t }) {
 						variant: "contained-primary",
 						disabled: u,
 						onClick: async () => {
-							p(!0), v(void 0), y.current ??= O();
+							p(!0), v(void 0), y.current ??= k();
 							try {
 								let r = e === "order" ? { orderExternalId: t } : { customerExternalId: t };
 								h(await n.runCheck(r, y.current)), y.current = void 0;
@@ -424,13 +442,13 @@ function ee({ kind: e, externalId: t }) {
 		})
 	});
 }
-function te(e) {
-	return /* @__PURE__ */ c(ee, { ...e }, `${e.kind}:${e.externalId}`);
+function re(e) {
+	return /* @__PURE__ */ c(ne, { ...e }, `${e.kind}:${e.externalId}`);
 }
 //#endregion
 //#region src/screens/ConnectScreen.tsx
-function ne({ connectUrl: e }) {
-	let t = V(), n = U();
+function ie({ connectUrl: e }) {
+	let t = B(), n = H();
 	return /* @__PURE__ */ l(f, {
 		title: n("connect.title"),
 		headingLevel: 2,
@@ -446,14 +464,14 @@ function ne({ connectUrl: e }) {
 }
 //#endregion
 //#region src/components/FieldRow.tsx
-function re(e, t, n) {
+function ae(e, t, n) {
 	return typeof e == "boolean" ? e ? t : n : typeof e == "object" ? JSON.stringify(e) : String(e);
 }
-function ie({ label: e, field: t }) {
-	let n = U(), r = t.confidenceLevel, i = [
-		t.sourceDetail ? `${R(t.source)}: ${t.sourceDetail}` : n("profile.source", { source: R(t.source) }),
+function oe({ label: e, field: t }) {
+	let n = H(), r = t.confidenceLevel, i = [
+		t.sourceDetail ? `${L(t.source)}: ${t.sourceDetail}` : n("profile.source", { source: L(t.source) }),
 		t.reason ? n("profile.reason", { reason: t.reason }) : "",
-		t.collectedAt ? n("profile.collectedAt", { date: L(t.collectedAt) }) : ""
+		t.collectedAt ? n("profile.collectedAt", { date: I(t.collectedAt) }) : ""
 	].filter(Boolean);
 	return /* @__PURE__ */ l("div", {
 		className: "ss-pc-field",
@@ -465,7 +483,7 @@ function ie({ label: e, field: t }) {
 			children: [
 				/* @__PURE__ */ c("span", {
 					className: "ss-pc-field-value",
-					children: t.masked ? n("profile.masked") : t.value === void 0 ? n("profile.noValue") : re(t.value, n("common.yes"), n("common.no"))
+					children: t.masked ? n("profile.masked") : t.value === void 0 ? n("profile.noValue") : ae(t.value, n("common.yes"), n("common.no"))
 				}),
 				r && /* @__PURE__ */ c(u, {
 					variant: r,
@@ -482,7 +500,7 @@ function ie({ label: e, field: t }) {
 }
 //#endregion
 //#region src/hooks/useResource.ts
-function J(e) {
+function q(e) {
 	let [n, i] = o({ loading: !0 }), [a, s] = o(0);
 	r(() => {
 		let t = !1;
@@ -511,12 +529,12 @@ function J(e) {
 }
 //#endregion
 //#region src/lib/profile.ts
-function Y(e) {
+function J(e) {
 	return typeof e == "object" && !!e && "source" in e && "reason" in e && "masked" in e;
 }
 //#endregion
 //#region src/screens/ProfileView.tsx
-var ae = [
+var se = [
 	"identity",
 	"contact",
 	"digitalFootprint",
@@ -527,14 +545,14 @@ var ae = [
 	"segments",
 	"ownData"
 ];
-function oe(e) {
+function ce(e) {
 	let t = [];
 	return Object.entries(e).forEach(([e, n]) => {
 		(Array.isArray(n) ? n : [n]).forEach((n, r) => {
-			if (Y(n)) {
+			if (J(n)) {
 				t.push({
 					key: `${e}-${r}`,
-					label: R(e),
+					label: L(e),
 					field: n
 				});
 				return;
@@ -547,25 +565,25 @@ function oe(e) {
 				i.title
 			].find((e) => typeof e == "string");
 			Object.entries(i).forEach(([n, i]) => {
-				Y(i) && t.push({
+				J(i) && t.push({
 					key: `${e}-${r}-${n}`,
-					label: a ?? R(n),
+					label: a ?? L(n),
 					field: i
 				});
 			});
 		});
 	}), t;
 }
-function X({ kind: e, externalId: n, onBack: r }) {
-	let i = B(), a = U(), { data: o, error: s, loading: u, reload: p } = J(t(() => e === "order" ? i.getOrderProfile(n) : i.getCustomerProfile(n), [
+function Y({ kind: e, externalId: n, onBack: r }) {
+	let i = z(), a = H(), { data: o, error: s, loading: u, reload: p } = q(t(() => e === "order" ? i.getOrderProfile(n) : i.getCustomerProfile(n), [
 		i,
 		e,
 		n
-	])), h = o?.categories ?? {}, _ = ae.map((e) => {
+	])), h = o?.categories ?? {}, _ = se.map((e) => {
 		let t = h[e];
 		return {
 			name: e,
-			rows: t && t.status === "available" ? oe(t.fields) : []
+			rows: t && t.status === "available" ? ce(t.fields) : []
 		};
 	}).filter((e) => e.rows.length > 0);
 	return /* @__PURE__ */ l("div", {
@@ -583,7 +601,7 @@ function X({ kind: e, externalId: n, onBack: r }) {
 				})]
 			}),
 			u && !o && /* @__PURE__ */ c(g, { label: a("profile.loading") }),
-			s !== void 0 && /* @__PURE__ */ c(q, {
+			s !== void 0 && /* @__PURE__ */ c(K, {
 				error: s,
 				onRetry: p
 			}),
@@ -593,7 +611,7 @@ function X({ kind: e, externalId: n, onBack: r }) {
 				headingLevel: 3,
 				children: /* @__PURE__ */ c("dl", {
 					className: "ss-pc-fields",
-					children: t.map((e) => /* @__PURE__ */ c(ie, {
+					children: t.map((e) => /* @__PURE__ */ c(oe, {
 						label: e.label,
 						field: e.field
 					}, e.key))
@@ -604,19 +622,19 @@ function X({ kind: e, externalId: n, onBack: r }) {
 }
 //#endregion
 //#region src/screens/SettingsScreen.tsx
-var Z = [
+var X = [
 	"onNewAccount",
 	"everyAccount",
 	"orderNewCustomer",
 	"orderAnyCustomer",
 	"manualOnly"
-], se = {
+], le = {
 	active: "success",
 	disconnected: "warning",
 	uninstalled: "error"
 };
-function Q() {
-	let e = B(), n = V(), i = U(), { data: a, error: m, loading: h, reload: _ } = J(t(() => e.getSettings(), [e])), [v, y] = o(), [b, x] = o(!1), [S, C] = o(), [w, T] = o();
+function Z() {
+	let e = z(), n = B(), i = H(), { data: a, error: m, loading: h, reload: _ } = q(t(() => e.getSettings(), [e])), [v, y] = o(), [b, x] = o(!1), [S, C] = o(), [w, T] = o();
 	r(() => {
 		a && y(a.settings);
 	}, [a]);
@@ -636,7 +654,7 @@ function Q() {
 	}, O = async () => {
 		if (!a || !v) return;
 		let t = {};
-		Z.forEach((e) => {
+		X.forEach((e) => {
 			v[e] !== a.settings[e] && (t[e] = v[e]);
 		}), x(!0), C(void 0);
 		try {
@@ -647,12 +665,12 @@ function Q() {
 			x(!1);
 		}
 	};
-	if (m !== void 0) return /* @__PURE__ */ c(q, {
+	if (m !== void 0) return /* @__PURE__ */ c(K, {
 		error: m,
 		onRetry: _
 	});
 	if (!v || !a) return h ? /* @__PURE__ */ c(g, { label: i("common.loading") }) : /* @__PURE__ */ c("div", {});
-	let k = a.status, A = Z.some((e) => v[e] !== a.settings[e]);
+	let k = a.status, A = X.some((e) => v[e] !== a.settings[e]);
 	return /* @__PURE__ */ l(f, {
 		title: i("settings.title"),
 		headingLevel: 2,
@@ -664,16 +682,20 @@ function Q() {
 			k && /* @__PURE__ */ l("p", {
 				className: "ss-pc-status",
 				children: [/* @__PURE__ */ l("span", { children: [i("settings.status"), ": "] }), /* @__PURE__ */ c(u, {
-					variant: se[k],
+					variant: le[k],
 					children: i(`settings.status.${k}`)
 				})]
+			}),
+			k === "disconnected" && /* @__PURE__ */ c("p", {
+				className: "ss-pc-text",
+				children: i("settings.disconnectedNote")
 			}),
 			/* @__PURE__ */ l("fieldset", {
 				className: "ss-pc-triggers",
 				children: [/* @__PURE__ */ c("legend", {
 					className: "ss-visually-hidden",
 					children: i("settings.title")
-				}), Z.map((e) => /* @__PURE__ */ c(p, {
+				}), X.map((e) => /* @__PURE__ */ c(p, {
 					label: i(`settings.trigger.${e}`),
 					checked: v[e],
 					onChange: (t) => D(e, t.target.checked)
@@ -684,11 +706,14 @@ function Q() {
 				role: "status",
 				children: [
 					w === "loading" && /* @__PURE__ */ c("p", { children: i("settings.costLoading") }),
-					w === "failed" && /* @__PURE__ */ c(q, {
+					w === "failed" && /* @__PURE__ */ c(K, {
 						error: void 0,
 						onRetry: E
 					}),
-					typeof w == "object" && /* @__PURE__ */ l(s, { children: [/* @__PURE__ */ c("p", { children: i("settings.costPreview", { count: w.explores }) }), /* @__PURE__ */ l("div", {
+					typeof w == "object" && /* @__PURE__ */ l(s, { children: [/* @__PURE__ */ c("p", { children: i("settings.costPreview", {
+						count: w.exploresMax,
+						reused: w.reusedKnown
+					}) }), /* @__PURE__ */ l("div", {
 						className: "ss-pc-actions",
 						children: [/* @__PURE__ */ c(d, {
 							variant: "contained-primary",
@@ -707,7 +732,7 @@ function Q() {
 					})] })
 				]
 			}),
-			S !== void 0 && /* @__PURE__ */ c(q, { error: S }),
+			S !== void 0 && /* @__PURE__ */ c(K, { error: S }),
 			/* @__PURE__ */ c("div", {
 				className: "ss-pc-actions",
 				children: /* @__PURE__ */ c(d, {
@@ -722,20 +747,27 @@ function Q() {
 }
 //#endregion
 //#region src/screens/StoreDashboard.tsx
-var ce = [
+var ue = [
 	"overview",
 	"profiles",
 	"segments",
 	"settings"
 ];
-function le({ openProfile: e }) {
-	let n = B(), r = U(), { data: i, error: a, loading: o, reload: s } = J(t(() => n.getOverview(), [n]));
-	if (a !== void 0) return /* @__PURE__ */ c(q, {
+function Q({ level: e }) {
+	let t = H();
+	return e ? /* @__PURE__ */ c(u, {
+		variant: e,
+		children: t(`level.${e}`)
+	}) : null;
+}
+function de({ openProfile: e }) {
+	let n = z(), r = H(), { data: i, error: a, loading: o, reload: s } = q(t(() => n.getOverview(), [n]));
+	if (a !== void 0) return /* @__PURE__ */ c(K, {
 		error: a,
 		onRetry: s
 	});
 	if (!i) return o ? /* @__PURE__ */ c(g, { label: r("common.loading") }) : /* @__PURE__ */ c("div", {});
-	let u = [
+	let u = (e) => e ?? r("overview.fewerThanFive"), p = [
 		{
 			key: "externalId",
 			header: r("overview.column.order"),
@@ -752,18 +784,18 @@ function le({ openProfile: e }) {
 		{
 			key: "placedAt",
 			header: r("overview.column.placed"),
-			render: (e) => L(e.placedAt)
+			render: (e) => I(e.placedAt)
 		},
 		{
 			key: "total",
 			header: r("overview.column.total"),
 			align: "end",
-			render: (e) => I(e.total, e.currency)
+			render: (e) => te(e.total, e.currency)
 		},
 		{
-			key: "fraudScore",
-			header: r("overview.column.fraud"),
-			align: "end"
+			key: "labels",
+			header: r("overview.column.labels"),
+			render: (e) => /* @__PURE__ */ c(U, { labels: e.labels })
 		}
 	];
 	return /* @__PURE__ */ l("div", {
@@ -776,7 +808,7 @@ function le({ openProfile: e }) {
 					headingLevel: 3,
 					children: /* @__PURE__ */ c("p", {
 						className: "ss-pc-stat",
-						children: i.checkedCustomers
+						children: u(i.checkedCustomers)
 					})
 				}),
 				/* @__PURE__ */ c(f, {
@@ -784,16 +816,15 @@ function le({ openProfile: e }) {
 					headingLevel: 3,
 					children: /* @__PURE__ */ c("p", {
 						className: "ss-pc-stat",
-						children: i.checkedOrders
+						children: u(i.checkedOrders)
 					})
 				}),
 				/* @__PURE__ */ c(f, {
 					title: r("overview.businessBuyers"),
 					headingLevel: 3,
-					when: i.businessBuyers !== void 0,
 					children: /* @__PURE__ */ c("p", {
 						className: "ss-pc-stat",
-						children: i.businessBuyers
+						children: u(i.businessBuyers)
 					})
 				})
 			]
@@ -803,7 +834,7 @@ function le({ openProfile: e }) {
 			hideWhenEmpty: !1,
 			children: /* @__PURE__ */ c(b, {
 				caption: r("overview.riskyOrdersCaption"),
-				columns: u,
+				columns: p,
 				rows: i.riskyOrders,
 				getRowKey: (e) => e.externalId,
 				empty: r("overview.riskyOrdersEmpty")
@@ -812,56 +843,61 @@ function le({ openProfile: e }) {
 	});
 }
 var $ = 20;
-function ue({ openProfile: e }) {
-	let n = B(), r = U(), [i, a] = o(1), { data: s, error: l, loading: f, reload: p } = J(t(() => n.listCheckedCustomers(i, $), [n, i]));
-	if (l !== void 0) return /* @__PURE__ */ c(q, {
+function fe({ openProfile: e }) {
+	let n = z(), r = H(), [i, a] = o(1), { data: s, error: l, loading: u, reload: f } = q(t(() => n.listCheckedCustomers(i, $), [n, i]));
+	if (l !== void 0) return /* @__PURE__ */ c(K, {
 		error: l,
-		onRetry: p
+		onRetry: f
 	});
-	if (!s) return f ? /* @__PURE__ */ c(g, { label: r("common.loading") }) : /* @__PURE__ */ c("div", {});
-	let h = [
+	if (!s) return u ? /* @__PURE__ */ c(g, { label: r("common.loading") }) : /* @__PURE__ */ c("div", {});
+	let p = [
 		{
-			key: "displayName",
+			key: "externalId",
 			header: r("profiles.column.customer"),
-			render: (t) => {
-				let n = t.displayName ?? t.externalId;
-				return /* @__PURE__ */ c(d, {
-					variant: "link",
-					"aria-label": r("profiles.open", { name: n }),
-					onClick: () => e({
-						kind: "customer",
-						externalId: t.externalId
-					}),
-					children: n
-				});
-			}
+			render: (t) => /* @__PURE__ */ c(d, {
+				variant: "link",
+				"aria-label": r("profiles.open", { id: t.externalId }),
+				onClick: () => e({
+					kind: "customer",
+					externalId: t.externalId
+				}),
+				children: t.externalId
+			})
 		},
 		{
 			key: "email",
-			header: r("profiles.column.email")
+			header: r("profiles.column.email"),
+			render: (e) => /* @__PURE__ */ c(Q, { level: e.health.email })
 		},
 		{
-			key: "ordersCount",
-			header: r("profiles.column.orders"),
-			align: "end"
+			key: "phone",
+			header: r("profiles.column.phone"),
+			render: (e) => /* @__PURE__ */ c(Q, { level: e.health.phone })
 		},
 		{
-			key: "healthLevel",
-			header: r("profiles.column.health"),
-			render: (e) => e.healthLevel ? /* @__PURE__ */ c(u, {
-				variant: e.healthLevel,
-				children: r(`level.${e.healthLevel}`)
-			}) : null
+			key: "fraudLevel",
+			header: r("profiles.column.fraud"),
+			render: (e) => /* @__PURE__ */ c(Q, { level: e.health.fraudLevel })
+		},
+		{
+			key: "digitalPresence",
+			header: r("profiles.column.presence"),
+			render: (e) => /* @__PURE__ */ c(Q, { level: e.health.digitalPresence })
+		},
+		{
+			key: "labels",
+			header: r("profiles.column.labels"),
+			render: (e) => /* @__PURE__ */ c(U, { labels: e.labels })
 		},
 		{
 			key: "checkedAt",
 			header: r("profiles.column.checked"),
-			render: (e) => L(e.checkedAt)
+			render: (e) => I(e.checkedAt)
 		}
 	];
 	return /* @__PURE__ */ c(b, {
 		caption: r("profiles.caption"),
-		columns: h,
+		columns: p,
 		rows: s.items,
 		getRowKey: (e) => e.externalId,
 		pageSize: $,
@@ -871,29 +907,22 @@ function ue({ openProfile: e }) {
 		empty: /* @__PURE__ */ c(m, { title: r("profiles.empty") })
 	});
 }
-function de() {
-	let e = B(), n = U(), { data: r, error: i, loading: a, reload: o } = J(t(() => e.listSegments(), [e]));
-	if (i !== void 0) return /* @__PURE__ */ c(q, {
+function pe() {
+	let e = z(), n = H(), { data: r, error: i, loading: a, reload: o } = q(t(() => e.listSegments(), [e]));
+	if (i !== void 0) return /* @__PURE__ */ c(K, {
 		error: i,
 		onRetry: o
 	});
 	if (!r) return a ? /* @__PURE__ */ c(g, { label: n("common.loading") }) : /* @__PURE__ */ c("div", {});
-	let s = [
-		{
-			key: "label",
-			header: n("segments.column.name")
-		},
-		{
-			key: "status",
-			header: n("segments.column.status"),
-			render: (e) => e.status ? n(`segments.status.${e.status}`) : ""
-		},
-		{
-			key: "size",
-			header: n("segments.column.size"),
-			align: "end"
-		}
-	];
+	let s = [{
+		key: "name",
+		header: n("segments.column.name")
+	}, {
+		key: "sizeBand",
+		header: n("segments.column.size"),
+		align: "end",
+		render: (e) => e.sizeBand ?? n("segments.sizeBand.small")
+	}];
 	return /* @__PURE__ */ l("div", { children: [/* @__PURE__ */ c("p", {
 		className: "ss-pc-text",
 		children: n("segments.editInSocialScore")
@@ -905,9 +934,9 @@ function de() {
 		empty: /* @__PURE__ */ c(m, { title: n("segments.empty") })
 	})] });
 }
-function fe({ initialProfile: e, initialTab: t = "overview" }) {
-	let n = U(), [r, i] = o(t), [a, s] = o(e);
-	return a ? /* @__PURE__ */ c(X, {
+function me({ initialProfile: e, initialTab: t = "overview" }) {
+	let n = H(), [r, i] = o(t), [a, s] = o(e);
+	return a ? /* @__PURE__ */ c(Y, {
 		kind: a.kind,
 		externalId: a.externalId,
 		onBack: () => s(void 0)
@@ -922,32 +951,32 @@ function fe({ initialProfile: e, initialTab: t = "overview" }) {
 			children: [
 				/* @__PURE__ */ c(v, {
 					"aria-label": n("dashboard.tabs"),
-					children: ce.map((e) => /* @__PURE__ */ c(_, {
+					children: ue.map((e) => /* @__PURE__ */ c(_, {
 						value: e,
 						children: n(`dashboard.tab.${e}`)
 					}, e))
 				}),
 				/* @__PURE__ */ c(y, {
 					value: "overview",
-					children: /* @__PURE__ */ c(le, { openProfile: s })
+					children: /* @__PURE__ */ c(de, { openProfile: s })
 				}),
 				/* @__PURE__ */ c(y, {
 					value: "profiles",
-					children: /* @__PURE__ */ c(ue, { openProfile: s })
+					children: /* @__PURE__ */ c(fe, { openProfile: s })
 				}),
 				/* @__PURE__ */ c(y, {
 					value: "segments",
-					children: /* @__PURE__ */ c(de, {})
+					children: /* @__PURE__ */ c(pe, {})
 				}),
 				/* @__PURE__ */ c(y, {
 					value: "settings",
-					children: /* @__PURE__ */ c(Q, {})
+					children: /* @__PURE__ */ c(Z, {})
 				})
 			]
 		})]
 	});
 }
 //#endregion
-export { j as ApiClient, D as ApiError, te as CheckPanel, ne as ConnectScreen, N as PluginProvider, X as ProfileView, Q as SettingsScreen, fe as StoreDashboard, P as messages, F as profilePath };
+export { j as ApiClient, D as ApiError, re as CheckPanel, ie as ConnectScreen, N as PluginProvider, Y as ProfileView, Z as SettingsScreen, me as StoreDashboard, O as batchIdMap, P as messages, F as profilePath };
 
 //# sourceMappingURL=index.js.map

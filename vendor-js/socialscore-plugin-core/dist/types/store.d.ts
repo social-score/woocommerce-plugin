@@ -1,23 +1,34 @@
 export type Platform = 'woocommerce' | 'shopify';
+/**
+ * `disconnected` is answered while the member who connected the store is gone or disabled. A store that
+ * was uninstalled answers 401 on the settings route, so the screen shows the expired-connection message.
+ */
 export type StoreStatus = 'active' | 'disconnected' | 'uninstalled';
-/** Enrichment triggers from BRD 12.6 (design-public-api.md, `stores.settings`). */
+/** When the plugin runs Check by itself (BRD 12.6). Abandoned cart needs the Pixel (phase 5): the API has no such field. */
 export interface TriggerSettings {
     onNewAccount: boolean;
     everyAccount: boolean;
-    /** Hidden in the settings screen until the Pixel exists (phase 5). */
-    abandonedCart: boolean;
     orderNewCustomer: boolean;
     orderAnyCustomer: boolean;
     manualOnly: boolean;
 }
 export type TriggerKey = keyof TriggerSettings;
 export interface StoreSettingsResponse {
-    /** needs backend: the contract names `settings` only; the connect status has no field yet. */
-    status?: StoreStatus;
+    storeId: number;
+    status: StoreStatus;
     settings: TriggerSettings;
 }
-/** needs backend: "API returns the estimate" has no endpoint in design-public-api.md. */
+/** What turning on "For every account" would cost. `exploresMax` is an upper bound. */
 export interface CostEstimate {
-    /** How many Explores turning on "For every account" would run. */
-    explores: number;
+    /** At most this many customers would be checked and charged. */
+    exploresMax: number;
+    /** Customers with a still valid check of the organization's own; no charge. */
+    reusedKnown: number;
+}
+export interface UninstallResult {
+    storeId: number;
+    status: string;
+    customersRedacted: number;
+    ordersRedacted: number;
+    profilesErased: number;
 }

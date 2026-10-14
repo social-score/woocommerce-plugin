@@ -1,8 +1,10 @@
-/** Zapier-style REST hooks (design-events.md, `/api/v2/hooks`). */
+/** Zapier-style REST hooks (`/api/v2/hooks`). Company keys only: a store key is refused. */
 export interface HookInput {
     targetUrl: string;
     eventType: string;
 }
 export interface HookCreated {
-    id: string | number;
+    id: number;
+    /** Signing secret for Standard Webhooks verification. Shown by the API on every subscribe. */
+    secret: string;
 }
