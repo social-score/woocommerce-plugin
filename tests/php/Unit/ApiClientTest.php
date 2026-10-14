@@ -19,7 +19,8 @@ class ApiClientTest extends TestCase {
 		$this->assertSame( 401, $response['status'] );
 		$this->assertFalse( Connection::is_connected() );
 		$this->assertTrue( Connection::was_lost() );
-		$this->assertSame( 'no', $this->autoload['socialscore_connection_lost'] ?? 'no' );
+		$this->assertArrayHasKey( 'socialscore_connection_lost', $this->autoload );
+		$this->assertSame( 'no', $this->autoload['socialscore_connection_lost'] );
 	}
 
 	public function test_other_errors_keep_the_connection() {

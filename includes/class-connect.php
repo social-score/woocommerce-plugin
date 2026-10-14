@@ -73,8 +73,9 @@ class Connect {
 	 * The store-connect URL on SocialScore.
 	 *
 	 * `shop` is the storefront host (home_url) and `redirect_uri` lives on the WordPress admin host (admin_url).
-	 * They differ when siteurl and home are on different hosts. SocialScore accepts a redirect_uri on the shop's registrable
-	 * domain. The same redirect_uri is sent again with the token request, as RFC 6749 section 4.1.3 requires.
+	 * They differ when siteurl and home are on different hosts. SocialScore accepts a redirect_uri on the shop host, a subdomain
+	 * of it, or the bare registrable domain. A sibling admin host (admin.example.com for www.example.com) is still
+	 * refused. The same redirect_uri is sent again with the token request, as RFC 6749 section 4.1.3 requires.
 	 *
 	 * @param string $state     Random state.
 	 * @param string $challenge PKCE challenge.

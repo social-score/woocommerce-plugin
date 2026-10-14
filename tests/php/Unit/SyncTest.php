@@ -260,16 +260,24 @@ class SyncTest extends TestCase {
 				),
 			),
 		);
+		\Brain\Monkey\Filters\expectAdded( 'woocommerce_orders_table_datastore_should_save_after_meta_change' )->times( 3 );
 		Sync::record_order_ids( $answer );
 		$this->assertSame( 501, $orders[9]->get_meta( '_socialscore_order_id' ) );
 		$this->assertSame( 502, $orders[10]->get_meta( '_socialscore_order_id' ) );
-		$this->assertSame( 1, $orders[9]->saves );
+		$this->assertSame( 0, $orders[9]->saves, 'the id is written through the data store, not by saving the order' );
+		$this->assertSame( 1, $orders[9]->store->added );
 
 		Sync::record_order_ids( $answer );
-		$this->assertSame( 1, $orders[9]->saves, 'an unchanged id is not saved again' );
+		$this->assertSame( 1, $orders[9]->store->added, 'an unchanged id is not written again' );
 		Sync::record_order_ids( new \WP_Error( 'x', 'down' ) );
 		Sync::record_order_ids( array( 'status' => 500, 'data' => $answer['data'], 'retry_after' => null ) );
-		$this->assertSame( 1, $orders[9]->saves );
+		$this->assertSame( 1, $orders[9]->store->added );
+
+		$answer['data']['ids'][0]['id'] = 601;
+		Sync::record_order_ids( $answer );
+		$this->assertSame( 601, $orders[9]->get_meta( '_socialscore_order_id' ) );
+		$this->assertSame( 1, $orders[9]->store->updated, 'a changed id updates the existing meta row' );
+		$this->assertSame( 0, $orders[9]->saves );
 	}
 
 	public function test_single_order_sync_stores_the_id_from_the_batch_answer() {

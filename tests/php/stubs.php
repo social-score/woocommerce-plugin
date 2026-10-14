@@ -95,12 +95,26 @@ namespace {
 			return $this->d['total'];
 		}
 	}
+	/** Data store fake: records meta rows written without a save. */
+	class WC_Order_Data_Store_Fake {
+		public $added   = 0;
+		public $updated = 0;
+		public function add_meta( $order, $meta ) {
+			++$this->added;
+			$order->meta[ $meta->key ] = $meta->value;
+		}
+		public function update_meta( $order, $meta ) {
+			++$this->updated;
+			$order->meta[ $meta->key ] = $meta->value;
+		}
+	}
 	/** Order fake: every getter reads from the $d array. */
 	class WC_Order {
 		public $d;
 		public $meta  = array();
 		public $notes = array();
 		public $saves = 0;
+		public $store;
 		public function __construct( array $d = array() ) {
 			$this->d = $d + array(
 				'id' => 1, 'customer_id' => 0, 'billing_email' => '', 'billing_phone' => '', 'billing_first_name' => '',
@@ -126,6 +140,17 @@ namespace {
 				return $this->d[ $key ];
 			}
 			throw new BadMethodCallException( $name );
+		}
+		public function get_data_store() {
+			$this->store = $this->store ?? new WC_Order_Data_Store_Fake();
+			return $this->store;
+		}
+		public function get_meta_data() {
+			$rows = array();
+			foreach ( $this->meta as $k => $v ) {
+				$rows[] = (object) array( 'id' => 100 + count( $rows ), 'key' => $k, 'value' => $v );
+			}
+			return $rows;
 		}
 		public function get_meta( $k ) {
 			return $this->meta[ $k ] ?? '';

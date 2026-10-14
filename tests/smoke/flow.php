@@ -88,6 +88,30 @@ foreach ( ss_log() as $row ) {
 	}
 }
 
+// Storing the SocialScore id must not save the order: no woocommerce_update_order, date_modified untouched.
+\SocialScore\Sync::pause(); // The probe order must not be queued for sync.
+$probe = wc_create_order();
+$probe->set_total( 3 );
+$probe->save();
+\SocialScore\Sync::resume();
+$GLOBALS['wpdb']->update( $GLOBALS['wpdb']->prefix . 'wc_orders', array( 'date_updated_gmt' => '2020-01-01 00:00:00' ), array( 'id' => $probe->get_id() ) );
+$GLOBALS['ss_probe_updates'] = 0;
+$counter = function () {
+	++$GLOBALS['ss_probe_updates'];
+};
+add_action( 'woocommerce_update_order', $counter );
+$answer = array( 'status' => 200, 'retry_after' => null, 'data' => array( 'ids' => array( array( 'external_id' => (string) $probe->get_id(), 'id' => 8001 ) ) ) );
+\SocialScore\Sync::record_order_ids( $answer );
+$answer['data']['ids'][0]['id'] = 8002;
+\SocialScore\Sync::record_order_ids( $answer );
+remove_action( 'woocommerce_update_order', $counter );
+$probe_fresh = wc_get_order( $probe->get_id() );
+ss_assert( 8002 === (int) $probe_fresh->get_meta( '_socialscore_order_id' ), 'the id is stored and updated in the order meta' );
+ss_assert( 0 === $GLOBALS['ss_probe_updates'], 'storing the id does not fire woocommerce_update_order' );
+ss_assert( '2020-01-01' === $probe_fresh->get_date_modified()->date( 'Y-m-d' ), 'storing the id leaves date_modified alone' );
+$found_probe = \SocialScore\Sync::order_for_socialscore_id( 8002 );
+ss_assert( $found_probe && $found_probe->get_id() === $probe->get_id(), 'the order is found by the stored id' );
+
 // Real-time: a new order is queued, not sent in the same request.
 @unlink( '/shared/api.log' );
 $order = wc_create_order();

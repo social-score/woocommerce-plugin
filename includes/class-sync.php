@@ -14,11 +14,12 @@ defined( 'ABSPATH' ) || exit;
  */
 class Sync {
 
-	const HOOK_ORDER    = 'socialscore_sync_order';
-	const HOOK_CUSTOMER = 'socialscore_sync_customer';
-	const HOOK_IMPORT   = 'socialscore_import';
-	const MAX_ATTEMPTS  = 6;
-	const BACKOFF       = array( 60, 300, 1800, 7200, 21600, 43200 );
+	const HOOK_ORDER     = 'socialscore_sync_order';
+	const NO_SAVE_FILTER = 'woocommerce_orders_table_datastore_should_save_after_meta_change';
+	const HOOK_CUSTOMER  = 'socialscore_sync_customer';
+	const HOOK_IMPORT    = 'socialscore_import';
+	const MAX_ATTEMPTS   = 6;
+	const BACKOFF        = array( 60, 300, 1800, 7200, 21600, 43200 );
 
 	/**
 	 * While true the queue hooks ignore events caused by our own saves.
@@ -237,11 +238,56 @@ class Sync {
 			if ( ! $order || (int) $order->get_meta( Config::META_ORDER_ID ) === (int) $row['id'] ) {
 				continue;
 			}
-			$order->update_meta_data( Config::META_ORDER_ID, (int) $row['id'] );
-			self::pause(); // Our own save must not queue the order again.
-			$order->save();
-			self::resume();
+			self::write_order_id( $order, (int) $row['id'] );
 		}
+	}
+
+	/**
+	 * Writes the SocialScore id straight through the order's data store. $order->save() (and save_meta_data(), which
+	 * fires the same event) would stamp date_modified and run woocommerce_update_order, and with it every webhook and
+	 * listener of other plugins, once per historical order of an import. With HPOS the data store saves the order
+	 * after a meta write too (WooCommerce 8.8+), unless this filter says no, so the filter is held back for this write only.
+	 *
+	 * @param \WC_Order $order Order.
+	 * @param int       $id    SocialScore order id.
+	 * @return void
+	 */
+	private static function write_order_id( $order, $id ) {
+		$store = $order->get_data_store();
+		add_filter( self::NO_SAVE_FILTER, '__return_false', PHP_INT_MAX );
+		self::store_order_id( $store, $order, $id );
+		remove_filter( self::NO_SAVE_FILTER, '__return_false', PHP_INT_MAX );
+	}
+
+	/**
+	 * Updates or adds the id meta row through the data store.
+	 *
+	 * @param object    $store Order data store.
+	 * @param \WC_Order $order Order.
+	 * @param int       $id    SocialScore order id.
+	 * @return void
+	 */
+	private static function store_order_id( $store, $order, $id ) {
+		foreach ( $order->get_meta_data() as $meta ) {
+			if ( Config::META_ORDER_ID === $meta->key ) {
+				$store->update_meta(
+					$order,
+					(object) array(
+						'id'    => $meta->id,
+						'key'   => Config::META_ORDER_ID,
+						'value' => $id,
+					)
+				);
+				return;
+			}
+		}
+		$store->add_meta(
+			$order,
+			(object) array(
+				'key'   => Config::META_ORDER_ID,
+				'value' => $id,
+			)
+		);
 	}
 
 	/**

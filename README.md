@@ -22,7 +22,9 @@ The plugin follows the final public API (`public-api-v2-ecommerce.md` in the soc
 
 - Connect sends `redirect_uri` with the code exchange. The cost estimate is shown by plugin-core as an upper bound.
 - The `ids` of every `orders:batch` answer are kept: each order stores the SocialScore id in the `_socialscore_order_id`
-  meta (HPOS aware, removed on uninstall). `Sync::order_for_socialscore_id()` finds the shop order for the `order_id` of an
+  meta (HPOS aware, removed on uninstall). The id is written through the order data store, so the order is not saved:
+  no `woocommerce_update_order`, no webhook and no `date_modified` change for the orders of an import (on HPOS this relies on the
+  `woocommerce_orders_table_datastore_should_save_after_meta_change` filter, WooCommerce 8.8+; older versions save the order). `Sync::order_for_socialscore_id()` finds the shop order for the `order_id` of an
   `order.created` event. Customer ids are not kept (events do not need them).
 - Every order row carries `customer_external_id` (the account id, `guest-<sha1 of the email>`, or `guest-order-<id>`).
 - Settings answer `active` or `disconnected` (plugin-core shows it). A store uninstalled on the SocialScore side answers
