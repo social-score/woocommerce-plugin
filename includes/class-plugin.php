@@ -29,6 +29,7 @@ class Plugin {
 		( new Connect() )->register();
 		( new Sync() )->register();
 		( new Enrichment() )->register();
+		( new Privacy() )->register();
 
 		if ( is_admin() ) {
 			( new Admin_Page() )->register();
