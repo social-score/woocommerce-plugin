@@ -23,6 +23,7 @@ class Connection {
 	 */
 	public static function save( $store_id, $api_key ) {
 		delete_option( Config::OPTION_CONN );
+		delete_option( Config::OPTION_LOST );
 		add_option(
 			Config::OPTION_CONN,
 			array(
@@ -43,6 +44,25 @@ class Connection {
 	public static function clear() {
 		delete_option( Config::OPTION_CONN );
 		delete_transient( Config::TRANSIENT_CONF );
+	}
+
+	/**
+	 * SocialScore answered 401 for the store key: forget the key and remember that the admin has to connect again.
+	 *
+	 * @return void
+	 */
+	public static function mark_lost() {
+		self::clear();
+		update_option( Config::OPTION_LOST, time(), false );
+	}
+
+	/**
+	 * Whether the key was dropped because SocialScore no longer accepts it.
+	 *
+	 * @return bool
+	 */
+	public static function was_lost() {
+		return (bool) get_option( Config::OPTION_LOST, false );
 	}
 
 	/**

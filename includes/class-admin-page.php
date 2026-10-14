@@ -118,6 +118,9 @@ class Admin_Page {
 		}
 
 		if ( ! Connection::is_connected() ) {
+			if ( Connection::was_lost() ) {
+				echo '<div class="notice notice-warning"><p>' . esc_html__( 'SocialScore no longer accepts this store\'s key. The store was uninstalled in SocialScore or connected again somewhere else. Connect again to continue.', 'socialscore' ) . '</p></div>';
+			}
 			$this->render_connect();
 		} else {
 			$this->render_dashboard( $profile );

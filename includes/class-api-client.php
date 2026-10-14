@@ -30,7 +30,14 @@ class Api_Client {
 		if ( '' === $key ) {
 			return new \WP_Error( 'socialscore_not_connected', __( 'SocialScore is not connected.', 'socialscore' ) );
 		}
-		return $this->send( $method, $path, $body, array_merge( $headers, array( 'X-API-KEY' => $key ) ), $query );
+		$response = $this->send( $method, $path, $body, array_merge( $headers, array( 'X-API-KEY' => $key ) ), $query );
+		// 401 Invalid API key: SocialScore no longer serves this key (the store was uninstalled there, or
+		// connected again with a new key). Retrying cannot help, so stop and ask the admin to connect again.
+		if ( is_array( $response ) && 401 === $response['status'] ) {
+			Connection::mark_lost();
+			Sync::unschedule_all();
+		}
+		return $response;
 	}
 
 	/**
@@ -147,6 +154,26 @@ class Api_Client {
 	 */
 	public function get_settings() {
 		return $this->request( 'GET', $this->store_path() . '/settings' );
+	}
+
+	/**
+	 * What SocialScore holds for one customer (data request).
+	 *
+	 * @param string $external_id Our id of the customer.
+	 * @return array|\WP_Error
+	 */
+	public function export_customer( $external_id ) {
+		return $this->request( 'GET', $this->store_path() . '/customers/' . rawurlencode( (string) $external_id ) . '/export' );
+	}
+
+	/**
+	 * Redacts one customer and their orders at SocialScore.
+	 *
+	 * @param string $external_id Our id of the customer.
+	 * @return array|\WP_Error
+	 */
+	public function redact_customer( $external_id ) {
+		return $this->request( 'DELETE', $this->store_path() . '/customers/' . rawurlencode( (string) $external_id ) );
 	}
 
 	/**

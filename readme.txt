@@ -19,6 +19,7 @@ SocialScore for WooCommerce connects your store to your SocialScore account. Aft
 * Every order screen and customer profile gets a **Check panel** with the result, and the orders list gets a risk column.
 * New and updated orders and customers are sent to SocialScore in the background, and your existing customers and orders are imported in batches of up to 500.
 * Orders get a note and a label such as "Review before shipping" or "Possible business buyer" from the check result.
+* Export and erase requests for a customer (Tools > Export / Erase Personal Data) also reach SocialScore.
 * You choose when checks run automatically (new account, every account, new customer's order, every order, or manual only).
 
 The plugin is fully functional on its own. Which checks your SocialScore plan includes is decided by the SocialScore service, not by the plugin: nothing in the plugin is locked behind a payment.
@@ -33,7 +34,9 @@ This plugin connects to the SocialScore service (https://socialscore.io), operat
 
 **What is sent:** your store address; for customers: email, phone, first and last name, city, postcode, country, number of orders, total paid and the date of the last order; for orders: order number, total, currency, date, the products (id, name, quantity, price), and shipping city, postcode and country. Payment details, passwords and street addresses are not sent. The store key SocialScore issues stays on your server and is never sent to the browser.
 
-**Disconnecting:** the Disconnect button tells SocialScore to remove the store and deletes the key from your site. Uninstalling the plugin removes its options and scheduled actions.
+**Privacy requests:** the plugin adds SocialScore to WordPress's Export Personal Data and Erase Personal Data tools. For a customer's email address, an export asks SocialScore for what it holds about that customer in your store (profile data, orders, check results), and an erasure asks SocialScore to redact that customer and their orders. Only the customer's id in your store is sent, and only while the store is connected.
+
+**Disconnecting:** the Disconnect button tells SocialScore to remove the store and deletes the key from your site. Uninstalling the plugin removes its options and scheduled actions. If SocialScore stops accepting the store key (for example the store was uninstalled in SocialScore), the plugin forgets the key, stops sending data and asks you to connect again.
 
 Service: https://socialscore.io
 Terms of Service: https://socialscore.io/terms
@@ -65,7 +68,7 @@ The `manage_woocommerce` capability (Shop manager and Administrator).
 == Changelog ==
 
 = 0.1.0 =
-* First release: connect, dashboard, check panel, order and customer sync, automatic checks, labels.
+* First release: connect, dashboard, check panel, order and customer sync, automatic checks, labels, personal data export and erase.
 
 == Upgrade Notice ==
 

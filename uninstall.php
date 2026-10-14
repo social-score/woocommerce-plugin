@@ -10,6 +10,7 @@ defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 
 delete_option( 'socialscore_connection' );
 delete_option( 'socialscore_sync_state' );
+delete_option( 'socialscore_connection_lost' );
 delete_transient( 'socialscore_trigger_settings' );
 
 // Pending connect attempts: transient names carry a hash, so they are found by prefix.
@@ -35,9 +36,10 @@ delete_metadata( 'user', 0, '_socialscore_checked', '', true );
 // Order meta: classic post meta, and the HPOS meta table when it exists.
 delete_post_meta_by_key( '_socialscore_labels' );
 delete_post_meta_by_key( '_socialscore_checked' );
+delete_post_meta_by_key( '_socialscore_order_id' );
 $socialscore_orders_meta = $wpdb->prefix . 'wc_orders_meta';
 // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $socialscore_orders_meta ) ) ) === $socialscore_orders_meta ) {
 	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-	$wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE meta_key IN (%s, %s)', $socialscore_orders_meta, '_socialscore_labels', '_socialscore_checked' ) );
+	$wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE meta_key IN (%s, %s, %s)', $socialscore_orders_meta, '_socialscore_labels', '_socialscore_checked', '_socialscore_order_id' ) );
 }

@@ -24,7 +24,9 @@ class Config {
 	const OPTION_CONN    = 'socialscore_connection';
 	const OPTION_SYNC    = 'socialscore_sync_state';
 	const TRANSIENT_CONF = 'socialscore_trigger_settings';
+	const OPTION_LOST    = 'socialscore_connection_lost';
 	const META_LABELS    = '_socialscore_labels';
+	const META_ORDER_ID  = '_socialscore_order_id';
 	const META_CHECKED   = '_socialscore_checked';
 	const API_DEFAULT    = 'https://api.socialscore.io';
 

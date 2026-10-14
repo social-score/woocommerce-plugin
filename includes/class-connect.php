@@ -229,6 +229,7 @@ class Connect {
 			( new Api_Client() )->delete_store();
 		}
 		Connection::clear();
+		delete_option( Config::OPTION_LOST ); // A deliberate disconnect is not a lost key, even if the uninstall call answered 401.
 		Sync::unschedule_all();
 		delete_option( Config::OPTION_SYNC );
 	}

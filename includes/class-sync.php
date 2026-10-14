@@ -219,13 +219,57 @@ class Sync {
 	}
 
 	/**
+	 * Keeps the SocialScore id of every order a batch stored, in the order's meta. An `order.created` event
+	 * carries that id, not the shop's order id, so this is how the shop finds its own order again.
+	 *
+	 * @param array|\WP_Error $response Answer of orders:batch.
+	 * @return void
+	 */
+	public static function record_order_ids( $response ) {
+		if ( is_wp_error( $response ) || $response['status'] < 200 || $response['status'] > 299 || ! is_array( $response['data'] ?? null ) || ! is_array( $response['data']['ids'] ?? null ) ) {
+			return;
+		}
+		foreach ( $response['data']['ids'] as $row ) {
+			if ( ! is_array( $row ) || ! isset( $row['external_id'], $row['id'] ) || ! ctype_digit( (string) $row['external_id'] ) || (int) $row['id'] < 1 ) {
+				continue;
+			}
+			$order = wc_get_order( (int) $row['external_id'] );
+			if ( ! $order || (int) $order->get_meta( Config::META_ORDER_ID ) === (int) $row['id'] ) {
+				continue;
+			}
+			$order->update_meta_data( Config::META_ORDER_ID, (int) $row['id'] );
+			self::pause(); // Our own save must not queue the order again.
+			$order->save();
+			self::resume();
+		}
+	}
+
+	/**
+	 * The shop order for a SocialScore order id (the `order_id` of an `order.created` event).
+	 *
+	 * @param int $socialscore_id Id from the event.
+	 * @return \WC_Order|null
+	 */
+	public static function order_for_socialscore_id( $socialscore_id ) {
+		$orders = wc_get_orders(
+			array(
+				'meta_key'   => Config::META_ORDER_ID, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+				'meta_value' => (string) (int) $socialscore_id, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'limit'      => 1,
+			)
+		);
+		return $orders ? reset( $orders ) : null;
+	}
+
+	/**
 	 * Sends rows in batches of at most 500; stops at the first failure.
 	 *
-	 * @param callable $push Takes one chunk, returns an API answer.
-	 * @param array    $rows Rows.
+	 * @param callable      $push     Takes one chunk, returns an API answer.
+	 * @param array         $rows     Rows.
+	 * @param callable|null $on_batch Called with each successful answer.
 	 * @return array|\WP_Error|null Last answer, null when there was nothing to send.
 	 */
-	public static function push_in_batches( $push, array $rows ) {
+	public static function push_in_batches( $push, array $rows, $on_batch = null ) {
 		$result = null;
 		foreach ( array_chunk( $rows, Config::BATCH_SIZE ) as $chunk ) {
 			$result = $push( $chunk );
@@ -233,6 +277,9 @@ class Sync {
 				return $result;
 			}
 			self::log_rejected( $result );
+			if ( $on_batch ) {
+				$on_batch( $result );
+			}
 		}
 		return $result;
 	}
@@ -262,6 +309,7 @@ class Sync {
 		if ( null === $result || ( ! is_wp_error( $result ) && $result['status'] < 300 ) ) {
 			$result = $client->push_orders( array( Mapper::order( $order ) ) );
 			self::log_rejected( $result );
+			self::record_order_ids( $result );
 		}
 
 		// A 200 batch answer can still set this order aside (for example customer_not_found after its customer
@@ -364,7 +412,7 @@ class Sync {
 			$result = self::push_in_batches( array( $client, 'push_customers' ), Mapper::customers_from_orders( $orders ) );
 			if ( null === $result || ( ! is_wp_error( $result ) && $result['status'] < 300 ) ) {
 				$rows   = array_map( array( Mapper::class, 'order' ), $orders );
-				$result = self::push_in_batches( array( $client, 'push_orders' ), $rows );
+				$result = self::push_in_batches( array( $client, 'push_orders' ), $rows, array( __CLASS__, 'record_order_ids' ) );
 			}
 			$count     = count( $orders );
 			$count_key = 'orders';

@@ -241,6 +241,80 @@ class SyncTest extends TestCase {
 		$this->assertCount( 2, $enqueued, 'finished: nothing more queued' );
 	}
 
+	public function test_batch_ids_of_orders_are_kept_in_the_order_meta_without_requeueing() {
+		$this->connect_store();
+		$orders = array( 9 => new \WC_Order( array( 'id' => 9 ) ), 10 => new \WC_Order( array( 'id' => 10 ) ) );
+		$orders[10]->update_meta_data( 'x', 1 );
+		Functions\when( 'wc_get_order' )->alias( fn( $id ) => $orders[ $id ] ?? false );
+		Functions\expect( 'as_enqueue_async_action' )->never();
+		$answer = array(
+			'status'      => 200,
+			'retry_after' => null,
+			'data'        => array(
+				'created' => 2,
+				'ids'     => array(
+					array( 'external_id' => '9', 'id' => 501 ),
+					array( 'external_id' => '10', 'id' => 502 ),
+					array( 'external_id' => '404', 'id' => 503 ), // Not a shop order any more.
+					array( 'external_id' => 'guest-x', 'id' => 504 ), // Not an order id.
+				),
+			),
+		);
+		Sync::record_order_ids( $answer );
+		$this->assertSame( 501, $orders[9]->get_meta( '_socialscore_order_id' ) );
+		$this->assertSame( 502, $orders[10]->get_meta( '_socialscore_order_id' ) );
+		$this->assertSame( 1, $orders[9]->saves );
+
+		Sync::record_order_ids( $answer );
+		$this->assertSame( 1, $orders[9]->saves, 'an unchanged id is not saved again' );
+		Sync::record_order_ids( new \WP_Error( 'x', 'down' ) );
+		Sync::record_order_ids( array( 'status' => 500, 'data' => $answer['data'], 'retry_after' => null ) );
+		$this->assertSame( 1, $orders[9]->saves );
+	}
+
+	public function test_single_order_sync_stores_the_id_from_the_batch_answer() {
+		$this->connect_store();
+		$order = new \WC_Order( array( 'id' => 9, 'billing_email' => 'a@b.bg', 'created' => time() ) );
+		Functions\when( 'wc_get_order' )->justReturn( $order );
+		$this->http_responder = function ( $url ) {
+			return self::response( 200, false !== strpos( $url, 'orders:batch' ) ? array( 'created' => 1, 'ids' => array( array( 'external_id' => '9', 'id' => 777 ) ) ) : array() );
+		};
+		( new Sync() )->handle_order( 9 );
+		$this->assertSame( 777, $order->get_meta( '_socialscore_order_id' ) );
+	}
+
+	public function test_import_batches_report_ids_to_the_callback_and_stop_at_a_failure() {
+		$seen = array();
+		Sync::push_in_batches(
+			fn( $chunk ) => array( 'status' => 200, 'data' => array( 'ids' => array( array( 'external_id' => (string) count( $chunk ), 'id' => 1 ) ) ), 'retry_after' => null ),
+			array_fill( 0, 501, array( 'x' => 1 ) ),
+			function ( $answer ) use ( &$seen ) {
+				$seen[] = $answer['data']['ids'][0]['external_id'];
+			}
+		);
+		$this->assertSame( array( '500', '1' ), $seen );
+
+		$seen = array();
+		Sync::push_in_batches( fn() => array( 'status' => 500, 'data' => null, 'retry_after' => null ), array( array( 'x' => 1 ) ), function () use ( &$seen ) { $seen[] = 1; } );
+		$this->assertSame( array(), $seen );
+	}
+
+	public function test_order_is_found_again_by_the_socialscore_id() {
+		$found = new \WC_Order( array( 'id' => 9 ) );
+		$query = null;
+		Functions\when( 'wc_get_orders' )->alias(
+			function ( $args ) use ( &$query, $found ) {
+				$query = $args;
+				return array( $found );
+			}
+		);
+		$this->assertSame( $found, Sync::order_for_socialscore_id( 501 ) );
+		$this->assertSame( '_socialscore_order_id', $query['meta_key'] );
+		$this->assertSame( '501', $query['meta_value'] );
+		Functions\when( 'wc_get_orders' )->justReturn( array() );
+		$this->assertNull( Sync::order_for_socialscore_id( 1 ) );
+	}
+
 	public function test_unschedule_all_uses_group() {
 		Functions\expect( 'as_unschedule_all_actions' )->once()->with( '', array(), 'socialscore' );
 		Sync::unschedule_all();

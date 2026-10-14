@@ -109,6 +109,28 @@ ss_assert( array( 'review_before_shipping' ) === $fresh->get_meta( '_socialscore
 $notes = wc_get_order_notes( array( 'order_id' => $order->get_id() ) );
 ss_assert( count( array_filter( $notes, fn( $n ) => false !== strpos( $n->content, 'Review before shipping' ) ) ) === 1, 'order note added once' );
 
+// The batch answer's id mapping is kept in the order meta, and the order is found again by it.
+$mapped = (int) $fresh->get_meta( '_socialscore_order_id' );
+ss_assert( $mapped > 9000, 'order meta holds the SocialScore id from the batch answer' );
+$found = \SocialScore\Sync::order_for_socialscore_id( $mapped );
+ss_assert( $found && $found->get_id() === $order->get_id(), 'order is found again by its SocialScore id' );
+ss_assert( '' === wc_get_order( $GLOBALS['ss_draft_id'] )->get_meta( '_socialscore_order_id' ), 'the skipped draft order has no SocialScore id' );
+
+// WordPress personal data exporter and eraser reach the per-customer routes.
+$exporters = apply_filters( 'wp_privacy_personal_data_exporters', array() );
+$erasers   = apply_filters( 'wp_privacy_personal_data_erasers', array() );
+ss_assert( isset( $exporters['socialscore'] ) && isset( $erasers['socialscore'] ), 'exporter and eraser are registered' );
+$guest_id = 'guest-' . sha1( 'new@example.test' );
+@unlink( '/shared/api.log' );
+$export = call_user_func( $exporters['socialscore']['callback'], 'new@example.test', 1 );
+ss_assert( true === $export['done'] && 'socialscore-customer' === $export['data'][0]['group_id'], 'exporter returns the customer group' );
+ss_assert( '/api/v2/stores/st_1/customers/' . $guest_id . '/export' === ss_log()[0]['path'], 'exporter called the export route with the guest id' );
+@unlink( '/shared/api.log' );
+$erase = call_user_func( $erasers['socialscore']['callback'], 'new@example.test', 1 );
+ss_assert( true === $erase['items_removed'] && false === $erase['items_retained'], 'eraser reports the removed customer' );
+$del = ss_log()[0];
+ss_assert( 'DELETE' === $del['method'] && '/api/v2/stores/st_1/customers/' . $guest_id === $del['path'] && 'sk_mock_secret' === $del['key'], 'eraser called DELETE on the customer route with the store key' );
+
 // Order screen ids and meta box. wc_get_page_screen_id() lives in an admin-only file.
 require_once WC_ABSPATH . 'includes/admin/wc-admin-functions.php';
 ss_assert( 'woocommerce_page_wc-orders' === wc_get_page_screen_id( 'shop-order' ), 'wc_get_page_screen_id returns the HPOS screen id' );
