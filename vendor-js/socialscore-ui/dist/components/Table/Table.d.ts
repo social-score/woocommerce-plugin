@@ -17,6 +17,7 @@ export interface TableColumn<Row> {
     compare?: (a: Row, b: Row) => number;
     /** Replaces the default filter (case-insensitive "contains" on the cell value). */
     filter?: (row: Row, filterValue: string) => boolean;
+    /** Header and cells. Default `start`; use `end` for numbers. */
     align?: 'start' | 'center' | 'end';
 }
 export type TableStripes = 'surface-first' | 'subtle-first' | 'none';
@@ -39,16 +40,17 @@ export interface TableProps<Row> {
     /** Rows with the same group value are shown together under a heading row. */
     groupBy?: (row: Row) => string;
     renderGroupHeader?: (group: string, rows: Row[]) => ReactNode;
-    /** Pagination shows when `pageSize` is set, even for 0 rows. 1-based. */
+    /** Pagination shows when `pageSize` is set and there is more than one page. 1-based. */
     pageSize?: number;
     page?: number;
     defaultPage?: number;
     onPageChange?: (page: number) => void;
     /** Set when the rows are one server-side page: no local slicing, this is the full count. */
     totalRecords?: number;
-    /** Shown instead of the rows when there are none. */
+    /** Shown instead of the rows when there are none. Without it an empty table is only a header. */
     empty?: ReactNode;
     fixed?: boolean;
+    /** Zebra rows. Default `none`: rows are split by hairlines. */
     stripes?: TableStripes;
     className?: string;
 }

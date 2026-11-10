@@ -19,11 +19,12 @@
   --ss-color-white: #ffffff;
   --ss-color-black: #000000;
 
-  --ss-color-gray-50: #f8f8f8;
-  --ss-color-gray-100: #f1f1f1;
-  --ss-color-gray-200: #e0e0e0;
-  --ss-color-gray-300: #d4d4d4;
-  --ss-color-gray-400: #bbbbbb;
+  /* Cool greys tinted toward navy-900, so surfaces sit with the navy text. */
+  --ss-color-gray-50: #f8f9fb;
+  --ss-color-gray-100: #f2f3f7;
+  --ss-color-gray-200: #e4e6ee;
+  --ss-color-gray-300: #d2d5e0;
+  --ss-color-gray-400: #a8acbd;
   /* Added for AA: placeholder text (was #9ca3af, 2.5:1 on white). Dark enough for
      4.5:1 on gray-100 too, where an input can sit on a muted panel. */
   --ss-color-gray-500: #686e79;
@@ -139,18 +140,18 @@
   /* ---- Typography -------------------------------------------------------- */
   --ss-font-sans: Inter, sans-serif;
 
-  /* Named by role, smallest first. Values are the 2023 design's sizes. */
-  --ss-font-size-micro: 0.625rem; /* 10px */
-  --ss-font-size-caption: 0.875rem; /* 14px */
-  --ss-font-size-body: 1rem; /* 16px */
-  --ss-font-size-body-lg: 1.125rem; /* 18px */
-  --ss-font-size-subtitle: 1.25rem; /* 20px */
-  --ss-font-size-title-sm: 1.3rem; /* 20.8px, h5 */
+  /* Named by role, smallest first. A dashboard scale: 14px body, 30px page title. */
+  --ss-font-size-micro: 0.75rem; /* 12px, labels and table headers */
+  --ss-font-size-caption: 0.8125rem; /* 13px, helper text and table cells */
+  --ss-font-size-body: 0.875rem; /* 14px */
+  --ss-font-size-body-lg: 1rem; /* 16px */
+  --ss-font-size-subtitle: 1.125rem; /* 18px, card titles */
+  --ss-font-size-title-sm: 1.25rem; /* 20px, h5 */
   --ss-font-size-title: 1.5rem; /* 24px */
-  --ss-font-size-title-lg: 1.75rem; /* 28px */
-  --ss-font-size-display-sm: 2rem; /* 32px */
-  --ss-font-size-display: 2.25rem; /* 36px, h1 */
-  --ss-font-size-display-lg: 2.625rem; /* 42px */
+  --ss-font-size-title-lg: 1.625rem; /* 26px */
+  --ss-font-size-display-sm: 1.75rem; /* 28px */
+  --ss-font-size-display: 1.875rem; /* 30px, h1 */
+  --ss-font-size-display-lg: 2.25rem; /* 36px */
 
   --ss-font-weight-thin: 100;
   --ss-font-weight-extralight: 200;
@@ -178,16 +179,19 @@
   --ss-radius-full: 9999px;
 
   /* ---- Shadows ------------------------------------------------------------ */
-  --ss-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --ss-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  /* Tinted with navy-900, never black. xs: cards. lg: menus, popovers, modals. */
+  --ss-shadow-xs: 0 1px 2px rgb(17 20 65 / 0.04);
+  --ss-shadow-md: 0 4px 12px -2px rgb(17 20 65 / 0.08), 0 2px 4px -2px rgb(17 20 65 / 0.04);
+  --ss-shadow-lg: 0 12px 24px -6px rgb(17 20 65 / 0.12);
   /* Even glow on all sides: tooltips and floating cards. */
-  --ss-shadow-all: 0px 0px 20px rgba(0, 0, 0, 0.15);
+  --ss-shadow-all: 0 8px 24px rgb(17 20 65 / 0.12);
 
   /* ---- Layout sizes -------------------------------------------------------- */
   /* Fixed widths and heights that carry a design decision. Anything else uses the
      spacing scale (`w-96`, `max-w-125`); theme.css exposes these as `w-nav`, `max-w-form`. */
   --ss-size-nav: 18.75rem; /* 300px, side navigation expanded */
   --ss-size-nav-collapsed: 10rem; /* 160px, side navigation collapsed */
+  --ss-size-nav-rail: 4.5rem; /* 72px, icon-only side navigation */
   --ss-size-form: 25rem; /* 400px, a single-column form */
   --ss-size-dropzone-tall: 20rem; /* 320px, FileDropzone size="tall" */
   --ss-size-chart-panel: 39.0625rem; /* 625px, one Compare section with a chart and its table */
@@ -216,11 +220,12 @@
  */
 /* Class selectors only: this file also loads inside host admin pages. */
 .ss-button {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: calc(var(--ss-space-unit) * 1);
-  width: 100%;
+  gap: calc(var(--ss-space-unit) * 2);
+  box-sizing: border-box;
+  width: auto;
   margin: 0;
   padding: 0;
   border: 0 solid;
@@ -230,6 +235,9 @@
   font: inherit;
   letter-spacing: inherit;
   cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
 .ss-button:focus-visible {
@@ -241,8 +249,11 @@
   border-radius: var(--ss-radius-full);
   background-color: var(--ss-color-action);
   color: var(--ss-color-text-on-action);
-  font-size: var(--ss-font-size-body-lg);
+  min-height: calc(var(--ss-space-unit) * 10);
+  padding: 0 calc(var(--ss-space-unit) * 4);
+  font-size: var(--ss-font-size-body);
   font-weight: var(--ss-font-weight-medium);
+  white-space: nowrap;
 }
 
 .ss-button--contained-primary:hover {
@@ -255,31 +266,42 @@
   border-radius: var(--ss-radius-full);
   background-color: var(--ss-color-surface);
   color: var(--ss-color-text-primary);
+  min-height: calc(var(--ss-space-unit) * 10);
+  padding: 0 calc(var(--ss-space-unit) * 4);
   font-size: var(--ss-font-size-body);
   font-weight: var(--ss-font-weight-medium);
+  white-space: nowrap;
 }
 
 .ss-button--outlined-primary:hover {
-  background-color: var(--ss-color-accent-subtle);
+  background-color: var(--ss-color-accent-faint);
 }
 
 .ss-button--contained-inverse {
   border-radius: var(--ss-radius-3xl);
   background-color: var(--ss-color-surface-inverse);
   color: var(--ss-color-text-inverse);
-  font-size: var(--ss-font-size-body-lg);
+  min-height: calc(var(--ss-space-unit) * 10);
+  padding: 0 calc(var(--ss-space-unit) * 4);
+  font-size: var(--ss-font-size-body);
   font-weight: var(--ss-font-weight-medium);
+  white-space: nowrap;
 }
 
 .ss-button--contained-inverse:hover {
   background-color: var(--ss-color-surface-inverse-subtle);
 }
 
-.ss-button--link {
+.ss-button--link,
+.ss-button--link-danger {
   display: inline-flex;
-  width: auto;
   color: var(--ss-color-text-link);
   text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ss-button--link-danger {
+  color: var(--ss-color-error-text);
 }
 
 .ss-button--link-disabled {
@@ -287,17 +309,42 @@
   cursor: default;
 }
 
-/* Inactive controls are exempt from WCAG 1.4.3; the grey matches the 2023 design. */
+/* Muted fill with a muted label: clearly inactive, and the label stays readable. */
 .ss-button--disabled {
   border-width: 1px;
-  border-color: var(--ss-color-border-inverse);
+  border-color: var(--ss-color-border-control);
   border-radius: var(--ss-radius-full);
-  background-color: var(--ss-color-disabled);
-  color: var(--ss-color-text-inverse);
+  background-color: var(--ss-color-surface-muted);
+  color: var(--ss-color-text-muted);
+  min-height: calc(var(--ss-space-unit) * 10);
+  padding: 0 calc(var(--ss-space-unit) * 4);
   font-size: var(--ss-font-size-body);
   font-weight: var(--ss-font-weight-medium);
+  white-space: nowrap;
   cursor: default;
 }
+
+/* The pill variants above are md (40px) by default, so a bare `ss-button--<variant>`
+   class on a Link is sized too. sm and lg come after them and override. */
+.ss-button--sm {
+  min-height: calc(var(--ss-space-unit) * 8);
+  padding: 0 calc(var(--ss-space-unit) * 3);
+  font-size: var(--ss-font-size-caption);
+  white-space: nowrap;
+}
+
+.ss-button--lg {
+  min-height: calc(var(--ss-space-unit) * 12);
+  padding: 0 calc(var(--ss-space-unit) * 6);
+  font-size: var(--ss-font-size-body-lg);
+  white-space: nowrap;
+}
+
+.ss-button--full {
+  display: flex;
+  width: 100%;
+}
+
 /* Shared by Input, Select, Checkbox and Switch. Class selectors only. */
 .ss-field {
   position: relative;
@@ -856,9 +903,11 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: calc(var(--ss-space-unit) * 6) 0;
+  gap: calc(var(--ss-space-unit) * 1);
+  padding: calc(var(--ss-space-unit) * 4) 0;
   color: var(--ss-color-text-primary);
   font-family: var(--ss-font-sans);
+  font-variant-numeric: tabular-nums;
 }
 
 .ss-pagination-item {
@@ -874,14 +923,14 @@
   background-color: transparent;
   color: inherit;
   font: inherit;
-  font-size: var(--ss-font-size-body);
+  font-size: var(--ss-font-size-caption);
   font-weight: var(--ss-font-weight-medium);
   cursor: pointer;
   user-select: none;
 }
 
 .ss-pagination-item:hover {
-  background-color: var(--ss-color-accent-subtle);
+  background-color: var(--ss-color-accent-faint);
 }
 
 .ss-pagination-item:focus-visible {
@@ -891,6 +940,7 @@
 
 .ss-pagination-item:disabled {
   background-color: transparent;
+  color: var(--ss-color-border-strong);
   cursor: default;
 }
 
@@ -914,9 +964,58 @@
 }
 
 /* Class selectors only: this file also loads inside host admin pages. */
+/* The table scrolls sideways when it is wider than its box. A page that wants that on
+   phones gives the table a minimum width (`className="min-w-160"`). */
 .ss-table-wrap {
   width: 100%;
+  min-width: 0;
+}
+
+.ss-table-frame {
+  position: relative;
+}
+
+/* Positioned so it also clips absolutely placed cell content (visually hidden labels): without
+   it they hang outside the box at their column's offset and widen the page on phones. */
+.ss-table-scroll {
+  position: relative;
+  width: 100%;
   overflow-x: auto;
+}
+
+/* A shadow on the edge that hides columns, so a cut-off table reads as scrollable. A shadow
+   and not a fade to white: tables also sit straight on the grey page. */
+.ss-table-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  width: calc(var(--ss-space-unit) * 6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.ss-table-edge-start {
+  left: 0;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--ss-color-text-primary) 14%, transparent),
+    transparent
+  );
+}
+
+.ss-table-edge-end {
+  right: 0;
+  background: linear-gradient(
+    to left,
+    color-mix(in srgb, var(--ss-color-text-primary) 14%, transparent),
+    transparent
+  );
+}
+
+.ss-table-edge-visible {
+  opacity: 1;
 }
 
 .ss-table {
@@ -924,6 +1023,8 @@
   border-collapse: collapse;
   border-spacing: 0;
   font-family: var(--ss-font-sans);
+  font-size: var(--ss-font-size-caption);
+  font-variant-numeric: tabular-nums;
   text-indent: 0;
 }
 
@@ -936,21 +1037,32 @@
 }
 
 .ss-table-th {
-  padding: calc(var(--ss-space-unit) * 3) calc(var(--ss-space-unit) * 2);
-  background-color: var(--ss-color-accent-subtle);
-  color: var(--ss-color-text-primary);
-  font-weight: var(--ss-font-weight-normal);
-  text-align: center;
+  padding: calc(var(--ss-space-unit) * 2.5) calc(var(--ss-space-unit) * 3);
+  border-bottom: 1px solid var(--ss-color-border);
+  background-color: var(--ss-color-surface-subtle);
+  color: var(--ss-color-text-muted);
+  font-size: var(--ss-font-size-micro);
+  font-weight: var(--ss-font-weight-medium);
+  letter-spacing: 0.04em;
+  text-align: start;
   text-transform: uppercase;
   white-space: nowrap;
   user-select: none;
 }
 
+.ss-table-th-center {
+  text-align: center;
+}
+
+.ss-table-th-end {
+  text-align: end;
+}
+
 .ss-table-sort {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: calc(var(--ss-space-unit) * 4);
+  justify-content: flex-start;
+  gap: calc(var(--ss-space-unit) * 1);
   width: 100%;
   margin: 0;
   padding: 0;
@@ -959,8 +1071,13 @@
   color: inherit;
   font: inherit;
   letter-spacing: inherit;
+  text-align: inherit;
   text-transform: inherit;
   cursor: pointer;
+}
+
+.ss-table-sort:hover {
+  color: var(--ss-color-text-primary);
 }
 
 .ss-table-sort:focus-visible {
@@ -968,17 +1085,34 @@
   outline-offset: var(--ss-focus-ring-offset);
 }
 
+.ss-table-th-content {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: calc(var(--ss-space-unit) * 1);
+}
+
+/* Header content follows the column alignment (on .ss-table-sort / .ss-table-th-content). */
+.ss-table-justify-center {
+  justify-content: center;
+}
+
+.ss-table-justify-end {
+  justify-content: flex-end;
+}
+
 .ss-table-sort-icons {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--ss-space-unit) * 1);
+  flex-shrink: 0;
+  gap: 2px;
 }
 
 .ss-table-sort-icon {
   display: block;
   width: calc(var(--ss-space-unit) * 2);
-  height: calc(var(--ss-space-unit) * 2);
-  color: var(--ss-color-accent);
+  height: calc(var(--ss-space-unit) * 1);
+  color: var(--ss-color-text-muted);
 }
 
 .ss-table-sort-icon-up {
@@ -997,16 +1131,24 @@
   background-color: var(--ss-color-surface-subtle);
 }
 
-.ss-table-td {
-  height: calc(var(--ss-space-unit) * 14);
-  padding: 1px;
-  overflow: hidden;
-  text-align: center;
-  text-overflow: ellipsis;
+/* After the stripes so it wins over them. */
+.ss-table-row:hover {
+  background-color: var(--ss-color-surface-subtle);
 }
 
-.ss-table-td-start {
+.ss-table-td {
+  height: calc(var(--ss-space-unit) * 11);
+  padding: calc(var(--ss-space-unit) * 2) calc(var(--ss-space-unit) * 3);
+  border-bottom: 1px solid var(--ss-color-border);
+  overflow: hidden;
+  color: var(--ss-color-text-primary);
   text-align: start;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.ss-table-td-center {
+  text-align: center;
 }
 
 .ss-table-td-end {
@@ -1014,7 +1156,8 @@
 }
 
 .ss-table-group {
-  padding: calc(var(--ss-space-unit) * 2) calc(var(--ss-space-unit) * 2);
+  padding: calc(var(--ss-space-unit) * 2) calc(var(--ss-space-unit) * 3);
+  border-bottom: 1px solid var(--ss-color-border);
   background-color: var(--ss-color-surface-muted);
   color: var(--ss-color-text-primary);
   font-weight: var(--ss-font-weight-medium);
@@ -1023,14 +1166,9 @@
 
 .ss-table-empty {
   padding: calc(var(--ss-space-unit) * 10) calc(var(--ss-space-unit) * 4);
+  color: var(--ss-color-text-muted);
+  font-size: var(--ss-font-size-body);
   text-align: center;
-}
-
-.ss-table-th-content {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: calc(var(--ss-space-unit) * 4);
 }
 
 /* Class selectors only: this file also loads inside host admin pages. */
@@ -1038,8 +1176,10 @@
   box-sizing: border-box;
   width: 100%;
   padding: calc(var(--ss-space-unit) * 6);
+  border: 1px solid var(--ss-color-border);
   border-radius: var(--ss-radius-2xl);
   background-color: var(--ss-color-surface);
+  box-shadow: var(--ss-shadow-xs);
   color: var(--ss-color-text-primary);
   font-family: var(--ss-font-sans);
 }
@@ -1048,6 +1188,52 @@
   margin: 0 0 calc(var(--ss-space-unit) * 4);
   font-size: var(--ss-font-size-subtitle);
   font-weight: var(--ss-font-weight-semibold);
+}
+
+/* Class selectors only: this file also loads inside host admin pages. */
+.ss-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: calc(var(--ss-space-unit) * 4);
+  color: var(--ss-color-text-primary);
+  font-family: var(--ss-font-sans);
+}
+
+.ss-page-header-text {
+  display: flex;
+  flex: 1 1 20rem;
+  flex-direction: column;
+  gap: calc(var(--ss-space-unit) * 1);
+  min-width: 0;
+}
+
+.ss-page-header-breadcrumb {
+  color: var(--ss-color-text-muted);
+  font-size: var(--ss-font-size-caption);
+}
+
+.ss-page-header-title {
+  margin: 0;
+  color: inherit;
+  font-size: var(--ss-font-size-display);
+  font-weight: var(--ss-font-weight-semibold);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.ss-page-header-description {
+  margin: 0;
+  color: var(--ss-color-text-secondary);
+  font-size: var(--ss-font-size-body);
+}
+
+.ss-page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--ss-space-unit) * 3);
 }
 
 /* Class selectors only: this file also loads inside host admin pages. */
@@ -1362,7 +1548,7 @@
   width: 100%;
   max-width: 32rem;
   max-height: 100%;
-  overflow-y: auto;
+  overflow: hidden;
   padding: calc(var(--ss-space-unit) * 6);
   border-radius: var(--ss-radius-2xl);
   background-color: var(--ss-color-surface);
@@ -1376,20 +1562,32 @@
 }
 
 .ss-modal-title {
+  flex-shrink: 0;
   margin: 0;
   font-size: var(--ss-font-size-title);
   font-weight: var(--ss-font-weight-semibold);
   color: inherit;
 }
 
+/* Only the body scrolls, so the title and the footer actions stay in view. The 4px
+   padding (taken back by the margin) keeps focus rings of edge fields unclipped. */
 .ss-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: calc(var(--ss-space-unit) * -1);
+  padding: calc(var(--ss-space-unit) * 1);
+  overflow-y: auto;
   color: var(--ss-color-text-secondary);
 }
 
 .ss-modal-footer {
   display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: calc(var(--ss-space-unit) * 3);
+  padding-top: calc(var(--ss-space-unit) * 4);
+  border-top: 1px solid var(--ss-color-border);
 }
 
 /* Class selectors only: this file also loads inside host admin pages. */
@@ -1684,7 +1882,6 @@
   font: inherit;
   font-size: var(--ss-font-size-caption);
   font-weight: var(--ss-font-weight-medium);
-  text-transform: uppercase;
   cursor: pointer;
 }
 

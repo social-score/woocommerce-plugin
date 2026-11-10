@@ -1,6 +1,6 @@
 {
   "name": "@socialscore/ui",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "SocialScore design tokens and React components, shared by the client app and the e-commerce plugins.",
   "type": "module",
   "license": "GPL-2.0-or-later",

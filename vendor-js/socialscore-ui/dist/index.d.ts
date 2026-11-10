@@ -1,5 +1,5 @@
 export { Button } from './components/Button/index.js';
-export type { ButtonProps, ButtonVariant } from './components/Button/index.js';
+export type { ButtonProps, ButtonSize, ButtonVariant } from './components/Button/index.js';
 export { paletteColors, paletteValue, paletteVar, tokenValue } from './tokens.js';
 export type { PaletteColor } from './tokens.js';
 export { Input } from './components/Input/index.js';
@@ -34,6 +34,8 @@ export { Table } from './components/Table/index.js';
 export type { SortDirection, SortState, TableColumn, TableProps, TableStripes, } from './components/Table/index.js';
 export { Tab, TabList, TabPanel, Tabs } from './components/Tabs/index.js';
 export type { TabListProps, TabPanelProps, TabProps, TabsOrientation, TabsProps, } from './components/Tabs/index.js';
+export { PageHeader } from './components/PageHeader/index.js';
+export type { PageHeaderProps } from './components/PageHeader/index.js';
 export { Modal } from './components/Modal/index.js';
 export type { ModalProps } from './components/Modal/index.js';
 export { ToastProvider, useToast } from './components/Toast/index.js';

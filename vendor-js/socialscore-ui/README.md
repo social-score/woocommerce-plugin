@@ -79,7 +79,7 @@ pages and components use them. Data-viz series may use the palette directly.
 | Scale  | Shades                                                                                 |
 | ------ | -------------------------------------------------------------------------------------- |
 | white, black | `#ffffff`, `#000000`                                                             |
-| gray   | 50 `#f8f8f8` · 100 `#f1f1f1` · 200 `#e0e0e0` · 300 `#d4d4d4` · 400 `#bbbbbb` · 500 `#686e79`* |
+| gray   | 50 `#f8f9fb` · 100 `#f2f3f7` · 200 `#e4e6ee` · 300 `#d2d5e0` · 400 `#a8acbd` · 500 `#686e79`* |
 | navy   | 500 `#595b7a` · 700 `#414367` · 900 `#111441`                                         |
 | blue   | 50 `#e6f6ff` · 100 `#dbf0ff` · 500 `#0d99ff` · 700 `#0271c0`* · 800 `#0061af`*          |
 | violet | 200 `#cfbefb` · 300 `#a794e2` · 400 `#9780f5` · 500 `#836ee1` · 600 `#755bcc`* · 700 `#63549c` |
@@ -130,17 +130,17 @@ Font: `--ss-font-sans` (Inter). Sizes are named by role. The old names were misl
 
 | Tailwind | Token | Size | Old class |
 | --- | --- | --- | --- |
-| `text-micro` | `--ss-font-size-micro` | 0.625rem (10px) | `text-xxs` |
-| `text-caption` | `--ss-font-size-caption` | 0.875rem (14px) | `text-xs` |
-| `text-body` | `--ss-font-size-body` | 1rem (16px) | `text-sm` |
-| `text-body-lg` | `--ss-font-size-body-lg` | 1.125rem (18px) | `text-base` |
-| `text-subtitle` | `--ss-font-size-subtitle` | 1.25rem (20px) | `text-lg` |
-| `text-title-sm` | `--ss-font-size-title-sm` | 1.3rem (20.8px) | `text-xl` |
+| `text-micro` | `--ss-font-size-micro` | 0.75rem (12px) | `text-xxs` |
+| `text-caption` | `--ss-font-size-caption` | 0.8125rem (13px) | `text-xs` |
+| `text-body` | `--ss-font-size-body` | 0.875rem (14px) | `text-sm` |
+| `text-body-lg` | `--ss-font-size-body-lg` | 1rem (16px) | `text-base` |
+| `text-subtitle` | `--ss-font-size-subtitle` | 1.125rem (18px) | `text-lg` |
+| `text-title-sm` | `--ss-font-size-title-sm` | 1.25rem (20px) | `text-xl` |
 | `text-title` | `--ss-font-size-title` | 1.5rem (24px) | `text-2xl` |
-| `text-title-lg` | `--ss-font-size-title-lg` | 1.75rem (28px) | `text-3xl` |
-| `text-display-sm` | `--ss-font-size-display-sm` | 2rem (32px) | `text-4xl` |
-| `text-display` | `--ss-font-size-display` | 2.25rem (36px) | `text-5xl` |
-| `text-display-lg` | `--ss-font-size-display-lg` | 2.625rem (42px) | `text-6xl` |
+| `text-title-lg` | `--ss-font-size-title-lg` | 1.625rem (26px) | `text-3xl` |
+| `text-display-sm` | `--ss-font-size-display-sm` | 1.75rem (28px) | `text-4xl` |
+| `text-display` | `--ss-font-size-display` | 1.875rem (30px) | `text-5xl` |
+| `text-display-lg` | `--ss-font-size-display-lg` | 2.25rem (36px) | `text-6xl` |
 
 Weights: `--ss-font-weight-thin` … `-black` (100–900), as Tailwind's `font-*`.
 
