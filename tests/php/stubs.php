@@ -165,6 +165,9 @@ namespace {
 		public function save() {
 			++$this->saves;
 		}
+		public function delete_meta_data( $k ) {
+			unset( $this->meta[ $k ] );
+		}
 		public function save_meta_data() {
 			++$this->meta_saves;
 		}

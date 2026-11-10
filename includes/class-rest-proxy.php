@@ -66,7 +66,7 @@ class Rest_Proxy {
 	 */
 	public static function allow_list( $store_id ) {
 		$s  = preg_quote( '/api/v2/stores/' . rawurlencode( $store_id ), '#' );
-		$id = '[A-Za-z0-9._:~-]+';
+		$id = '(?!\\.+/)[A-Za-z0-9._:~-]+'; // Not a bare run of dots: "." is a path segment, not an id.
 		return array(
 			'GET'   => array(
 				'#^' . $s . '/settings$#D',

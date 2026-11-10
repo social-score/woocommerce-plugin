@@ -49,6 +49,7 @@ abstract class TestCase extends PHPUnitTestCase {
 				'esc_html'              => static function ( $t ) { return htmlspecialchars( (string) $t, ENT_QUOTES ); },
 				'esc_attr'              => static function ( $t ) { return htmlspecialchars( (string) $t, ENT_QUOTES ); },
 				'esc_url'               => static function ( $t ) { return (string) $t; },
+				'esc_url_raw'           => static function ( $t ) { return (string) $t; },
 				'sanitize_text_field'   => static function ( $t ) { return trim( strip_tags( (string) $t ) ); },
 				'sanitize_key'          => static function ( $t ) { return strtolower( preg_replace( '/[^a-z0-9_\-]/i', '', (string) $t ) ); },
 				'wp_unslash'            => static function ( $t ) { return $t; },

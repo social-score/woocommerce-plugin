@@ -1,5 +1,6 @@
 /**
- * Storefront add-to-cart events for the SocialScore Pixel: the classic jQuery event and the block cart store.
+ * Storefront add-to-cart events for the SocialScore Pixel: the classic jQuery event, the block cart data store and the
+ * Interactivity API cart store (block product buttons).
  * Everything else (product view, checkout start, purchase) is printed by PHP. Nothing here reads consent: the
  * Pixel script holds or drops events by itself.
  */
@@ -69,11 +70,16 @@ export function watchClassic(jq: JQueryLike, report: Report): void {
 	});
 }
 
-/** Cart and Checkout blocks: compare the cart in the `wc/store/cart` store after each change. */
-export function watchBlocks(data: WpData, report: Report): void {
+/**
+ * Cart and Checkout blocks: compare the cart in the `wc/store/cart` store after each change. Returns false when the
+ * store is not there (yet).
+ * The id reported is the Store API cart item id: the variation id for a variation, where PHP and the classic path
+ * report the parent product id.
+ */
+export function watchBlocks(data: WpData, report: Report): boolean {
 	const store = data.select('wc/store/cart');
 	if (!store || typeof store.getCartData !== 'function') {
-		return;
+		return false;
 	}
 	let baseline: Map<string, number> | null = null;
 	data.subscribe(() => {
@@ -99,17 +105,76 @@ export function watchBlocks(data: WpData, report: Report): void {
 		}
 		baseline = next;
 	}, 'wc/store/cart');
+	return true;
+}
+
+type Lookup = (id: string) => Promise<{ price: number; code?: string }>;
+
+/**
+ * Block product buttons (Interactivity API): WooCommerce fires no jQuery event and no data-store change there. The
+ * only signal with a product is `wc-blocks_store_sync_required` on window, which names the product ids added but
+ * not the quantity (reported as 1) or the price, which `lookup` reads.
+ */
+export function watchStoreSync(target: EventTarget, report: Report, lookup: Lookup): void {
+	target.addEventListener('wc-blocks_store_sync_required', (event: any) => {
+		const detail = event?.detail;
+		const ids = detail?.type === 'from_iAPI' ? detail.quantityChanges?.productsPendingAdd : null;
+		if (!Array.isArray(ids)) {
+			return;
+		}
+		ids.forEach((id: unknown) => {
+			const key = String(id);
+			lookup(key).then(
+				(found) => report(key, 1, found.price, found.code),
+				() => report(key, 1, 0)
+			);
+		});
+	});
+}
+
+/** Price from the Store API product route; `base` ends with a slash, also with plain permalinks (`?rest_route=`). */
+function storeApiLookup(win: any, base: string): Lookup {
+	return (id) =>
+		win.fetch(base + 'products/' + id, { credentials: 'same-origin' })
+			.then((response: any) => response.json())
+			.then((product: any) => ({
+				price: parseInt(product?.prices?.price ?? '0', 10) / Math.pow(10, product?.prices?.currency_minor_unit ?? 2),
+				code: product?.prices?.currency_code,
+			}));
 }
 
 export function init(win: any): void {
 	try {
 		const queue: any[] = (win.ssPixel = win.ssPixel || []);
 		const report = createReporter((event) => queue.push(event), win.socialscorePixel?.currency ?? '');
-		if (typeof win.jQuery === 'function') {
-			watchClassic(win.jQuery, report);
-		}
-		if (win.wp?.data) {
-			watchBlocks(win.wp.data, report);
+		// jQuery and wp.data are not dependencies of this script (they would load on every page): use them when the
+		// shop has loaded them, and look again once the page has finished loading.
+		let classic = false;
+		let blocks = false;
+		const attach = () => {
+			if (!classic && typeof win.jQuery === 'function') {
+				classic = true;
+				watchClassic(win.jQuery, report);
+			}
+			if (!blocks && win.wp?.data) {
+				blocks = watchBlocks(win.wp.data, report);
+			}
+		};
+		attach();
+		if (typeof win.addEventListener === 'function') {
+			if (!classic || !blocks) {
+				win.addEventListener('load', () => {
+					try {
+						attach();
+					} catch (_) {
+						/* never throw into the shop page */
+					}
+				});
+			}
+			const base = win.socialscorePixel?.storeApi;
+			if (typeof base === 'string' && typeof win.fetch === 'function') {
+				watchStoreSync(win, report, storeApiLookup(win, base));
+			}
 		}
 	} catch (_) {
 		/* never throw into the shop page */

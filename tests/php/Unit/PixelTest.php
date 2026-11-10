@@ -435,4 +435,83 @@ class PixelTest extends TestCase {
 		$this->assertSame( array(), $this->transients );
 		$this->assertTrue( Pixel::state()['enabled'] );
 	}
+
+	// Review round 1 ---------------------------------------------------------------------------------------------
+
+	public function test_the_events_bundle_does_not_force_jquery_or_wp_data() {
+		if ( ! is_readable( SOCIALSCORE_DIR . 'build/pixel-events.asset.php' ) ) {
+			$this->markTestSkipped( 'Run npm run build first.' );
+		}
+		$deps = null;
+		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => null, 'session' => null ) );
+		Functions\when( 'wp_enqueue_script' )->alias(
+			function ( $handle, $src = '', $d = array() ) use ( &$deps ) {
+				if ( 'socialscore-pixel-events' === $handle ) {
+					$deps = $d;
+				}
+				return true;
+			}
+		);
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		( new Pixel() )->enqueue();
+		$this->assertNotNull( $deps, 'the events bundle is enqueued' );
+		$this->assertSame( array( 'socialscore-pixel' ), $deps );
+		$this->assertStringContainsString( '"storeApi":"https:\/\/shop.test\/wp-json\/wc\/store\/v1\/"', implode( '', $this->inline['socialscore-pixel-events'] ) );
+	}
+
+	public function test_the_lookup_waits_two_seconds_at_most() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		Pixel::state();
+		$this->assertLessThanOrEqual( 2, $this->http[0]['args']['timeout'] );
+	}
+
+	public function test_requests_that_arrive_during_a_running_lookup_do_not_start_their_own() {
+		$this->connect_store( 'st_1' );
+		$inner                = null;
+		$this->http_responder = function () use ( &$inner ) {
+			$inner = Pixel::state();
+			return self::response( 200, array( 'enabled' => true, 'site_id' => self::SITE ) );
+		};
+		$outer = Pixel::state();
+		$this->assertFalse( $inner['enabled'], 'the second request sees off while the first one waits' );
+		$this->assertCount( 1, $this->http, 'and does not call the API' );
+		$this->assertTrue( $outer['enabled'] );
+		$this->assertTrue( Pixel::state()['enabled'], 'the answer replaces the marker' );
+	}
+
+	public function test_a_purchase_waiting_for_the_loader_is_marked_sent_only_when_it_is_printed() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		Functions\when( 'wp_script_is' )->justReturn( false );
+		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => null, 'session' => null ) );
+		$order = new \WC_Order( array( 'id' => 330, 'total' => '10', 'currency' => 'EUR' ) );
+		Functions\when( 'wc_get_order' )->justReturn( $order );
+		$pixel = new Pixel();
+		$pixel->purchase( 330 );
+		$pixel->purchase( 330 );
+		$this->assertArrayNotHasKey( '_ss_pixel_purchase_sent', $order->meta, 'nothing was printed yet' );
+		$pixel->enqueue();
+		$this->assertSame( '1', $order->meta['_ss_pixel_purchase_sent'] );
+		$this->assertSame( 1, substr_count( implode( '', $this->inline['socialscore-pixel'] ), '"type":"purchase"' ) );
+	}
+
+	public function test_a_purchase_that_is_never_printed_does_not_use_up_the_order() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		Functions\when( 'wp_script_is' )->justReturn( false );
+		$order = new \WC_Order( array( 'id' => 331 ) );
+		Functions\when( 'wc_get_order' )->justReturn( $order );
+		( new Pixel() )->purchase( 331 );
+		$this->assertArrayNotHasKey( '_ss_pixel_purchase_sent', $order->meta );
+	}
+
+	public function test_a_dot_is_not_an_id_for_the_proxy() {
+		foreach ( array( '/orders/./session', '/orders/.../session', '/customers/./profile', '/orders/../session' ) as $tail ) {
+			$this->assertFalse( Rest_Proxy::is_allowed( 'GET', '/api/v2/stores/st_1' . $tail, 'st_1' ), $tail );
+		}
+		$this->assertTrue( Rest_Proxy::is_allowed( 'GET', '/api/v2/stores/st_1/orders/a.b/session', 'st_1' ) );
+		$this->assertTrue( Rest_Proxy::is_allowed( 'GET', '/api/v2/stores/st_1/customers/guest-abc/profile', 'st_1' ) );
+	}
 }

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createReporter, init, watchBlocks, watchClassic, type PixelEvent } from '../../src/js/pixel-events';
+import { createReporter, init, watchBlocks, watchClassic, watchStoreSync, type PixelEvent } from '../../src/js/pixel-events';
 
 function collector() {
 	const events: PixelEvent[] = [];
@@ -104,6 +104,57 @@ describe('block cart store', () => {
 	});
 });
 
+describe('block product buttons (Interactivity API cart store)', () => {
+	const sync = (target: EventTarget, detail: any) => target.dispatchEvent(new CustomEvent('wc-blocks_store_sync_required', { detail }));
+	const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+	it('reports a product added by the Interactivity API with the price looked up from the Store API', async () => {
+		const { events, report } = collector();
+		const target = new EventTarget();
+		const lookup = jest.fn().mockResolvedValue({ price: 19.9, code: 'BGN' });
+		watchStoreSync(target, report, lookup);
+		sync(target, { type: 'from_iAPI', quantityChanges: { productsPendingAdd: [42] } });
+		await settle();
+		expect(lookup).toHaveBeenCalledWith('42');
+		expect(events).toEqual([{ type: 'add_to_cart', data: { item_id: '42', quantity: 1, price: 19.9, currency: 'BGN' } }]);
+	});
+
+	it('still reports the add when the price cannot be read', async () => {
+		const { events, report } = collector();
+		const target = new EventTarget();
+		watchStoreSync(target, report, () => Promise.reject(new Error('offline')));
+		sync(target, { type: 'from_iAPI', quantityChanges: { productsPendingAdd: [7] } });
+		await settle();
+		expect(events).toEqual([{ type: 'add_to_cart', data: { item_id: '7', quantity: 1, price: 0, currency: 'EUR' } }]);
+	});
+
+	it('ignores syncs that are not adds, and syncs from the data store (watchBlocks counts those)', async () => {
+		const { events, report } = collector();
+		const target = new EventTarget();
+		const lookup = jest.fn().mockResolvedValue({ price: 1 });
+		watchStoreSync(target, report, lookup);
+		sync(target, { type: 'from_iAPI', quantityChanges: { cartItemsPendingQuantity: ['k'] } });
+		sync(target, { type: 'from_iAPI', quantityChanges: { cartItemsPendingDelete: ['k'] } });
+		sync(target, { type: 'from_@wordpress/data', quantityChanges: { productsPendingAdd: [5] } });
+		sync(target, undefined);
+		await settle();
+		expect(lookup).not.toHaveBeenCalled();
+		expect(events).toEqual([]);
+	});
+
+	it('init listens for the sync event on the window and reads prices from the configured Store API', async () => {
+		const target = new EventTarget() as any;
+		target.ssPixel = [];
+		target.socialscorePixel = { currency: 'EUR', storeApi: 'https://shop.test/?rest_route=/wc/store/v1/' };
+		target.fetch = jest.fn().mockResolvedValue({ json: () => Promise.resolve({ prices: { price: '1250', currency_minor_unit: 2, currency_code: 'EUR' } }) });
+		init(target);
+		sync(target, { type: 'from_iAPI', quantityChanges: { productsPendingAdd: [9] } });
+		await settle();
+		expect(target.fetch).toHaveBeenCalledWith('https://shop.test/?rest_route=/wc/store/v1/products/9', { credentials: 'same-origin' });
+		expect(target.ssPixel).toEqual([{ type: 'add_to_cart', data: { item_id: '9', quantity: 1, price: 12.5, currency: 'EUR' } }]);
+	});
+});
+
 describe('one add seen by both paths', () => {
 	it('counts once within three seconds and again after', () => {
 		const { events, report, tick } = collector();
@@ -139,6 +190,21 @@ describe('init', () => {
 		fake.setCart([item('a', 5, 2)]);
 		expect(win2.ssPixel).toHaveLength(1);
 		expect(win2.ssPixel[0].type).toBe('add_to_cart');
+	});
+
+	it('waits for jQuery and wp.data that load after the bundle, without forcing them as dependencies', () => {
+		const target = new EventTarget() as any;
+		target.socialscorePixel = { currency: 'EUR' };
+		init(target);
+		const fake = fakeData();
+		target.wp = { data: fake.data };
+		let handler: (...a: any[]) => void = () => undefined;
+		target.jQuery = () => ({ on: (_n: string, h: any) => (handler = h) });
+		target.dispatchEvent(new Event('load'));
+		fake.setCart([item('a', 5, 1)]);
+		fake.setCart([item('a', 5, 2)]);
+		handler({}, {}, 'hash', { length: 1, attr: (k: string) => ({ 'data-product_id': '88' } as any)[k] });
+		expect(target.ssPixel.map((e: any) => e.data.item_id)).toEqual(['5', '88']);
 	});
 
 	it('does not throw when the queue is broken', () => {

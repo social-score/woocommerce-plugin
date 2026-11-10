@@ -59,6 +59,8 @@ ss_assert( false !== strpos( $body, 'https://pixel.socialscore.io/v1/p.js' ) && 
 ss_assert( false !== strpos( $body, '"type":"view_item","data":{"item_id":"' . $product->get_id() . '","price":12.5,"currency":"' . get_woocommerce_currency() . '"}' ), 'product page pushes view_item' );
 ss_assert( false !== strpos( $body, 'build/pixel-events.js' ), 'the add-to-cart bundle is loaded' );
 ss_assert( false === strpos( $body, 'sk_mock' ), 'the store key is not in the page' );
+ss_assert( false === strpos( $body, 'id=\'wp-data-js' ) && false === strpos( $body, 'id="wp-data-js' ) && false === strpos( $body, 'react-dom-js' ), 'the Pixel does not pull wp-data or React into a product page' );
+ss_assert( 1 === preg_match( '#id=[\'"]socialscore-pixel-events-js#', $body ), 'the events bundle script is on the page' );
 wp_remote_retrieve_body( ss_get( $url ) );
 $gets = array_filter( ss_log(), fn( $e ) => 'GET' === $e['method'] && '/api/v2/stores/st_1/pixel' === $e['path'] );
 ss_assert( 1 === count( $gets ), 'the Pixel state is read once for two page views (cached): ' . count( $gets ) );
@@ -174,4 +176,7 @@ ss_assert( false === strpos( $html, '"type":"purchase"' ), 'a second visit to th
 wp_update_post( array( 'ID' => wc_get_page_id( 'checkout' ), 'post_content' => '[woocommerce_checkout]' ) );
 $html = wp_remote_retrieve_body( ss_get( wc_get_order( $id2 )->get_checkout_order_received_url(), $cookies ) );
 ss_assert( 1 === substr_count( $html, '"type":"purchase"' ), 'classic shortcode thank-you page pushes purchase once' );
+$html = wp_remote_retrieve_body( ss_get( wc_get_checkout_url(), $jar ) );
+ss_assert( 1 === substr_count( $html, '"type":"begin_checkout"' ), 'classic shortcode checkout page pushes begin_checkout once' );
+ss_assert( 1 === preg_match( '/setAttribute\("data-site","' . $SITE . '"\)/', $html ), 'classic checkout page has the loader with data-site' );
 echo "pixel done\n";

@@ -19,6 +19,7 @@ class Pixel {
 	const TRANSIENT       = 'socialscore_pixel_';
 	const STATE_TTL       = 600;
 	const FAILED_TTL      = 60;
+	const LOOKUP_TIMEOUT  = 2;
 	const META_VISITOR    = '_ss_pixel_visitor';
 	const META_SESSION    = '_ss_pixel_session';
 	const META_PURCHASE   = '_ss_pixel_purchase_sent';
@@ -45,6 +46,20 @@ class Pixel {
 	 * @var array[]
 	 */
 	private $pending = array();
+
+	/**
+	 * Orders whose purchase event waits in $pending: they are marked as sent only once the event is printed.
+	 *
+	 * @var \WC_Order[]
+	 */
+	private $pending_orders = array();
+
+	/**
+	 * Ids of the orders whose purchase event this request already made.
+	 *
+	 * @var bool[]
+	 */
+	private $purchased = array();
 
 	/**
 	 * Registers hooks. The order link works in every request that creates an order; the storefront
@@ -128,8 +143,8 @@ class Pixel {
 	}
 
 	/**
-	 * Pixel state of the connected store: array( enabled, site_id ). Cached for ten minutes; a failed lookup
-	 * counts as off for one minute so a slow API cannot slow every page.
+	 * Pixel state of the connected store: array( enabled, site_id ). Cached for ten minutes; a failed or running lookup
+	 * counts as off for one minute, and the lookup waits at most two seconds, so a slow API cannot slow every page.
 	 *
 	 * @return array{enabled:bool,site_id:string}
 	 */
@@ -147,7 +162,10 @@ class Pixel {
 			return $cached;
 		}
 
-		$response = ( new Api_Client() )->request( 'GET', '/api/v2/stores/' . rawurlencode( (string) Connection::store_id() ) . '/pixel' );
+		// Mark the lookup as running before it starts: requests that arrive while it waits see "off" and
+		// do not start their own lookup, so a slow API costs one short wait per minute, not one per page.
+		set_transient( $key, $off, self::FAILED_TTL );
+		$response = ( new Api_Client( self::LOOKUP_TIMEOUT ) )->request( 'GET', '/api/v2/stores/' . rawurlencode( (string) Connection::store_id() ) . '/pixel' );
 		$state    = $off;
 		$ttl      = self::FAILED_TTL;
 		if ( ! is_wp_error( $response ) && 200 === $response['status'] && is_array( $response['data'] ) ) {
@@ -257,6 +275,10 @@ class Pixel {
 		if ( $events ) {
 			wp_add_inline_script( self::HANDLE_LOADER, self::push_js( $events ) );
 		}
+		foreach ( $this->pending_orders as $order ) {
+			$this->mark_purchase_sent( $order );
+		}
+		$this->pending_orders = array();
 		$this->enqueue_events_script();
 	}
 
@@ -320,13 +342,15 @@ class Pixel {
 			return;
 		}
 		$meta = require $asset;
-		$deps = array_values( array_unique( array_merge( (array) $meta['dependencies'], array( self::HANDLE_LOADER, 'jquery', 'wp-data' ) ) ) );
+		// No forced jquery or wp-data: they would load React, the data stores and jQuery on every page. The bundle
+		// uses window.jQuery and window.wp.data when the shop has loaded them, and waits for them otherwise.
+		$deps = array_values( array_unique( array_merge( (array) $meta['dependencies'], array( self::HANDLE_LOADER ) ) ) );
 		wp_enqueue_script( self::HANDLE_EVENTS, SOCIALSCORE_URL . 'build/pixel-events.js', $deps, $meta['version'], true );
-		wp_add_inline_script(
-			self::HANDLE_EVENTS,
-			'window.socialscorePixel=' . wp_json_encode( array( 'currency' => (string) get_woocommerce_currency() ), self::JSON_FLAGS ) . ';',
-			'before'
+		$config = array(
+			'currency' => (string) get_woocommerce_currency(),
+			'storeApi' => esc_url_raw( rest_url( 'wc/store/v1/' ) ),
 		);
+		wp_add_inline_script( self::HANDLE_EVENTS, 'window.socialscorePixel=' . wp_json_encode( $config, self::JSON_FLAGS ) . ';', 'before' );
 	}
 
 	/**
@@ -388,7 +412,8 @@ class Pixel {
 
 	/**
 	 * Thank-you page: one purchase event per order. The flag in the order meta keeps a reload or a
-	 * second visit from counting it again. It carries no personal data.
+	 * second visit from counting it again. It carries no personal data. The flag is set only after the event is
+	 * printed, so a request that prints nothing does not use up the order's one purchase event.
 	 *
 	 * @param int $order_id Order id.
 	 * @return void
@@ -398,12 +423,11 @@ class Pixel {
 			return;
 		}
 		$order = wc_get_order( (int) $order_id );
-		if ( ! $order || $order->get_meta( self::META_PURCHASE ) ) {
+		if ( ! $order || $order->get_meta( self::META_PURCHASE ) || isset( $this->purchased[ (int) $order_id ] ) ) {
 			return;
 		}
-		$order->update_meta_data( self::META_PURCHASE, '1' );
-		$order->save_meta_data();
-		$event = self::event(
+		$this->purchased[ (int) $order_id ] = true;
+		$event                              = self::event(
 			'purchase',
 			array(
 				'order_external_id' => (string) $order->get_id(),
@@ -413,8 +437,22 @@ class Pixel {
 		);
 		if ( wp_script_is( self::HANDLE_LOADER, 'enqueued' ) ) {
 			wp_add_inline_script( self::HANDLE_LOADER, self::push_js( array( $event ) ) );
+			$this->mark_purchase_sent( $order );
 		} else {
-			$this->pending[] = $event;
+			// The loader is not enqueued yet: enqueue() prints the event and marks the order, or drops both.
+			$this->pending[]        = $event;
+			$this->pending_orders[] = $order;
 		}
+	}
+
+	/**
+	 * Remembers that the purchase event of an order was printed.
+	 *
+	 * @param \WC_Order $order Order.
+	 * @return void
+	 */
+	private function mark_purchase_sent( $order ) {
+		$order->update_meta_data( self::META_PURCHASE, '1' );
+		$order->save_meta_data();
 	}
 }
