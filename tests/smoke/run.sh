@@ -29,6 +29,8 @@ echo "== functional flow against the mock API"
 $WP eval-file /smoke/flow.php || fail "flow.php failed"
 $WP rewrite structure "/%postname%/" --hard
 $WP eval-file /smoke/http.php || fail "http.php failed"
+echo "== Pixel: loader, events, order link"
+$WP eval-file /smoke/pixel.php || fail "pixel.php failed"
 $WP eval-file /smoke/flow-end.php || fail "flow-end.php failed"
 
 echo "== deactivate unschedules, uninstall removes data"

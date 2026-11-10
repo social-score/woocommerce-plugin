@@ -14,6 +14,7 @@ module.exports = {
 	entry: {
 		dashboard: path.resolve( __dirname, 'src/js/dashboard.tsx' ),
 		panel: path.resolve( __dirname, 'src/js/panel.tsx' ),
+		'pixel-events': path.resolve( __dirname, 'src/js/pixel-events.ts' ),
 	},
 	resolve: {
 		...defaultConfig.resolve,

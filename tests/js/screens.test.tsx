@@ -31,6 +31,13 @@ describe('shared screens inside the WooCommerce host', () => {
 				<CheckPanel kind="order" externalId="1001" />
 			</PluginProvider>
 		);
+		// plugin-core 0.3.0 first asks for the visit the Pixel tied to the order (404 is fine), through the same proxy.
+		await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+		const [sessionUrl, sessionInit] = fetchMock.mock.calls[0];
+		expect(sessionUrl).toBe('https://shop.test/wp-json/socialscore/v1/proxy/api/v2/stores/42/orders/1001/session');
+		expect(sessionInit.headers['X-WP-Nonce']).toBe('n0nce');
+		fetchMock.mockClear();
+
 		fireEvent.click(screen.getByRole('button', { name: /check/i }));
 		await waitFor(() => expect(fetchMock).toHaveBeenCalled());
 

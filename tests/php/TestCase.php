@@ -52,7 +52,7 @@ abstract class TestCase extends PHPUnitTestCase {
 				'sanitize_text_field'   => static function ( $t ) { return trim( strip_tags( (string) $t ) ); },
 				'sanitize_key'          => static function ( $t ) { return strtolower( preg_replace( '/[^a-z0-9_\-]/i', '', (string) $t ) ); },
 				'wp_unslash'            => static function ( $t ) { return $t; },
-				'wp_json_encode'        => static function ( $d ) { return json_encode( $d ); },
+				'wp_json_encode'        => static function ( $d, $flags = 0 ) { return json_encode( $d, $flags ); },
 				'untrailingslashit'     => static function ( $t ) { return rtrim( $t, '/' ); },
 				'home_url'              => static function () { return 'https://shop.test'; },
 				'wp_parse_url'          => static function ( $url, $component = -1 ) { return parse_url( $url, $component ); },

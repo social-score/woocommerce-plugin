@@ -28,6 +28,16 @@ if ( false !== strpos( $path, '/stores/st_gone/' ) ) {
 	echo json_encode( array( 'store_id' => 1, 'external_id' => $m[1], 'customers_redacted' => 1, 'orders_redacted' => 1, 'profile_erased' => true ) );
 } elseif ( preg_match( '#/checks$#', $path ) ) {
 	echo json_encode( array( 'profile' => new stdClass(), 'labels' => array( 'review_before_shipping' ) ) );
+} elseif ( preg_match( '#/stores/[^/]+/pixel$#', $path ) ) {
+	// The Pixel switch: a flag file stands in for the stored state.
+	if ( 'PATCH' === $_SERVER['REQUEST_METHOD'] ) {
+		if ( ! empty( $json['enabled'] ) ) {
+			@unlink( '/shared/pixel-off' );
+		} else {
+			touch( '/shared/pixel-off' );
+		}
+	}
+	echo json_encode( array( 'enabled' => ! file_exists( '/shared/pixel-off' ), 'site_id' => 'ps_abcdefghijklmnop', 'snippet_url' => 'https://pixel.socialscore.io/v1/p.js' ) );
 } elseif ( preg_match( '#/settings$#', $path ) ) {
 	echo json_encode( array( 'status' => 'active', 'settings' => array( 'order_any_customer' => true, 'manual_only' => false ) ) );
 } elseif ( 'DELETE' === $_SERVER['REQUEST_METHOD'] ) {

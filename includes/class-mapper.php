@@ -146,7 +146,8 @@ class Mapper {
 	}
 
 	/**
-	 * Row for orders:batch. Items carry product data only, no personal data.
+	 * Row for orders:batch. Items carry product data only, no personal data. The visit ids are the Pixel cookies the
+	 * server stored when the order was made; a value that is not a UUIDv4 is left out.
 	 *
 	 * @param \WC_Order $order Order.
 	 * @return array
@@ -184,6 +185,8 @@ class Mapper {
 				'shipping_city'        => self::cut( $ship_city, 256 ),
 				'shipping_postcode'    => self::cut( $ship_postcode, 32 ),
 				'shipping_country'     => self::country( $ship_country ),
+				'pixel_visitor_id'     => Pixel::uuid( $order->get_meta( Pixel::META_VISITOR ) ),
+				'pixel_session_id'     => Pixel::uuid( $order->get_meta( Pixel::META_SESSION ) ),
 			)
 		);
 	}

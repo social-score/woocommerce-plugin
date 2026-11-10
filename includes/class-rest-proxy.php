@@ -75,10 +75,14 @@ class Rest_Proxy {
 				'#^' . $s . '/customers$#D',
 				'#^' . $s . '/customers/' . $id . '/profile$#D',
 				'#^' . $s . '/orders/' . $id . '/profile$#D',
+				'#^' . $s . '/pixel$#D',
+				'#^' . $s . '/customers/' . $id . '/session$#D',
+				'#^' . $s . '/orders/' . $id . '/session$#D',
 				'#^/api/v2/segments$#D',
 			),
 			'PATCH' => array(
 				'#^' . $s . '/settings$#D',
+				'#^' . $s . '/pixel$#D',
 			),
 			'POST'  => array(
 				'#^' . $s . '/checks$#D',
@@ -152,6 +156,10 @@ class Rest_Proxy {
 			} elseif ( isset( $body['customer_external_id'] ) ) {
 				Labels::apply_from_check( 'customer', (string) $body['customer_external_id'], $response['data'] );
 			}
+		}
+
+		if ( 'PATCH' === $method && $response['status'] >= 200 && $response['status'] < 300 && 1 === preg_match( '#/pixel$#D', $path ) ) {
+			Pixel::forget(); // The storefront must see the switch at once, not after the cache runs out.
 		}
 
 		$out = new \WP_REST_Response( $response['data'], $response['status'] );

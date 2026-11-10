@@ -1,3 +1,4 @@
+import type { SessionClassName } from './pixel.js';
 export type ConfidenceLevel = 'strong' | 'medium' | 'weak';
 export type FieldSource = 'request' | 'collector' | 'vendor' | 'derived' | 'own_data' | 'unknown';
 export interface ProfileField<T = unknown> {
@@ -110,6 +111,13 @@ export interface SegmentsFields {
         segmentStatus?: 'building' | 'ready' | 'failed';
     }[];
 }
+export interface OnSiteBehaviorFields {
+    lastClass: ProfileField<SessionClassName>;
+    lastBotScore: ProfileField<number>;
+    sessions30d: ProfileField<number>;
+    lastSeenAt: ProfileField<string>;
+    deviceFarm: ProfileField<boolean>;
+}
 export interface ProfileCategories {
     identity?: ProfileCategory<IdentityFields>;
     contact?: ProfileCategory<ContactFields>;
@@ -120,6 +128,8 @@ export interface ProfileCategories {
     healthSignals?: ProfileCategory<HealthSignalsFields>;
     segments?: ProfileCategory<SegmentsFields>;
     ownData?: ProfileCategory<Record<string, never>>;
+    /** Present only where the Pixel is on. */
+    onSiteBehavior?: ProfileCategory<OnSiteBehaviorFields>;
 }
 export interface ProfileSubject {
     profileId?: number;

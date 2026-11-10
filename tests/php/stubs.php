@@ -114,6 +114,7 @@ namespace {
 		public $meta  = array();
 		public $notes = array();
 		public $saves = 0;
+		public $meta_saves = 0;
 		public $store;
 		public function __construct( array $d = array() ) {
 			$this->d = $d + array(
@@ -163,6 +164,9 @@ namespace {
 		}
 		public function save() {
 			++$this->saves;
+		}
+		public function save_meta_data() {
+			++$this->meta_saves;
 		}
 	}
 	class WC_Customer {
