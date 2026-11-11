@@ -265,7 +265,7 @@ var P = {
 	"pixel.title": "Pixel",
 	"pixel.toggle": "Pixel: tell SocialScore how visits to your shop behave",
 	"pixel.intro": "The Pixel is a script on your shop that classifies each visit as a person, a passive visitor, a bad bot or an AI agent. It shows the class on orders and customers.",
-	"pixel.consent": "The Pixel collects only with the visitor's consent, so your shop needs a cookie banner. It reads consent from TCF, the WP Consent API, CookieYes, Cookiebot or the Shopify banner. Without a banner it collects nothing.",
+	"pixel.consent": "The Pixel is a security tool. It protects your shop from bots, AI agents and automated fraud, so it runs on every visit and does not need a cookie banner. It keeps working when a visitor declines cookies. When your shop has a banner (TCF, WP Consent API, CookieYes, Cookiebot or the Shopify banner), the Pixel records the visitor's choice. List the Pixel as a security tool in your privacy and cookie policy.",
 	"pixel.siteId": "Site id: {siteId}",
 	"pixel.saved": "Pixel switched on",
 	"pixel.savedOff": "Pixel switched off",
