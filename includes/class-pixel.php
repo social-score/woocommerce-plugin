@@ -62,6 +62,13 @@ class Pixel {
 	private $purchased = array();
 
 	/**
+	 * Whether this request already made its begin_checkout event.
+	 *
+	 * @var bool
+	 */
+	private $checkout_started = false;
+
+	/**
 	 * Registers hooks. The order link works in every request that creates an order; the storefront
 	 * output only outside the admin.
 	 *
@@ -78,6 +85,7 @@ class Pixel {
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue' ) );
 		add_action( 'woocommerce_add_to_cart', array( $this, 'remember_add_to_cart' ), 10, 4 );
 		add_action( 'woocommerce_thankyou', array( $this, 'purchase' ), 10, 1 );
+		add_action( 'woocommerce_before_checkout_form', array( $this, 'begin_checkout_classic' ), 10, 0 );
 		add_filter( 'woocommerce_loop_add_to_cart_args', array( $this, 'loop_button_args' ), 10, 2 );
 	}
 
@@ -306,17 +314,12 @@ class Pixel {
 			}
 		}
 
-		if ( function_exists( 'is_checkout' ) && is_checkout() && ! is_order_received_page() && ! is_checkout_pay_page() ) {
-			$cart = function_exists( 'WC' ) ? WC()->cart : null;
-			if ( $cart && ! $cart->is_empty() ) {
-				$events[] = self::event(
-					'begin_checkout',
-					array(
-						'value'    => (float) $cart->get_total( 'edit' ),
-						'currency' => (string) get_woocommerce_currency(),
-						'items'    => count( $cart->get_cart() ),
-					)
-				);
+		// The Checkout block has no classic checkout form hook, so its page start is taken here. The classic
+		// checkout reports on woocommerce_before_checkout_form.
+		if ( function_exists( 'is_checkout' ) && is_checkout() && function_exists( 'has_block' ) && has_block( 'woocommerce/checkout', get_queried_object_id() ) ) {
+			$event = $this->checkout_event();
+			if ( $event ) {
+				$events[] = $event;
 			}
 		}
 
@@ -329,6 +332,51 @@ class Pixel {
 			}
 		}
 		return $events;
+	}
+
+	/**
+	 * begin_checkout once per request for a cart with items, never on the thank-you or the pay page.
+	 *
+	 * @return array|null The event, or null when there is nothing to report.
+	 */
+	private function checkout_event() {
+		if ( $this->checkout_started || ( function_exists( 'is_order_received_page' ) && is_order_received_page() ) || ( function_exists( 'is_checkout_pay_page' ) && is_checkout_pay_page() ) ) {
+			return null;
+		}
+		$cart = function_exists( 'WC' ) ? WC()->cart : null;
+		if ( ! $cart || $cart->is_empty() ) {
+			return null;
+		}
+		$this->checkout_started = true;
+		return self::event(
+			'begin_checkout',
+			array(
+				'value'    => (float) $cart->get_total( 'edit' ),
+				'currency' => (string) get_woocommerce_currency(),
+				'items'    => count( $cart->get_cart() ),
+			)
+		);
+	}
+
+	/**
+	 * Classic checkout form: the checkout was started. It runs while the page body is built, after the loader is
+	 * enqueued in a classic theme; a request where it is not yet enqueued gets the event with the loader.
+	 *
+	 * @return void
+	 */
+	public function begin_checkout_classic() {
+		if ( '' === $this->active_site_id() ) {
+			return;
+		}
+		$event = $this->checkout_event();
+		if ( ! $event ) {
+			return;
+		}
+		if ( wp_script_is( self::HANDLE_LOADER, 'enqueued' ) ) {
+			wp_add_inline_script( self::HANDLE_LOADER, self::push_js( array( $event ) ) );
+		} else {
+			$this->pending[] = $event;
+		}
 	}
 
 	/**
@@ -396,17 +444,18 @@ class Pixel {
 		if ( ! $session ) {
 			return;
 		}
-		$queued   = $session->get( self::SESSION_EVENTS );
-		$queued   = is_array( $queued ) ? $queued : array();
-		$queued[] = self::event(
-			'add_to_cart',
-			array(
-				'item_id'  => (string) (int) $product_id,
-				'quantity' => max( 1, (int) $quantity ),
-				'price'    => self::price( wc_get_product( $variation_id ? $variation_id : $product_id ) ),
-				'currency' => (string) get_woocommerce_currency(),
-			)
+		$queued = $session->get( self::SESSION_EVENTS );
+		$queued = is_array( $queued ) ? $queued : array();
+		$data   = array(
+			'item_id'  => (string) (int) $product_id,
+			'quantity' => max( 1, (int) $quantity ),
+			'price'    => self::price( wc_get_product( $variation_id ? $variation_id : $product_id ) ),
+			'currency' => (string) get_woocommerce_currency(),
 		);
+		if ( $variation_id ) {
+			$data['variant_id'] = (string) (int) $variation_id;
+		}
+		$queued[] = self::event( 'add_to_cart', $data );
 		$session->set( self::SESSION_EVENTS, array_slice( $queued, -self::MAX_QUEUED ) );
 	}
 
@@ -424,6 +473,12 @@ class Pixel {
 		}
 		$order = wc_get_order( (int) $order_id );
 		if ( ! $order || $order->get_meta( self::META_PURCHASE ) || isset( $this->purchased[ (int) $order_id ] ) ) {
+			return;
+		}
+		// A shop manager who opens the thank-you page is not the buyer: no event, and the order's one purchase
+		// event stays for the customer.
+		$viewer = (int) get_current_user_id();
+		if ( $viewer > 0 && $viewer !== (int) $order->get_customer_id() && current_user_can( Config::CAPABILITY ) ) {
 			return;
 		}
 		$this->purchased[ (int) $order_id ] = true;

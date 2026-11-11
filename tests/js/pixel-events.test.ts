@@ -35,6 +35,8 @@ function fakeData(resolved = true) {
 }
 
 const item = (key: string, id: number, quantity: number, price = '1990') => ({ key, id, quantity, prices: { price, currency_code: 'BGN', currency_minor_unit: 2 } });
+const variationItem = (key: string, id: number, quantity: number) => ({ ...item(key, id, quantity), variation: [{ attribute: 'Size', value: 'S' }] });
+const settleAll = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('classic add to cart', () => {
 	function jqStub() {
@@ -95,6 +97,29 @@ describe('block cart store', () => {
 		expect(events).toEqual([]);
 	});
 
+	it('reports a variation with the parent product id as item_id and its own id as variant_id', async () => {
+		const { events, report } = collector();
+		const fake = fakeData();
+		const lookup = jest.fn().mockResolvedValue({ price: 20, parent: 12 });
+		watchBlocks(fake.data as any, report, lookup);
+		fake.setCart([variationItem('v', 13, 1)]);
+		fake.setCart([variationItem('v', 13, 2)]);
+		await settleAll();
+		expect(lookup).toHaveBeenCalledWith('13');
+		expect(events).toEqual([{ type: 'add_to_cart', data: { item_id: '12', quantity: 1, price: 19.9, currency: 'BGN', variant_id: '13' } }]);
+	});
+
+	it('does not look anything up for a plain product', () => {
+		const { events, report } = collector();
+		const fake = fakeData();
+		const lookup = jest.fn();
+		watchBlocks(fake.data as any, report, lookup);
+		fake.setCart([item('a', 5, 1)]);
+		fake.setCart([item('a', 5, 2)]);
+		expect(lookup).not.toHaveBeenCalled();
+		expect(events).toHaveLength(1);
+	});
+
 	it('does nothing on a page without the cart store', () => {
 		const { events, report } = collector();
 		const subscribe = jest.fn();
@@ -117,6 +142,15 @@ describe('block product buttons (Interactivity API cart store)', () => {
 		await settle();
 		expect(lookup).toHaveBeenCalledWith('42');
 		expect(events).toEqual([{ type: 'add_to_cart', data: { item_id: '42', quantity: 1, price: 19.9, currency: 'BGN' } }]);
+	});
+
+	it('reports a variation added by the Interactivity API under its parent id', async () => {
+		const { events, report } = collector();
+		const target = new EventTarget();
+		watchStoreSync(target, report, () => Promise.resolve({ price: 22, code: 'BGN', parent: 12 }));
+		sync(target, { type: 'from_iAPI', quantityChanges: { productsPendingAdd: [14] } });
+		await settle();
+		expect(events).toEqual([{ type: 'add_to_cart', data: { item_id: '12', quantity: 1, price: 22, currency: 'BGN', variant_id: '14' } }]);
 	});
 
 	it('still reports the add when the price cannot be read', async () => {
@@ -167,6 +201,14 @@ describe('one add seen by both paths', () => {
 		expect(events).toHaveLength(2);
 		report('6', 1, 2);
 		expect(events).toHaveLength(3);
+	});
+
+	it('does not merge two variations of one product, and counts the same variation once', () => {
+		const { events, report } = collector();
+		report('12', 1, 20, 'EUR', '13');
+		report('12', 1, 22, 'EUR', '14');
+		report('12', 1, 20, 'EUR', '13');
+		expect(events.map((e) => e.data.variant_id)).toEqual(['13', '14']);
 	});
 
 	it('ignores an empty id or a zero quantity and turns a bad price into 0', () => {

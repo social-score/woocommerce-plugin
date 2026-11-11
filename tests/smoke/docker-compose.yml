@@ -69,6 +69,16 @@ services:
       - ./:/smoke:ro
       - shared:/shared
     entrypoint: ["sh", "/smoke/run.sh"]
+  e2e:
+    # Browser check of the add-to-cart events, started by tests/smoke/e2e/run.sh only.
+    profiles: ["e2e"]
+    image: mcr.microsoft.com/playwright:v1.63.0-noble
+    depends_on:
+      wordpress:
+        condition: service_started
+    volumes:
+      - ./e2e:/e2e:ro
+    entrypoint: ["sh", "-c", "mkdir -p /tmp/run && cp /e2e/e2e.mjs /tmp/run/ && cd /tmp/run && npm i --no-save --no-audit --no-fund playwright@1.63.0 >/dev/null 2>&1 && node e2e.mjs \"$$@\"", "--"]
 volumes:
   wp:
   shared:

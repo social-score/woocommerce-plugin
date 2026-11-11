@@ -160,4 +160,26 @@ class PrivacyTest extends TestCase {
 		$this->assertTrue( $result['items_removed'], 'a store that is not connected still erased the local ids' );
 		$this->assertTrue( $result['items_retained'], 'and still says SocialScore could not be asked' );
 	}
+
+	public function test_export_lists_the_pixel_visit_ids_kept_on_the_orders_of_the_email() {
+		$this->user( 0 );
+		$with = new \WC_Order( array( 'id' => 11 ) );
+		$with->meta = array( '_ss_pixel_visitor' => 'v-1', '_ss_pixel_session' => 's-1', '_ss_pixel_purchase_sent' => '1' );
+		$none = new \WC_Order( array( 'id' => 12 ) );
+		$seen = null;
+		Functions\when( 'wc_get_orders' )->alias(
+			function ( $args ) use ( &$seen, $with, $none ) {
+				$seen = $args;
+				return array( $with, $none );
+			}
+		);
+		$result = ( new Privacy() )->export( ' A@B.bg ', 1 );
+		$this->assertSame( 'a@b.bg', $seen['billing_email'] );
+		$this->assertCount( 1, $result['data'], 'store not connected: only the local ids, and only for the order that has them' );
+		$group = $result['data'][0];
+		$this->assertSame( 'socialscore-pixel', $group['group_id'] );
+		$this->assertSame( 'socialscore-pixel-order-11', $group['item_id'] );
+		$rows = array_column( $group['data'], 'value', 'name' );
+		$this->assertSame( array( 'Order' => '11', 'Visit id' => 'v-1', 'Session id' => 's-1' ), $rows );
+	}
 }

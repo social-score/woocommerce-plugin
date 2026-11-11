@@ -23,6 +23,10 @@ class PixelTest extends TestCase {
 		Functions\when( 'is_admin' )->justReturn( false );
 		Functions\when( 'is_product' )->justReturn( false );
 		Functions\when( 'is_checkout' )->justReturn( false );
+		Functions\when( 'has_block' )->justReturn( false );
+		Functions\when( 'get_queried_object_id' )->justReturn( 5 );
+		Functions\when( 'get_current_user_id' )->justReturn( 0 );
+		Functions\when( 'current_user_can' )->justReturn( false );
 		Functions\when( 'wp_doing_ajax' )->justReturn( false );
 		Functions\when( 'wp_register_script' )->justReturn( true );
 		Functions\when( 'wp_enqueue_script' )->justReturn( true );
@@ -256,10 +260,11 @@ class PixelTest extends TestCase {
 		};
 	}
 
-	public function test_checkout_page_pushes_begin_checkout_for_a_cart_with_items() {
+	public function test_checkout_block_page_pushes_begin_checkout_for_a_cart_with_items() {
 		$this->connect_store( 'st_1' );
 		$this->pixel_answer();
 		Functions\when( 'is_checkout' )->justReturn( true );
+		Functions\when( 'has_block' )->justReturn( true );
 		Functions\when( 'is_order_received_page' )->justReturn( false );
 		Functions\when( 'is_checkout_pay_page' )->justReturn( false );
 		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 59.9, 2 ), 'session' => null ) );
@@ -271,6 +276,7 @@ class PixelTest extends TestCase {
 		$this->connect_store( 'st_1' );
 		$this->pixel_answer();
 		Functions\when( 'is_checkout' )->justReturn( true );
+		Functions\when( 'has_block' )->justReturn( true );
 		Functions\when( 'is_order_received_page' )->justReturn( false );
 		Functions\when( 'is_checkout_pay_page' )->justReturn( false );
 		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 0, 0, true ), 'session' => null ) );
@@ -347,6 +353,133 @@ class PixelTest extends TestCase {
 		);
 		$this->assertSame( '7.5', $args['attributes']['data-ss-price'] );
 		$this->assertSame( 3, $args['attributes']['data-product_id'] );
+	}
+
+	// begin_checkout on the classic form hook ------------------------------------------------------------------------
+
+	public function test_the_classic_checkout_form_hook_is_registered() {
+		$hooks = array();
+		Functions\when( 'add_action' )->alias(
+			function ( $hook, $callback, $priority = 10, $args = 1 ) use ( &$hooks ) {
+				$hooks[ $hook ] = array( $callback[1], $priority, $args );
+			}
+		);
+		Functions\when( 'add_filter' )->justReturn( true );
+		( new Pixel() )->register();
+		$this->assertSame( array( 'begin_checkout_classic', 10, 0 ), $hooks['woocommerce_before_checkout_form'] );
+	}
+
+	public function test_classic_checkout_form_pushes_begin_checkout_once() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		Functions\when( 'is_order_received_page' )->justReturn( false );
+		Functions\when( 'is_checkout_pay_page' )->justReturn( false );
+		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 59.9, 2 ), 'session' => null ) );
+		$pixel = new Pixel();
+		$pixel->begin_checkout_classic();
+		$pixel->begin_checkout_classic();
+		$this->assertCount( 1, $this->inline['socialscore-pixel'] );
+		$this->assertStringContainsString( '{"type":"begin_checkout","data":{"value":59.9,"currency":"EUR","items":2}}', $this->inline['socialscore-pixel'][0] );
+	}
+
+	public function test_a_shortcode_checkout_page_does_not_report_from_the_enqueue_hook() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		Functions\when( 'is_checkout' )->justReturn( true );
+		Functions\when( 'is_order_received_page' )->justReturn( false );
+		Functions\when( 'is_checkout_pay_page' )->justReturn( false );
+		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 59.9, 2 ), 'session' => null ) );
+		$pixel = new Pixel();
+		$pixel->enqueue();
+		$this->assertCount( 1, $this->inline['socialscore-pixel'], 'the form hook reports it, not the enqueue hook' );
+		$pixel->begin_checkout_classic();
+		$this->assertCount( 2, $this->inline['socialscore-pixel'] );
+	}
+
+	public function test_a_block_checkout_page_is_not_reported_twice() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		Functions\when( 'is_checkout' )->justReturn( true );
+		Functions\when( 'has_block' )->justReturn( true );
+		Functions\when( 'is_order_received_page' )->justReturn( false );
+		Functions\when( 'is_checkout_pay_page' )->justReturn( false );
+		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 10, 1 ), 'session' => null ) );
+		$pixel = new Pixel();
+		$pixel->enqueue();
+		$pixel->begin_checkout_classic();
+		$this->assertSame( 1, substr_count( implode( '', $this->inline['socialscore-pixel'] ), 'begin_checkout' ) );
+	}
+
+	public function test_classic_checkout_form_with_an_empty_cart_or_the_pixel_off_pushes_nothing() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		Functions\when( 'is_order_received_page' )->justReturn( false );
+		Functions\when( 'is_checkout_pay_page' )->justReturn( false );
+		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 0, 0, true ), 'session' => null ) );
+		( new Pixel() )->begin_checkout_classic();
+		$this->assertSame( array(), $this->inline );
+	}
+
+	// One item id rule -------------------------------------------------------------------------------------------
+
+	public function test_a_reloading_variation_add_reports_the_parent_id_and_the_variation_id_apart() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		$session = $this->session();
+		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => null, 'session' => $session ) );
+		Functions\when( 'wc_get_product' )->alias(
+			function ( $id ) {
+				return new class( $id ) {
+					private $id;
+					public function __construct( $id ) {
+						$this->id = $id;
+					}
+					public function get_price() {
+						return 40 === $this->id ? '9.00' : '5.00';
+					}
+				};
+			}
+		);
+		( new Pixel() )->remember_add_to_cart( 'abc', 12, 1, 40 );
+		$this->assertSame( array( 'item_id' => '12', 'quantity' => 1, 'price' => 9.0, 'currency' => 'EUR', 'variant_id' => '40' ), $session->data['socialscore_pixel_events'][0]['data'] );
+		( new Pixel() )->remember_add_to_cart( 'abd', 13, 1, 0 );
+		$this->assertArrayNotHasKey( 'variant_id', $session->data['socialscore_pixel_events'][1]['data'] );
+	}
+
+	// Purchase seen by a shop manager ----------------------------------------------------------------------------
+
+	public function test_a_shop_manager_opening_the_thank_you_page_sends_nothing_and_keeps_the_flag() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		Functions\when( 'get_current_user_id' )->justReturn( 1 );
+		Functions\when( 'current_user_can' )->justReturn( true );
+		$order = new \WC_Order( array( 'id' => 340, 'customer_id' => 77, 'total' => '10' ) );
+		Functions\when( 'wc_get_order' )->justReturn( $order );
+		( new Pixel() )->purchase( 340 );
+		$this->assertSame( array(), $this->inline );
+		$this->assertArrayNotHasKey( '_ss_pixel_purchase_sent', $order->meta );
+		$this->assertSame( 0, $order->meta_saves );
+	}
+
+	public function test_a_guest_the_customer_and_a_manager_who_is_the_customer_still_send_purchase() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		foreach ( array(
+			array( 0, 0, false ),
+			array( 77, 77, false ),
+			array( 1, 1, true ),
+			array( 78, 77, false ),
+		) as $i => $case ) {
+			list( $viewer, $customer, $manager ) = $case;
+			Functions\when( 'get_current_user_id' )->justReturn( $viewer );
+			Functions\when( 'current_user_can' )->justReturn( $manager );
+			$order = new \WC_Order( array( 'id' => 350 + $i, 'customer_id' => $customer, 'total' => '10' ) );
+			Functions\when( 'wc_get_order' )->justReturn( $order );
+			$this->inline = array();
+			( new Pixel() )->purchase( 350 + $i );
+			$this->assertCount( 1, $this->inline['socialscore-pixel'], 'case ' . $i );
+			$this->assertSame( '1', $order->meta['_ss_pixel_purchase_sent'] );
+		}
 	}
 
 	// Purchase ---------------------------------------------------------------------------------------------------

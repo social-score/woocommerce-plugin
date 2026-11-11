@@ -160,21 +160,47 @@ ss_assert( false === strpos( $html, '"type":"add_to_cart"' ), 'the next page doe
 $html = wp_remote_retrieve_body( ss_get( wc_get_checkout_url(), $jar ) );
 ss_assert( 1 === substr_count( $html, '"type":"begin_checkout"' ) && false !== strpos( $html, '"items":1' ), 'checkout page pushes begin_checkout once' );
 
+// A shop manager who opens a thank-you page is not the buyer: no purchase event, and the flag stays for the buyer.
 $thanks = $order->get_checkout_order_received_url();
-// As the shop manager: WooCommerce shows a guest order only after an email check, which needs the customer's own session.
 $html   = wp_remote_retrieve_body( ss_get( $thanks, $cookies ) );
+ss_assert( false === strpos( $html, '"type":"purchase"' ), 'a shop manager on the thank-you page gets no purchase event' );
+ss_assert( '' === (string) wc_get_order( $id1 )->get_meta( '_ss_pixel_purchase_sent' ), 'and the order keeps its one purchase event' );
+
+// The buyer: a customer account with an order of their own. A visitor who is not a shop manager sees store pages
+// only when the store is not in coming-soon mode (the default of a new store).
+update_option( 'woocommerce_coming_soon', 'no' );
+$buyer = wp_insert_user( array( 'user_login' => 'buyer', 'user_pass' => 'buyer-pass', 'user_email' => 'buyer@example.test', 'role' => 'customer' ) );
+$mk    = function () use ( $buyer, $product ) {
+	$o = wc_create_order( array( 'customer_id' => $buyer ) );
+	$o->add_product( $product, 1 );
+	$o->set_billing_email( 'buyer@example.test' );
+	$o->calculate_totals();
+	$o->set_status( 'processing' );
+	$o->save();
+	return $o;
+};
+$buyer_cookies = array();
+for ( $try = 0; $try < 4 && count( $buyer_cookies ) < 2; $try++ ) {
+	$login         = wp_remote_post( 'http://wordpress/wp-login.php', array( 'redirection' => 0, 'timeout' => 60, 'cookies' => array( 'wordpress_test_cookie' => 'WP Cookie check' ), 'body' => array( 'log' => 'buyer', 'pwd' => 'buyer-pass', 'wp-submit' => 'Log In', 'testcookie' => 1 ) ) );
+	$buyer_cookies = is_wp_error( $login ) ? array() : wp_remote_retrieve_cookies( $login );
+}
+ss_assert( count( $buyer_cookies ) >= 2, 'the buyer logged in' );
+$buy1   = $mk();
+$thanks = $buy1->get_checkout_order_received_url();
+$html   = wp_remote_retrieve_body( ss_get( $thanks, $buyer_cookies ) );
 $post   = get_post( wc_get_page_id( 'checkout' ) );
 echo 'checkout page content: ' . substr( (string) $post->post_content, 0, 60 ) . "\n";
-ss_assert( 1 === substr_count( $html, '"type":"purchase"' ) && false !== strpos( $html, '"order_external_id":"' . $id1 . '","value":' ), 'thank-you page pushes purchase once (block checkout page; ' . ( false !== stripos( $html, 'verify' ) ? 'email verification shown' : 'order shown' ) . ')' );
+ss_assert( 1 === substr_count( $html, '"type":"purchase"' ) && false !== strpos( $html, '"order_external_id":"' . $buy1->get_id() . '","value":' ), 'thank-you page pushes purchase once for the buyer (block checkout page)' );
 preg_match( '#<script id="socialscore-pixel-js-after">(.*?)</script>#s', $html, $inline );
 $push = $inline[1] ?? '';
-ss_assert( '' !== $push && false === stripos( $push, 'identify' ) && false === strpos( $push, 'ana@example.test' ) && false === strpos( $push, '0888123456' ), 'the Pixel inline script has no identify and no email or phone' );
-$html = wp_remote_retrieve_body( ss_get( $thanks, $cookies ) );
+ss_assert( '' !== $push && false === stripos( $push, 'identify' ) && false === strpos( $push, 'buyer@example.test' ) && false === strpos( $push, '0888123456' ), 'the Pixel inline script has no identify and no email or phone' );
+$html = wp_remote_retrieve_body( ss_get( $thanks, $buyer_cookies ) );
 ss_assert( false === strpos( $html, '"type":"purchase"' ), 'a second visit to the thank-you page does not push it again' );
 
 // The same thank-you page with the classic checkout shortcode.
 wp_update_post( array( 'ID' => wc_get_page_id( 'checkout' ), 'post_content' => '[woocommerce_checkout]' ) );
-$html = wp_remote_retrieve_body( ss_get( wc_get_order( $id2 )->get_checkout_order_received_url(), $cookies ) );
+$buy2 = $mk();
+$html = wp_remote_retrieve_body( ss_get( $buy2->get_checkout_order_received_url(), $buyer_cookies ) );
 ss_assert( 1 === substr_count( $html, '"type":"purchase"' ), 'classic shortcode thank-you page pushes purchase once' );
 $html = wp_remote_retrieve_body( ss_get( wc_get_checkout_url(), $jar ) );
 ss_assert( 1 === substr_count( $html, '"type":"begin_checkout"' ), 'classic shortcode checkout page pushes begin_checkout once' );
