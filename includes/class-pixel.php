@@ -10,7 +10,7 @@ namespace SocialScore;
 defined( 'ABSPATH' ) || exit;
 
 /**
- * The Pixel script itself decides what to collect from the visitor's consent; nothing here reads consent.
+ * The Pixel is a security tool: the script collects on every visit regardless of consent and only records the banner choice; nothing here reads consent.
  * The server only (a) prints the loader and the shop events when the Pixel is on and (b) copies the first-party
  * cookies ss_pv and ss_ps onto the order when it is made. The browser never links a visit to an order.
  */

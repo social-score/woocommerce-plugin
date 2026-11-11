@@ -2,7 +2,7 @@
  * Storefront add-to-cart events for the SocialScore Pixel: the classic jQuery event, the block cart data store and the
  * Interactivity API cart store (block product buttons).
  * Everything else (product view, checkout start, purchase) is printed by PHP. Nothing here reads consent: the
- * Pixel script holds or drops events by itself.
+ * Pixel collects regardless of consent and only records the banner choice.
  */
 
 /** item_id is always the parent product id; the variation id, when there is one, goes in variant_id. */

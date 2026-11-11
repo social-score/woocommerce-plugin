@@ -136,7 +136,7 @@ class Messages {
 			'pixel.title'                       => __( 'Pixel', 'socialscore' ),
 			'pixel.toggle'                      => __( 'Pixel: tell SocialScore how visits to your shop behave', 'socialscore' ),
 			'pixel.intro'                       => __( 'The Pixel is a script on your shop that classifies each visit as a person, a passive visitor, a bad bot or an AI agent. It shows the class on orders and customers.', 'socialscore' ),
-			'pixel.consent'                     => __( 'The Pixel collects only with the visitor\'s consent, so your shop needs a cookie banner. It reads consent from TCF, the WP Consent API, CookieYes, Cookiebot or the Shopify banner. Without a banner it collects nothing.', 'socialscore' ),
+			'pixel.consent'                     => __( 'The Pixel is a security tool. It protects your shop from bots, AI agents and automated fraud, so it runs on every visit and does not need a cookie banner. It keeps working when a visitor declines cookies. When your shop has a banner (TCF, WP Consent API, CookieYes, Cookiebot or the Shopify banner), the Pixel records the visitor\'s choice. List the Pixel as a security tool in your privacy and cookie policy.', 'socialscore' ),
 			'pixel.siteId'                      => __( 'Site id: {siteId}', 'socialscore' ),
 			'pixel.saved'                       => __( 'Pixel switched on', 'socialscore' ),
 			'pixel.savedOff'                    => __( 'Pixel switched off', 'socialscore' ),
