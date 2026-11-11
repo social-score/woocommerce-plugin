@@ -1,6 +1,6 @@
 {
   "name": "@socialscore/plugin-core",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Shared SocialScore UI and logic for the WooCommerce and Shopify plugins: API client, store dashboard, Check panel and settings.",
   "type": "module",
   "license": "GPL-2.0-or-later",

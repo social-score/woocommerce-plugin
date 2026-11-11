@@ -1,44 +1,44 @@
 import { createContext as e, useCallback as t, useContext as n, useEffect as r, useMemo as i, useRef as a, useState as o } from "react";
 import { Fragment as s, jsx as c, jsxs as l } from "react/jsx-runtime";
-import { Badge as u, Button as d, Card as f, Checkbox as p, EmptyState as m, LevelIndicator as h, Spinner as g, Tab as _, TabList as v, TabPanel as y, Table as b, Tabs as x } from "@socialscore/ui";
+import { Badge as u, Button as d, Card as f, Checkbox as p, EmptyState as m, LevelIndicator as h, Spinner as g, Switch as _, Tab as v, TabList as y, TabPanel as b, Table as x, Tabs as S } from "@socialscore/ui";
 //#region src/api/case.ts
-var S = (e) => e.replace(/_([a-z0-9])/g, (e, t) => t.toUpperCase()), C = (e) => e.replace(/[A-Z]/g, (e) => `_${e.toLowerCase()}`);
-function w(e) {
+var C = (e) => e.replace(/_([a-z0-9])/g, (e, t) => t.toUpperCase()), w = (e) => e.replace(/[A-Z]/g, (e) => `_${e.toLowerCase()}`);
+function T(e) {
 	return typeof e == "object" && !!e && !Array.isArray(e);
 }
-function T(e) {
-	if (Array.isArray(e)) return e.map((e) => T(e));
-	if (!w(e)) return e;
+function E(e) {
+	if (Array.isArray(e)) return e.map((e) => E(e));
+	if (!T(e)) return e;
 	let t = {};
 	return Object.entries(e).forEach(([e, n]) => {
-		n !== null && (t[S(e)] = T(n));
+		n !== null && (t[C(e)] = E(n));
 	}), t;
 }
-function E(e) {
-	if (Array.isArray(e)) return e.map(E);
-	if (!w(e)) return e;
+function D(e) {
+	if (Array.isArray(e)) return e.map(D);
+	if (!T(e)) return e;
 	let t = {};
 	return Object.entries(e).forEach(([e, n]) => {
-		t[C(e)] = E(n);
+		t[w(e)] = D(n);
 	}), t;
 }
 //#endregion
 //#region src/api/errors.ts
-var D = class extends Error {
+var O = class extends Error {
 	constructor(e, t, n, r) {
 		super(n ?? t ?? `Request failed with status ${e}`), this.name = "ApiError", this.status = e, this.code = t, this.retryAfter = r;
 	}
 };
 //#endregion
 //#region src/api/client.ts
-function O(e) {
+function k(e) {
 	return new Map(e.map((e) => [e.externalId, e.id]));
 }
-function k() {
+function A() {
 	let e = globalThis.crypto;
 	return e && typeof e.randomUUID == "function" ? e.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
 }
-async function A(e) {
+async function ee(e) {
 	let t = await e.text();
 	if (t) try {
 		return JSON.parse(t);
@@ -46,11 +46,11 @@ async function A(e) {
 		return;
 	}
 }
-function ee(e, t) {
+function j(e, t) {
 	let n = t && typeof t == "object" ? t : {}, r = n.detail && typeof n.detail == "object" ? n.detail : n, i = typeof r.code == "string" ? r.code : typeof n.detail == "string" ? n.detail : void 0, a = typeof r.message == "string" ? r.message : void 0, o = e.headers.get("Retry-After"), s = o !== null && /^\d+$/.test(o) ? Number(o) : void 0;
-	return new D(e.status, i, a, s);
+	return new O(e.status, i, a, s);
 }
-var j = class {
+var M = class {
 	constructor(e, t) {
 		this.host = e, this.storePath = `/api/v2/stores/${encodeURIComponent(String(t))}`;
 	}
@@ -62,10 +62,10 @@ var j = class {
 			method: e,
 			headers: r
 		};
-		n.body !== void 0 && (r["Content-Type"] = "application/json", i.body = JSON.stringify(E(n.body)));
-		let a = await this.host.apiFetch(t, i), o = await A(a);
-		if (!a.ok) throw ee(a, o);
-		return T(o);
+		n.body !== void 0 && (r["Content-Type"] = "application/json", i.body = JSON.stringify(D(n.body)));
+		let a = await this.host.apiFetch(t, i), o = await ee(a);
+		if (!a.ok) throw j(a, o);
+		return E(o);
 	}
 	getSettings() {
 		return this.request("GET", `${this.storePath}/settings`);
@@ -85,7 +85,7 @@ var j = class {
 	pushOrders(e) {
 		return this.request("POST", `${this.storePath}/orders:batch`, { body: { orders: e } });
 	}
-	runCheck(e, t = k()) {
+	runCheck(e, t = A()) {
 		let n = e.orderExternalId === void 0 ? { customerExternalId: e.customerExternalId } : { orderExternalId: e.orderExternalId };
 		return this.request("POST", `${this.storePath}/checks`, {
 			body: n,
@@ -97,6 +97,18 @@ var j = class {
 	}
 	getOrderProfile(e) {
 		return this.request("GET", `${this.storePath}/orders/${encodeURIComponent(e)}/profile`);
+	}
+	getCustomerSession(e) {
+		return this.request("GET", `${this.storePath}/customers/${encodeURIComponent(e)}/session`);
+	}
+	getOrderSession(e) {
+		return this.request("GET", `${this.storePath}/orders/${encodeURIComponent(e)}/session`);
+	}
+	getPixel() {
+		return this.request("GET", `${this.storePath}/pixel`);
+	}
+	setPixel(e) {
+		return this.request("PATCH", `${this.storePath}/pixel`, { body: { enabled: e } });
 	}
 	getOverview() {
 		return this.request("GET", `${this.storePath}/overview`);
@@ -122,16 +134,16 @@ var j = class {
 	getHookSamples(e) {
 		return this.request("GET", `/api/v2/hooks/samples/${encodeURIComponent(e)}`);
 	}
-}, M = e(null);
+}, N = e(null);
 //#endregion
 //#region src/PluginProvider.tsx
-function N({ host: e, storeId: t, children: n }) {
+function te({ host: e, storeId: t, children: n }) {
 	let r = String(t), a = i(() => ({
 		host: e,
 		storeId: r,
-		api: new j(e, r)
+		api: new M(e, r)
 	}), [e, r]);
-	return /* @__PURE__ */ c(M.Provider, {
+	return /* @__PURE__ */ c(N.Provider, {
 		value: a,
 		children: n
 	});
@@ -171,6 +183,15 @@ var P = {
 	"check.noSignals": "No signals available for this profile yet.",
 	"check.replayWithoutProfile": "This is a repeat of an earlier check and your organization stores no profiles. Check again to see the signals.",
 	"check.seeFullProfile": "See full profile",
+	"session.title": "Visit on the shop",
+	"session.class.human": "Human",
+	"session.class.lurker": "Passive visitor",
+	"session.class.bad_bot": "Bad bot",
+	"session.class.ai_agent": "AI agent",
+	"session.botScore": "Bot score: {score}",
+	"session.pages": "Pages read: {count}",
+	"session.lastSeen": "Last seen {date}",
+	"session.deviceFarm": "A visit came from a device farm. Treat it with caution.",
 	"dashboard.title": "SocialScore",
 	"dashboard.tabs": "SocialScore sections",
 	"dashboard.tab.overview": "Overview",
@@ -241,6 +262,14 @@ var P = {
 	"settings.costConfirm": "Turn on for every account",
 	"settings.saved": "Settings saved",
 	"settings.saveFailed": "Settings were not saved.",
+	"pixel.title": "Pixel",
+	"pixel.toggle": "Pixel: tell SocialScore how visits to your shop behave",
+	"pixel.intro": "The Pixel is a script on your shop that classifies each visit as a person, a passive visitor, a bad bot or an AI agent. It shows the class on orders and customers.",
+	"pixel.consent": "The Pixel collects only with the visitor's consent, so your shop needs a cookie banner. It reads consent from TCF, the WP Consent API, CookieYes, Cookiebot or the Shopify banner. Without a banner it collects nothing.",
+	"pixel.siteId": "Site id: {siteId}",
+	"pixel.saved": "Pixel switched on",
+	"pixel.savedOff": "Pixel switched off",
+	"pixel.mainOnly": "Only the Main user of your SocialScore company can switch the Pixel.",
 	"connect.title": "Connect your store to SocialScore",
 	"connect.description.woocommerce": "Log in to SocialScore and approve access. Your WooCommerce store is then linked to your organization.",
 	"connect.description.shopify": "Log in to SocialScore and approve access. Your Shopify store is then linked to your organization.",
@@ -251,7 +280,7 @@ var P = {
 function F(e) {
 	return `profile/${e.kind}/${encodeURIComponent(e.externalId)}`;
 }
-function te(e, t) {
+function ne(e, t) {
 	if (e === void 0) return "";
 	let n = Number(e);
 	if (!t || Number.isNaN(n)) return t ? `${e} ${t}` : String(e);
@@ -276,25 +305,25 @@ function L(e) {
 //#endregion
 //#region src/hooks/usePlugin.ts
 function R() {
-	let e = n(M);
+	let e = n(N);
 	if (!e) throw Error("Plugin screens must be rendered inside <PluginProvider>");
 	return e;
 }
 var z = () => R().api, B = () => R().host;
-function V(e, t) {
+function re(e, t) {
 	return t ? e.replace(/\{(\w+)\}/g, (e, n) => n in t ? String(t[n]) : e) : e;
 }
-function H() {
+function V() {
 	let { host: e } = R();
 	return t((t, n) => {
 		let r = e.t?.(t, n);
-		return r && r !== t ? r : V(P[t], n);
+		return r && r !== t ? r : re(P[t], n);
 	}, [e]);
 }
 //#endregion
 //#region src/components/CheckLabels.tsx
-function U({ labels: e }) {
-	let t = H();
+function H({ labels: e }) {
+	let t = V();
 	return e.length === 0 ? null : /* @__PURE__ */ c("ul", {
 		className: "ss-pc-labels",
 		children: e.map((e) => /* @__PURE__ */ c("li", { children: /* @__PURE__ */ c(u, {
@@ -305,8 +334,8 @@ function U({ labels: e }) {
 }
 //#endregion
 //#region src/components/CheckSignals.tsx
-function W({ profile: e }) {
-	let t = H(), n = e.categories.healthSignals?.fields, r = e.categories.b2b?.fields.isBusinessEmail, i = [
+function ie({ profile: e }) {
+	let t = V(), n = e.categories.healthSignals?.fields, r = e.categories.b2b?.fields.isBusinessEmail, i = [
 		{
 			key: "presence",
 			label: t("check.digitalPresence"),
@@ -363,10 +392,10 @@ function W({ profile: e }) {
 }
 //#endregion
 //#region src/hooks/useErrorText.ts
-function G() {
-	let e = H();
+function ae() {
+	let e = V();
 	return (t) => {
-		if (t instanceof D) {
+		if (t instanceof O) {
 			if (t.status === 402 || t.code === "plan_required") return e("error.planRequired");
 			if (t.status === 429) return t.retryAfter === void 0 ? e("error.rateLimitedNoWait") : e("error.rateLimited", { seconds: t.retryAfter });
 			if (t.status === 401) return e("error.unauthorized");
@@ -376,8 +405,8 @@ function G() {
 }
 //#endregion
 //#region src/components/ErrorNote.tsx
-function K({ error: e, onRetry: t }) {
-	let n = H(), r = G()(e);
+function U({ error: e, onRetry: t }) {
+	let n = V(), r = ae()(e);
 	return /* @__PURE__ */ l("div", {
 		role: "alert",
 		className: "ss-pc-error",
@@ -392,115 +421,8 @@ function K({ error: e, onRetry: t }) {
 	});
 }
 //#endregion
-//#region src/screens/CheckPanel.tsx
-function ne({ kind: e, externalId: t }) {
-	let n = z(), r = B(), i = H(), [u, p] = o(!1), [m, h] = o(), [_, v] = o(), y = a(void 0);
-	return /* @__PURE__ */ c(f, {
-		title: i("check.title"),
-		headingLevel: 3,
-		hideWhenEmpty: !1,
-		children: /* @__PURE__ */ l("div", {
-			className: "ss-pc-panel",
-			children: [
-				m && /* @__PURE__ */ l(s, { children: [
-					/* @__PURE__ */ c(U, { labels: m.labels }),
-					m.profile && /* @__PURE__ */ c(W, { profile: m.profile }),
-					m.replayWithoutProfile && /* @__PURE__ */ c("p", {
-						className: "ss-pc-muted",
-						children: i("check.replayWithoutProfile")
-					})
-				] }),
-				_ !== void 0 && /* @__PURE__ */ c(K, { error: _ }),
-				u && /* @__PURE__ */ c(g, { label: i("check.checking") }),
-				/* @__PURE__ */ l("div", {
-					className: "ss-pc-actions",
-					children: [/* @__PURE__ */ c(d, {
-						variant: "contained-primary",
-						disabled: u,
-						onClick: async () => {
-							p(!0), v(void 0), y.current ??= k();
-							try {
-								let r = e === "order" ? { orderExternalId: t } : { customerExternalId: t };
-								h(await n.runCheck(r, y.current)), y.current = void 0;
-							} catch (e) {
-								v(e);
-							} finally {
-								p(!1);
-							}
-						},
-						children: i("check.button")
-					}), m && /* @__PURE__ */ c(d, {
-						variant: "link",
-						onClick: () => r.navigate(F({
-							kind: e,
-							externalId: t
-						})),
-						children: i("check.seeFullProfile")
-					})]
-				})
-			]
-		})
-	});
-}
-function re(e) {
-	return /* @__PURE__ */ c(ne, { ...e }, `${e.kind}:${e.externalId}`);
-}
-//#endregion
-//#region src/screens/ConnectScreen.tsx
-function ie({ connectUrl: e }) {
-	let t = B(), n = H();
-	return /* @__PURE__ */ l(f, {
-		title: n("connect.title"),
-		headingLevel: 2,
-		children: [/* @__PURE__ */ c("p", {
-			className: "ss-pc-text",
-			children: n(`connect.description.${t.platform}`)
-		}), /* @__PURE__ */ c(d, {
-			variant: "contained-primary",
-			onClick: () => t.navigate(e),
-			children: n("connect.button")
-		})]
-	});
-}
-//#endregion
-//#region src/components/FieldRow.tsx
-function ae(e, t, n) {
-	return typeof e == "boolean" ? e ? t : n : typeof e == "object" ? JSON.stringify(e) : String(e);
-}
-function oe({ label: e, field: t }) {
-	let n = H(), r = t.confidenceLevel, i = [
-		t.sourceDetail ? `${L(t.source)}: ${t.sourceDetail}` : n("profile.source", { source: L(t.source) }),
-		t.reason ? n("profile.reason", { reason: t.reason }) : "",
-		t.collectedAt ? n("profile.collectedAt", { date: I(t.collectedAt) }) : ""
-	].filter(Boolean);
-	return /* @__PURE__ */ l("div", {
-		className: "ss-pc-field",
-		children: [/* @__PURE__ */ c("dt", {
-			className: "ss-pc-field-label",
-			children: e
-		}), /* @__PURE__ */ l("dd", {
-			className: "ss-pc-field-body",
-			children: [
-				/* @__PURE__ */ c("span", {
-					className: "ss-pc-field-value",
-					children: t.masked ? n("profile.masked") : t.value === void 0 ? n("profile.noValue") : ae(t.value, n("common.yes"), n("common.no"))
-				}),
-				r && /* @__PURE__ */ c(u, {
-					variant: r,
-					"aria-label": n("profile.confidence", { level: n(`level.${r}`) }),
-					children: n(`level.${r}`)
-				}),
-				i.length > 0 && /* @__PURE__ */ c("span", {
-					className: "ss-pc-field-meta",
-					children: i.join(" · ")
-				})
-			]
-		})]
-	});
-}
-//#endregion
 //#region src/hooks/useResource.ts
-function q(e) {
+function W(e) {
 	let [n, i] = o({ loading: !0 }), [a, s] = o(0);
 	r(() => {
 		let t = !1;
@@ -528,13 +450,172 @@ function q(e) {
 	};
 }
 //#endregion
+//#region src/components/SessionClass.tsx
+var G = {
+	human: "success",
+	lurker: "neutral",
+	bad_bot: "error",
+	ai_agent: "warning"
+};
+function K({ kind: e, externalId: n }) {
+	let r = z(), i = V(), { data: a, error: o } = W(t(() => e === "order" ? r.getOrderSession(n) : r.getCustomerSession(n), [
+		r,
+		e,
+		n
+	]));
+	if (o !== void 0 || !a) return null;
+	let s = Object.prototype.hasOwnProperty.call(G, a.class);
+	return /* @__PURE__ */ l("section", {
+		className: "ss-pc-session",
+		"aria-label": i("session.title"),
+		children: [
+			/* @__PURE__ */ l("p", {
+				className: "ss-pc-text",
+				children: [
+					/* @__PURE__ */ c(u, {
+						variant: s ? G[a.class] : "neutral",
+						children: s ? i(`session.class.${a.class}`) : a.class
+					}),
+					" ",
+					/* @__PURE__ */ c("span", { children: i("session.botScore", { score: a.botScore }) })
+				]
+			}),
+			/* @__PURE__ */ l("p", {
+				className: "ss-pc-muted",
+				children: [
+					i("session.pages", { count: a.pages }),
+					" · ",
+					i("session.lastSeen", { date: I(a.lastSeenAt) })
+				]
+			}),
+			a.deviceFarm && /* @__PURE__ */ c("p", {
+				className: "ss-pc-muted",
+				children: i("session.deviceFarm")
+			})
+		]
+	});
+}
+//#endregion
+//#region src/screens/CheckPanel.tsx
+function q({ kind: e, externalId: t }) {
+	let n = z(), r = B(), i = V(), [u, p] = o(!1), [m, h] = o(), [_, v] = o(), y = a(void 0);
+	return /* @__PURE__ */ c(f, {
+		title: i("check.title"),
+		headingLevel: 3,
+		hideWhenEmpty: !1,
+		children: /* @__PURE__ */ l("div", {
+			className: "ss-pc-panel",
+			children: [
+				/* @__PURE__ */ c(K, {
+					kind: e,
+					externalId: t
+				}),
+				m && /* @__PURE__ */ l(s, { children: [
+					/* @__PURE__ */ c(H, { labels: m.labels }),
+					m.profile && /* @__PURE__ */ c(ie, { profile: m.profile }),
+					m.replayWithoutProfile && /* @__PURE__ */ c("p", {
+						className: "ss-pc-muted",
+						children: i("check.replayWithoutProfile")
+					})
+				] }),
+				_ !== void 0 && /* @__PURE__ */ c(U, { error: _ }),
+				u && /* @__PURE__ */ c(g, { label: i("check.checking") }),
+				/* @__PURE__ */ l("div", {
+					className: "ss-pc-actions",
+					children: [/* @__PURE__ */ c(d, {
+						variant: "contained-primary",
+						disabled: u,
+						onClick: async () => {
+							p(!0), v(void 0), y.current ??= A();
+							try {
+								let r = e === "order" ? { orderExternalId: t } : { customerExternalId: t };
+								h(await n.runCheck(r, y.current)), y.current = void 0;
+							} catch (e) {
+								v(e);
+							} finally {
+								p(!1);
+							}
+						},
+						children: i("check.button")
+					}), m && /* @__PURE__ */ c(d, {
+						variant: "link",
+						onClick: () => r.navigate(F({
+							kind: e,
+							externalId: t
+						})),
+						children: i("check.seeFullProfile")
+					})]
+				})
+			]
+		})
+	});
+}
+function oe(e) {
+	return /* @__PURE__ */ c(q, { ...e }, `${e.kind}:${e.externalId}`);
+}
+//#endregion
+//#region src/screens/ConnectScreen.tsx
+function se({ connectUrl: e }) {
+	let t = B(), n = V();
+	return /* @__PURE__ */ l(f, {
+		title: n("connect.title"),
+		headingLevel: 2,
+		children: [/* @__PURE__ */ c("p", {
+			className: "ss-pc-text",
+			children: n(`connect.description.${t.platform}`)
+		}), /* @__PURE__ */ c(d, {
+			variant: "contained-primary",
+			size: "lg",
+			fullWidth: !0,
+			onClick: () => t.navigate(e),
+			children: n("connect.button")
+		})]
+	});
+}
+//#endregion
+//#region src/components/FieldRow.tsx
+function ce(e, t, n) {
+	return typeof e == "boolean" ? e ? t : n : typeof e == "object" ? JSON.stringify(e) : String(e);
+}
+function le({ label: e, field: t }) {
+	let n = V(), r = t.confidenceLevel, i = [
+		t.sourceDetail ? `${L(t.source)}: ${t.sourceDetail}` : n("profile.source", { source: L(t.source) }),
+		t.reason ? n("profile.reason", { reason: t.reason }) : "",
+		t.collectedAt ? n("profile.collectedAt", { date: I(t.collectedAt) }) : ""
+	].filter(Boolean);
+	return /* @__PURE__ */ l("div", {
+		className: "ss-pc-field",
+		children: [/* @__PURE__ */ c("dt", {
+			className: "ss-pc-field-label",
+			children: e
+		}), /* @__PURE__ */ l("dd", {
+			className: "ss-pc-field-body",
+			children: [
+				/* @__PURE__ */ c("span", {
+					className: "ss-pc-field-value",
+					children: t.masked ? n("profile.masked") : t.value === void 0 ? n("profile.noValue") : ce(t.value, n("common.yes"), n("common.no"))
+				}),
+				r && /* @__PURE__ */ c(u, {
+					variant: r,
+					"aria-label": n("profile.confidence", { level: n(`level.${r}`) }),
+					children: n(`level.${r}`)
+				}),
+				i.length > 0 && /* @__PURE__ */ c("span", {
+					className: "ss-pc-field-meta",
+					children: i.join(" · ")
+				})
+			]
+		})]
+	});
+}
+//#endregion
 //#region src/lib/profile.ts
 function J(e) {
 	return typeof e == "object" && !!e && "source" in e && "reason" in e && "masked" in e;
 }
 //#endregion
 //#region src/screens/ProfileView.tsx
-var se = [
+var ue = [
 	"identity",
 	"contact",
 	"digitalFootprint",
@@ -545,7 +626,7 @@ var se = [
 	"segments",
 	"ownData"
 ];
-function ce(e) {
+function de(e) {
 	let t = [];
 	return Object.entries(e).forEach(([e, n]) => {
 		(Array.isArray(n) ? n : [n]).forEach((n, r) => {
@@ -575,15 +656,15 @@ function ce(e) {
 	}), t;
 }
 function Y({ kind: e, externalId: n, onBack: r }) {
-	let i = z(), a = H(), { data: o, error: s, loading: u, reload: p } = q(t(() => e === "order" ? i.getOrderProfile(n) : i.getCustomerProfile(n), [
+	let i = z(), a = V(), { data: o, error: s, loading: u, reload: p } = W(t(() => e === "order" ? i.getOrderProfile(n) : i.getCustomerProfile(n), [
 		i,
 		e,
 		n
-	])), h = o?.categories ?? {}, _ = se.map((e) => {
+	])), h = o?.categories ?? {}, _ = ue.map((e) => {
 		let t = h[e];
 		return {
 			name: e,
-			rows: t && t.status === "available" ? ce(t.fields) : []
+			rows: t && t.status === "available" ? de(t.fields) : []
 		};
 	}).filter((e) => e.rows.length > 0);
 	return /* @__PURE__ */ l("div", {
@@ -601,7 +682,7 @@ function Y({ kind: e, externalId: n, onBack: r }) {
 				})]
 			}),
 			u && !o && /* @__PURE__ */ c(g, { label: a("profile.loading") }),
-			s !== void 0 && /* @__PURE__ */ c(K, {
+			s !== void 0 && /* @__PURE__ */ c(U, {
 				error: s,
 				onRetry: p
 			}),
@@ -611,7 +692,7 @@ function Y({ kind: e, externalId: n, onBack: r }) {
 				headingLevel: 3,
 				children: /* @__PURE__ */ c("dl", {
 					className: "ss-pc-fields",
-					children: t.map((e) => /* @__PURE__ */ c(oe, {
+					children: t.map((e) => /* @__PURE__ */ c(le, {
 						label: e.label,
 						field: e.field
 					}, e.key))
@@ -628,13 +709,65 @@ var X = [
 	"orderNewCustomer",
 	"orderAnyCustomer",
 	"manualOnly"
-], le = {
+], fe = {
 	active: "success",
 	disconnected: "warning",
 	uninstalled: "error"
 };
+function pe() {
+	let e = z(), n = B(), i = V(), { data: a, error: s, loading: u } = W(t(() => e.getPixel(), [e])), [d, f] = o(), [p, m] = o(!1), [h, g] = o();
+	if (r(() => {
+		a && f(a);
+	}, [a]), u || s !== void 0 || !d) return null;
+	let v = async (t) => {
+		m(!0), g(void 0);
+		try {
+			f(await e.setPixel(t)), n.toast(i(t ? "pixel.saved" : "pixel.savedOff"));
+		} catch (e) {
+			g(e);
+		} finally {
+			m(!1);
+		}
+	};
+	return /* @__PURE__ */ l("section", {
+		className: "ss-pc-pixel",
+		"aria-label": i("pixel.title"),
+		children: [
+			/* @__PURE__ */ c("h3", {
+				className: "ss-pc-heading",
+				children: i("pixel.title")
+			}),
+			/* @__PURE__ */ c("p", {
+				className: "ss-pc-text",
+				children: i("pixel.intro")
+			}),
+			/* @__PURE__ */ c(_, {
+				label: i("pixel.toggle"),
+				checked: d.enabled,
+				disabled: p,
+				onChange: (e) => v(e.target.checked)
+			}),
+			/* @__PURE__ */ c("p", {
+				className: "ss-pc-muted",
+				children: i("pixel.consent")
+			}),
+			d.siteId && /* @__PURE__ */ c("p", {
+				className: "ss-pc-muted",
+				children: i("pixel.siteId", { siteId: d.siteId })
+			}),
+			h instanceof O && h.status === 403 ? /* @__PURE__ */ c("div", {
+				role: "alert",
+				className: "ss-pc-error",
+				children: /* @__PURE__ */ c("p", {
+					className: "ss-pc-error-text",
+					children: i("pixel.mainOnly")
+				})
+			}) : h !== void 0 && /* @__PURE__ */ c(U, { error: h })
+		]
+	});
+}
 function Z() {
-	let e = z(), n = B(), i = H(), { data: a, error: m, loading: h, reload: _ } = q(t(() => e.getSettings(), [e])), [v, y] = o(), [b, x] = o(!1), [S, C] = o(), [w, T] = o();
+	let e = z(), n = B(), i = V(), { data: a, error: m, loading: h, reload: _ } = W(t(() => e.getSettings(), [e])), [v, y] = o(), [b, x] = o(!1), [S, C] = o(), [w, T] = o();
 	r(() => {
 		a && y(a.settings);
 	}, [a]);
@@ -665,7 +798,7 @@ function Z() {
 			x(!1);
 		}
 	};
-	if (m !== void 0) return /* @__PURE__ */ c(K, {
+	if (m !== void 0) return /* @__PURE__ */ c(U, {
 		error: m,
 		onRetry: _
 	});
@@ -682,7 +815,7 @@ function Z() {
 			k && /* @__PURE__ */ l("p", {
 				className: "ss-pc-status",
 				children: [/* @__PURE__ */ l("span", { children: [i("settings.status"), ": "] }), /* @__PURE__ */ c(u, {
-					variant: le[k],
+					variant: fe[k],
 					children: i(`settings.status.${k}`)
 				})]
 			}),
@@ -706,7 +839,7 @@ function Z() {
 				role: "status",
 				children: [
 					w === "loading" && /* @__PURE__ */ c("p", { children: i("settings.costLoading") }),
-					w === "failed" && /* @__PURE__ */ c(K, {
+					w === "failed" && /* @__PURE__ */ c(U, {
 						error: void 0,
 						onRetry: E
 					}),
@@ -732,7 +865,7 @@ function Z() {
 					})] })
 				]
 			}),
-			S !== void 0 && /* @__PURE__ */ c(K, { error: S }),
+			S !== void 0 && /* @__PURE__ */ c(U, { error: S }),
 			/* @__PURE__ */ c("div", {
 				className: "ss-pc-actions",
 				children: /* @__PURE__ */ c(d, {
@@ -741,28 +874,29 @@ function Z() {
 					onClick: O,
 					children: i("common.save")
 				})
-			})
+			}),
+			/* @__PURE__ */ c(pe, {})
 		]
 	});
 }
 //#endregion
 //#region src/screens/StoreDashboard.tsx
-var ue = [
+var me = [
 	"overview",
 	"profiles",
 	"segments",
 	"settings"
 ];
 function Q({ level: e }) {
-	let t = H();
+	let t = V();
 	return e ? /* @__PURE__ */ c(u, {
 		variant: e,
 		children: t(`level.${e}`)
 	}) : null;
 }
-function de({ openProfile: e }) {
-	let n = z(), r = H(), { data: i, error: a, loading: o, reload: s } = q(t(() => n.getOverview(), [n]));
-	if (a !== void 0) return /* @__PURE__ */ c(K, {
+function he({ openProfile: e }) {
+	let n = z(), r = V(), { data: i, error: a, loading: o, reload: s } = W(t(() => n.getOverview(), [n]));
+	if (a !== void 0) return /* @__PURE__ */ c(U, {
 		error: a,
 		onRetry: s
 	});
@@ -790,12 +924,12 @@ function de({ openProfile: e }) {
 			key: "total",
 			header: r("overview.column.total"),
 			align: "end",
-			render: (e) => te(e.total, e.currency)
+			render: (e) => ne(e.total, e.currency)
 		},
 		{
 			key: "labels",
 			header: r("overview.column.labels"),
-			render: (e) => /* @__PURE__ */ c(U, { labels: e.labels })
+			render: (e) => /* @__PURE__ */ c(H, { labels: e.labels })
 		}
 	];
 	return /* @__PURE__ */ l("div", {
@@ -832,7 +966,7 @@ function de({ openProfile: e }) {
 			title: r("overview.riskyOrders"),
 			headingLevel: 3,
 			hideWhenEmpty: !1,
-			children: /* @__PURE__ */ c(b, {
+			children: /* @__PURE__ */ c(x, {
 				caption: r("overview.riskyOrdersCaption"),
 				columns: p,
 				rows: i.riskyOrders,
@@ -843,9 +977,9 @@ function de({ openProfile: e }) {
 	});
 }
 var $ = 20;
-function fe({ openProfile: e }) {
-	let n = z(), r = H(), [i, a] = o(1), { data: s, error: l, loading: u, reload: f } = q(t(() => n.listCheckedCustomers(i, $), [n, i]));
-	if (l !== void 0) return /* @__PURE__ */ c(K, {
+function ge({ openProfile: e }) {
+	let n = z(), r = V(), [i, a] = o(1), { data: s, error: l, loading: u, reload: f } = W(t(() => n.listCheckedCustomers(i, $), [n, i]));
+	if (l !== void 0) return /* @__PURE__ */ c(U, {
 		error: l,
 		onRetry: f
 	});
@@ -887,7 +1021,7 @@ function fe({ openProfile: e }) {
 		{
 			key: "labels",
 			header: r("profiles.column.labels"),
-			render: (e) => /* @__PURE__ */ c(U, { labels: e.labels })
+			render: (e) => /* @__PURE__ */ c(H, { labels: e.labels })
 		},
 		{
 			key: "checkedAt",
@@ -895,7 +1029,7 @@ function fe({ openProfile: e }) {
 			render: (e) => I(e.checkedAt)
 		}
 	];
-	return /* @__PURE__ */ c(b, {
+	return /* @__PURE__ */ c(x, {
 		caption: r("profiles.caption"),
 		columns: p,
 		rows: s.items,
@@ -907,9 +1041,9 @@ function fe({ openProfile: e }) {
 		empty: /* @__PURE__ */ c(m, { title: r("profiles.empty") })
 	});
 }
-function pe() {
-	let e = z(), n = H(), { data: r, error: i, loading: a, reload: o } = q(t(() => e.listSegments(), [e]));
-	if (i !== void 0) return /* @__PURE__ */ c(K, {
+function _e() {
+	let e = z(), n = V(), { data: r, error: i, loading: a, reload: o } = W(t(() => e.listSegments(), [e]));
+	if (i !== void 0) return /* @__PURE__ */ c(U, {
 		error: i,
 		onRetry: o
 	});
@@ -926,7 +1060,7 @@ function pe() {
 	return /* @__PURE__ */ l("div", { children: [/* @__PURE__ */ c("p", {
 		className: "ss-pc-text",
 		children: n("segments.editInSocialScore")
-	}), /* @__PURE__ */ c(b, {
+	}), /* @__PURE__ */ c(x, {
 		caption: n("segments.caption"),
 		columns: s,
 		rows: r,
@@ -934,8 +1068,8 @@ function pe() {
 		empty: /* @__PURE__ */ c(m, { title: n("segments.empty") })
 	})] });
 }
-function me({ initialProfile: e, initialTab: t = "overview" }) {
-	let n = H(), [r, i] = o(t), [a, s] = o(e);
+function ve({ initialProfile: e, initialTab: t = "overview" }) {
+	let n = V(), [r, i] = o(t), [a, s] = o(e);
 	return a ? /* @__PURE__ */ c(Y, {
 		kind: a.kind,
 		externalId: a.externalId,
@@ -945,30 +1079,30 @@ function me({ initialProfile: e, initialTab: t = "overview" }) {
 		children: [/* @__PURE__ */ c("h1", {
 			className: "ss-pc-heading",
 			children: n("dashboard.title")
-		}), /* @__PURE__ */ l(x, {
+		}), /* @__PURE__ */ l(S, {
 			value: r,
 			onValueChange: i,
 			children: [
-				/* @__PURE__ */ c(v, {
+				/* @__PURE__ */ c(y, {
 					"aria-label": n("dashboard.tabs"),
-					children: ue.map((e) => /* @__PURE__ */ c(_, {
+					children: me.map((e) => /* @__PURE__ */ c(v, {
 						value: e,
 						children: n(`dashboard.tab.${e}`)
 					}, e))
 				}),
-				/* @__PURE__ */ c(y, {
+				/* @__PURE__ */ c(b, {
 					value: "overview",
-					children: /* @__PURE__ */ c(de, { openProfile: s })
+					children: /* @__PURE__ */ c(he, { openProfile: s })
 				}),
-				/* @__PURE__ */ c(y, {
+				/* @__PURE__ */ c(b, {
 					value: "profiles",
-					children: /* @__PURE__ */ c(fe, { openProfile: s })
+					children: /* @__PURE__ */ c(ge, { openProfile: s })
 				}),
-				/* @__PURE__ */ c(y, {
+				/* @__PURE__ */ c(b, {
 					value: "segments",
-					children: /* @__PURE__ */ c(pe, {})
+					children: /* @__PURE__ */ c(_e, {})
 				}),
-				/* @__PURE__ */ c(y, {
+				/* @__PURE__ */ c(b, {
 					value: "settings",
 					children: /* @__PURE__ */ c(Z, {})
 				})
@@ -977,6 +1111,6 @@ function me({ initialProfile: e, initialTab: t = "overview" }) {
 	});
 }
 //#endregion
-export { j as ApiClient, D as ApiError, re as CheckPanel, ie as ConnectScreen, N as PluginProvider, Y as ProfileView, Z as SettingsScreen, me as StoreDashboard, O as batchIdMap, P as messages, F as profilePath };
+export { M as ApiClient, O as ApiError, oe as CheckPanel, se as ConnectScreen, te as PluginProvider, Y as ProfileView, Z as SettingsScreen, ve as StoreDashboard, k as batchIdMap, P as messages, F as profilePath };
 
 //# sourceMappingURL=index.js.map

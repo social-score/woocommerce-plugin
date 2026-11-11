@@ -66,7 +66,7 @@ class Rest_Proxy {
 	 */
 	public static function allow_list( $store_id ) {
 		$s  = preg_quote( '/api/v2/stores/' . rawurlencode( $store_id ), '#' );
-		$id = '[A-Za-z0-9._:~-]+';
+		$id = '(?!\\.+/)[A-Za-z0-9._:~-]+'; // Not a bare run of dots: "." is a path segment, not an id.
 		return array(
 			'GET'   => array(
 				'#^' . $s . '/settings$#D',
@@ -75,10 +75,14 @@ class Rest_Proxy {
 				'#^' . $s . '/customers$#D',
 				'#^' . $s . '/customers/' . $id . '/profile$#D',
 				'#^' . $s . '/orders/' . $id . '/profile$#D',
+				'#^' . $s . '/pixel$#D',
+				'#^' . $s . '/customers/' . $id . '/session$#D',
+				'#^' . $s . '/orders/' . $id . '/session$#D',
 				'#^/api/v2/segments$#D',
 			),
 			'PATCH' => array(
 				'#^' . $s . '/settings$#D',
+				'#^' . $s . '/pixel$#D',
 			),
 			'POST'  => array(
 				'#^' . $s . '/checks$#D',
@@ -152,6 +156,10 @@ class Rest_Proxy {
 			} elseif ( isset( $body['customer_external_id'] ) ) {
 				Labels::apply_from_check( 'customer', (string) $body['customer_external_id'], $response['data'] );
 			}
+		}
+
+		if ( 'PATCH' === $method && $response['status'] >= 200 && $response['status'] < 300 && 1 === preg_match( '#/pixel$#D', $path ) ) {
+			Pixel::forget(); // The storefront must see the switch at once, not after the cache runs out.
 		}
 
 		$out = new \WP_REST_Response( $response['data'], $response['status'] );

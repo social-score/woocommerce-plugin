@@ -1,18 +1,18 @@
 import { Fragment as e, jsx as t, jsxs as n } from "react/jsx-runtime";
 import { Children as r, cloneElement as i, createContext as a, forwardRef as o, isValidElement as s, useCallback as c, useContext as l, useEffect as u, useId as d, useLayoutEffect as f, useMemo as p, useRef as m, useState as h } from "react";
 import { createPortal as g } from "react-dom";
-//#region src/components/Button/Button.tsx
-function _({ variant: e, className: n, disabled: r, children: i, ...a }) {
-	let o = ["ss-button"];
-	return r && e === "link" ? o.push("ss-button--link", "ss-button--link-disabled") : r ? o.push("ss-button--disabled") : e && o.push(`ss-button--${e}`), n && o.push(n), /* @__PURE__ */ t("button", {
-		className: o.join(" "),
-		disabled: r,
-		...a,
-		children: i
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Button/Button.tsx
+function _({ variant: e, size: n = "md", fullWidth: r = !1, className: i, disabled: a, children: o, ...s }) {
+	let c = e === "link" || e === "link-danger", l = ["ss-button"];
+	return a && c ? l.push(`ss-button--${e}`, "ss-button--link-disabled") : a ? l.push("ss-button--disabled") : e && l.push(`ss-button--${e}`), e && !c && l.push(`ss-button--${n}`), r && l.push("ss-button--full"), i && l.push(i), /* @__PURE__ */ t("button", {
+		className: l.join(" "),
+		disabled: a,
+		...s,
+		children: o
 	});
 }
 //#endregion
-//#region src/tokens.ts
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/tokens.ts
 var v = /* @__PURE__ */ "white.black.gray-50.gray-100.gray-200.gray-300.gray-400.gray-500.navy-200.navy-500.navy-700.navy-900.blue-50.blue-100.blue-500.blue-700.blue-800.violet-200.violet-300.violet-400.violet-500.violet-600.violet-700.teal-200.teal-400.teal-700.sage-300.sage-500.red-500.red-600.orange-400.orange-700".split(".");
 function y(e) {
 	return `var(--ss-color-${e})`;
@@ -24,7 +24,7 @@ function x(e, t) {
 	return b(`--ss-color-${e}`, t);
 }
 //#endregion
-//#region src/components/Input/Input.tsx
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Input/Input.tsx
 var S = o(function({ label: e, hint: r, error: i, size: a = "md", endAdornment: o, className: s, id: c, required: l, "aria-describedby": u, ...f }, p) {
 	let m = d(), h = c ?? m, g = `${h}-hint`, _ = `${h}-error`, v = !!i, y = [
 		u,
@@ -76,7 +76,7 @@ var S = o(function({ label: e, hint: r, error: i, size: a = "md", endAdornment: 
 	});
 });
 //#endregion
-//#region src/components/Select/Select.tsx
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Select/Select.tsx
 function C({ label: e, value: r, options: i, onChange: a, placeholder: o, emptyText: s = "No options", hint: c, error: l, required: u, disabled: f, size: p = "md", getOptionLabel: g, renderValue: _, name: v, id: y, "aria-label": b, className: x }) {
 	let S = d(), C = y ?? S, w = `${C}-label`, T = `${C}-list`, E = `${C}-hint`, D = `${C}-error`, O = (e) => `${C}-option-${e}`, k = (i ?? []).map((e) => {
 		let t = typeof e == "string" ? e : e.value;
@@ -233,7 +233,7 @@ function C({ label: e, value: r, options: i, onChange: a, placeholder: o, emptyT
 	});
 }
 //#endregion
-//#region src/components/Checkbox/Checkbox.tsx
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Checkbox/Checkbox.tsx
 var w = o(function({ label: e, hint: r, error: i, className: a, id: o, disabled: s, "aria-describedby": c, ...l }, u) {
 	let f = d(), p = o ?? f, m = `${p}-hint`, h = `${p}-error`, g = !!i, _ = [
 		c,
@@ -301,7 +301,7 @@ var w = o(function({ label: e, hint: r, error: i, className: a, id: o, disabled:
 	});
 });
 //#endregion
-//#region src/components/Tooltip/Tooltip.tsx
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Tooltip/Tooltip.tsx
 function E({ children: e, content: r, className: a }) {
 	let o = d(), [c, l] = h(!1), u = (e) => {
 		e.key === "Escape" && c && (l(!1), e.stopPropagation());
@@ -327,7 +327,7 @@ function E({ children: e, content: r, className: a }) {
 	});
 }
 //#endregion
-//#region src/components/InfoIcon/InfoIcon.tsx
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/InfoIcon/InfoIcon.tsx
 var D = {
 	source: "Source",
 	confidence: "Confidence",
@@ -396,7 +396,7 @@ function O({ source: e, confidence: r, reason: i, date: a, label: o = "More info
 	});
 }
 //#endregion
-//#region src/components/Badge/Badge.tsx
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Badge/Badge.tsx
 var k = {
 	strong: "Strong",
 	medium: "Medium",
@@ -443,7 +443,7 @@ function A({ variant: e = "neutral", className: r, children: i, onRemove: a, rem
 	});
 }
 //#endregion
-//#region src/components/Card/Card.tsx
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Card/Card.tsx
 function j(e) {
 	return r.toArray(e).some((e) => e !== "");
 }
@@ -462,7 +462,7 @@ function M({ title: e, headingLevel: r = 2, when: i = !0, hideWhenEmpty: a = !0,
 	});
 }
 //#endregion
-//#region src/components/Spinner/Spinner.tsx
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Spinner/Spinner.tsx
 function N() {
 	return typeof window < "u" && typeof window.matchMedia == "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
@@ -501,7 +501,7 @@ function P({ label: e = "Loading...", className: r }) {
 	});
 }
 //#endregion
-//#region src/components/ChartFrame/ChartFrame.tsx
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/ChartFrame/ChartFrame.tsx
 function F({ title: e, headingLevel: r = 3, source: i, loading: a = !1, error: o, onRetry: s, empty: c = !1, emptyState: l, loadingLabel: u = "Loading chart…", minHeight: f, description: p, children: m, className: h }) {
 	let g = d(), v = d(), y = `h${r}`, b = ["ss-chart-frame"];
 	h && b.push(h);
@@ -556,7 +556,7 @@ function F({ title: e, headingLevel: r = 3, source: i, loading: a = !1, error: o
 	});
 }
 //#endregion
-//#region src/components/EmptyState/EmptyState.tsx
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/EmptyState/EmptyState.tsx
 function I({ title: e, description: r, icon: i, action: a, headingLevel: o = 3, className: s }) {
 	let c = `h${o}`, l = ["ss-empty"];
 	return s && l.push(s), /* @__PURE__ */ n("div", {
@@ -583,7 +583,7 @@ function I({ title: e, description: r, icon: i, action: a, headingLevel: o = 3, 
 	});
 }
 //#endregion
-//#region src/components/LevelIndicator/levels.ts
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/LevelIndicator/levels.ts
 var L = [40, 70], R = {
 	strong: "Strong",
 	medium: "Medium",
@@ -594,7 +594,7 @@ function z(e, t = L, n = !1) {
 	return e < t[0] ? r = "weak" : e < t[1] && (r = "medium"), n ? r === "weak" ? "strong" : r === "strong" ? "weak" : "medium" : r;
 }
 //#endregion
-//#region src/components/LevelIndicator/LevelIndicator.tsx
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/LevelIndicator/LevelIndicator.tsx
 function B({ value: e, thresholds: r = L, inverted: i = !1, level: a, label: o, valueLabel: s, showLevelName: c = !1, levelNames: l = R, className: u }) {
 	let f = d(), p = Number.isFinite(e) ? Math.min(100, Math.max(0, e)) : 0, m = a ?? z(p, r, i), h = ["ss-level"];
 	return u && h.push(u), /* @__PURE__ */ n("div", {
@@ -628,12 +628,12 @@ function B({ value: e, thresholds: r = L, inverted: i = !1, level: a, label: o, 
 	});
 }
 //#endregion
-//#region src/classes.ts
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/classes.ts
 function V(...e) {
 	return e.filter(Boolean).join(" ");
 }
 //#endregion
-//#region src/components/LockedSection/LockedSection.tsx
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/LockedSection/LockedSection.tsx
 function H(e) {
 	e && e.setAttribute("inert", "");
 }
@@ -698,14 +698,14 @@ function U({ title: r, description: i, requiredPlan: a, upgradeLabel: o = "Upgra
 	});
 }
 //#endregion
-//#region src/components/Pagination/page-window.ts
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Pagination/page-window.ts
 var W = 3;
 function G(e, t) {
 	let n = Math.min(W, t), r = Math.max(1, Math.min(e - 1, t - n + 1));
 	return Array.from({ length: n }, (e, t) => r + t);
 }
 //#endregion
-//#region src/components/Pagination/Pagination.tsx
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Pagination/Pagination.tsx
 function K({ direction: e }) {
 	return /* @__PURE__ */ t("svg", {
 		"aria-hidden": "true",
@@ -760,7 +760,7 @@ function q({ currentPage: e, totalRecords: r, pageSize: i, onPageChange: a, labe
 	});
 }
 //#endregion
-//#region src/components/Table/Table.tsx
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Table/Table.tsx
 function J(e, t) {
 	return e.value ? e.value(t) : t[e.key];
 }
@@ -818,37 +818,61 @@ function ie({ direction: e }) {
 		children: [r("up"), r("down")]
 	});
 }
-function ae({ columns: e, rows: r, getRowKey: i, caption: a, sort: o, defaultSort: s = null, onSortChange: c, manualSort: l = !1, filters: u, groupBy: d, renderGroupHeader: f, pageSize: m, page: g, defaultPage: _ = 1, onPageChange: v, totalRecords: y, empty: b, fixed: x = !1, stripes: S = "surface-first", className: C }) {
-	let [w, T] = h(s), [E, D] = h(_), O = o === void 0 ? w : o, k = y !== void 0, A = p(() => {
+function ae(e) {
+	let [t, n] = h({
+		start: !1,
+		end: !1
+	});
+	return u(() => {
+		let t = e.current;
+		if (!t) return;
+		let r = () => {
+			let e = Math.abs(t.scrollLeft), r = t.scrollWidth - t.clientWidth, i = e > 1, a = r - e > 1;
+			n((e) => e.start === i && e.end === a ? e : {
+				start: i,
+				end: a
+			});
+		};
+		r(), t.addEventListener("scroll", r, { passive: !0 });
+		let i = typeof ResizeObserver > "u" ? null : new ResizeObserver(r);
+		i?.observe(t);
+		let a = t.firstElementChild;
+		return a && i?.observe(a), () => {
+			t.removeEventListener("scroll", r), i?.disconnect();
+		};
+	}, [e]), t;
+}
+function oe({ columns: e, rows: r, getRowKey: i, caption: a, sort: o, defaultSort: s = null, onSortChange: c, manualSort: l = !1, filters: u, groupBy: d, renderGroupHeader: f, pageSize: g, page: _, defaultPage: v = 1, onPageChange: y, totalRecords: b, empty: x, fixed: S = !1, stripes: C = "none", className: w }) {
+	let [T, E] = h(s), [D, O] = h(v), k = m(null), A = ae(k), j = o === void 0 ? T : o, M = b !== void 0, N = p(() => {
 		let t = r;
 		if (u) {
 			let n = e.filter((e) => !Y(u[e.key]));
 			n.length > 0 && (t = t.filter((e) => n.every((t) => te(t, e, u[t.key]))));
 		}
-		if (O && !l) {
-			let n = e.find((e) => e.key === O.key);
-			n && (t = X(t, n, O.direction));
+		if (j && !l) {
+			let n = e.find((e) => e.key === j.key);
+			n && (t = X(t, n, j.direction));
 		}
 		return t;
 	}, [
 		r,
 		e,
 		u,
-		O,
+		j,
 		l
-	]), j = k ? y : A.length, M = m ? Math.max(1, Math.ceil(j / m)) : 1, N = Math.min(Math.max(1, g ?? E), M), P = p(() => !m || k ? A : A.slice((N - 1) * m, N * m), [
-		A,
-		m,
-		k,
-		N
-	]), F = p(() => {
+	]), P = M ? b : N.length, F = g ? Math.max(1, Math.ceil(P / g)) : 1, I = Math.min(Math.max(1, _ ?? D), F), L = p(() => !g || M ? N : N.slice((I - 1) * g, I * g), [
+		N,
+		g,
+		M,
+		I
+	]), R = p(() => {
 		if (!d) return [{
 			name: null,
-			rows: P,
+			rows: L,
 			start: 0
 		}];
 		let e = [], t = /* @__PURE__ */ new Map();
-		P.forEach((n) => {
+		L.forEach((n) => {
 			let r = d(n);
 			t.has(r) || (t.set(r, []), e.push(r)), t.get(r)?.push(n);
 		});
@@ -861,91 +885,111 @@ function ae({ columns: e, rows: r, getRowKey: i, caption: a, sort: o, defaultSor
 			};
 			return n += r.length, i;
 		});
-	}, [d, P]), I = (e) => {
-		let t = ne(O, e.key);
-		o === void 0 && T(t), c?.(t, e.key);
-	}, L = (e) => {
-		g === void 0 && D(e), v?.(e);
-	}, R = ["ss-table"];
-	R.push(x ? "ss-table-fixed" : "ss-table-auto"), C && R.push(C);
-	let z = (e) => {
-		if (S === "none") return "ss-table-row";
+	}, [d, L]), z = (e) => {
+		let t = ne(j, e.key);
+		o === void 0 && E(t), c?.(t, e.key);
+	}, B = (e) => {
+		_ === void 0 && O(e), y?.(e);
+	}, H = ["ss-table"];
+	H.push(S ? "ss-table-fixed" : "ss-table-auto"), w && H.push(w);
+	let U = (e, t) => t.align && t.align !== "start" && `${e}-${t.align}`, W = (e) => {
+		if (C === "none") return "ss-table-row";
 		let t = e % 2 == 0;
-		return `ss-table-row ${(S === "surface-first" ? t : !t) ? "ss-table-row-surface" : "ss-table-row-subtle"}`;
+		return `ss-table-row ${(C === "surface-first" ? t : !t) ? "ss-table-row-surface" : "ss-table-row-subtle"}`;
 	};
 	return /* @__PURE__ */ n("div", {
 		className: "ss-table-wrap",
-		children: [/* @__PURE__ */ n("table", {
-			className: R.join(" "),
-			children: [
-				/* @__PURE__ */ t("caption", {
-					className: "ss-visually-hidden",
-					children: a
-				}),
-				/* @__PURE__ */ t("thead", { children: /* @__PURE__ */ t("tr", { children: e.map((e) => {
-					let r = O?.key === e.key ? O.direction : null;
-					return /* @__PURE__ */ t("th", {
-						scope: "col",
-						className: "ss-table-th",
-						"aria-sort": e.sortable ? r ? re[r] : "none" : void 0,
-						children: e.sortable ? /* @__PURE__ */ n("button", {
-							type: "button",
-							className: "ss-table-sort",
-							onClick: () => I(e),
-							children: [/* @__PURE__ */ t("span", {
-								className: "ss-table-th-label",
-								children: e.header
-							}), /* @__PURE__ */ t(ie, { direction: r })]
-						}) : /* @__PURE__ */ t("div", {
-							className: "ss-table-th-content",
-							children: /* @__PURE__ */ t("span", {
-								className: "ss-table-th-label",
-								children: e.header
-							})
+		children: [
+			/* @__PURE__ */ n("div", {
+				className: "ss-table-frame",
+				children: [
+					/* @__PURE__ */ t("span", {
+						"aria-hidden": "true",
+						className: V("ss-table-edge ss-table-edge-start", A.start && "ss-table-edge-visible")
+					}),
+					/* @__PURE__ */ t("span", {
+						"aria-hidden": "true",
+						className: V("ss-table-edge ss-table-edge-end", A.end && "ss-table-edge-visible")
+					}),
+					/* @__PURE__ */ t("div", {
+						ref: k,
+						className: "ss-table-scroll",
+						children: /* @__PURE__ */ n("table", {
+							className: H.join(" "),
+							children: [
+								/* @__PURE__ */ t("caption", {
+									className: "ss-visually-hidden",
+									children: a
+								}),
+								/* @__PURE__ */ t("thead", { children: /* @__PURE__ */ t("tr", { children: e.map((e) => {
+									let r = j?.key === e.key ? j.direction : null;
+									return /* @__PURE__ */ t("th", {
+										scope: "col",
+										className: V("ss-table-th", U("ss-table-th", e)),
+										"aria-sort": e.sortable ? r ? re[r] : "none" : void 0,
+										children: e.sortable ? /* @__PURE__ */ n("button", {
+											type: "button",
+											className: V("ss-table-sort", U("ss-table-justify", e)),
+											onClick: () => z(e),
+											children: [/* @__PURE__ */ t("span", {
+												className: "ss-table-th-label",
+												children: e.header
+											}), /* @__PURE__ */ t(ie, { direction: r })]
+										}) : /* @__PURE__ */ t("div", {
+											className: V("ss-table-th-content", U("ss-table-justify", e)),
+											children: /* @__PURE__ */ t("span", {
+												className: "ss-table-th-label",
+												children: e.header
+											})
+										})
+									}, e.key);
+								}) }) }),
+								L.length === 0 ? /* @__PURE__ */ t("tbody", {}) : R.map((r) => /* @__PURE__ */ n("tbody", { children: [r.name !== null && /* @__PURE__ */ t("tr", {
+									className: "ss-table-group-row",
+									children: /* @__PURE__ */ t("th", {
+										scope: "rowgroup",
+										colSpan: e.length,
+										className: "ss-table-group",
+										children: f ? f(r.name, r.rows) : r.name
+									})
+								}), r.rows.map((n, a) => {
+									let o = r.start + a;
+									return /* @__PURE__ */ t("tr", {
+										className: W(o),
+										children: e.map((e) => /* @__PURE__ */ t("td", {
+											className: V("ss-table-td", U("ss-table-td", e)),
+											children: e.render ? e.render(n, o) : String(J(e, n) ?? "")
+										}, e.key))
+									}, i ? i(n, o) : o);
+								})] }, r.name ?? "__all"))
+							]
 						})
-					}, e.key);
-				}) }) }),
-				P.length === 0 ? /* @__PURE__ */ t("tbody", { children: b !== void 0 && /* @__PURE__ */ t("tr", { children: /* @__PURE__ */ t("td", {
-					colSpan: e.length,
-					className: "ss-table-empty",
-					children: b
-				}) }) }) : F.map((r) => /* @__PURE__ */ n("tbody", { children: [r.name !== null && /* @__PURE__ */ t("tr", {
-					className: "ss-table-group-row",
-					children: /* @__PURE__ */ t("th", {
-						scope: "rowgroup",
-						colSpan: e.length,
-						className: "ss-table-group",
-						children: f ? f(r.name, r.rows) : r.name
 					})
-				}), r.rows.map((n, a) => {
-					let o = r.start + a;
-					return /* @__PURE__ */ t("tr", {
-						className: z(o),
-						children: e.map((e) => /* @__PURE__ */ t("td", {
-							className: V("ss-table-td", e.align && e.align !== "center" && `ss-table-td-${e.align}`),
-							children: e.render ? e.render(n, o) : String(J(e, n) ?? "")
-						}, e.key))
-					}, i ? i(n, o) : o);
-				})] }, r.name ?? "__all"))
-			]
-		}), m !== void 0 && /* @__PURE__ */ t(q, {
-			currentPage: N,
-			totalRecords: j,
-			pageSize: m,
-			onPageChange: L
-		})]
+				]
+			}),
+			L.length === 0 && x !== void 0 && /* @__PURE__ */ t("div", {
+				className: "ss-table-empty",
+				children: x
+			}),
+			g !== void 0 && F > 1 && /* @__PURE__ */ t(q, {
+				currentPage: I,
+				totalRecords: P,
+				pageSize: g,
+				onPageChange: B
+			})
+		]
 	});
 }
 //#endregion
-//#region src/components/Tabs/Tabs.tsx
-var oe = a(null);
-function se(e) {
-	let t = l(oe);
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Tabs/Tabs.tsx
+var se = a(null);
+function ce(e) {
+	let t = l(se);
 	if (!t) throw Error(`${e} must be rendered inside <Tabs>`);
 	return t;
 }
-var ce = (e) => e.replace(/[^A-Za-z0-9_-]/g, "_"), le = (e, t) => `${e}-tab-${ce(t)}`, ue = (e, t) => `${e}-panel-${ce(t)}`;
-function de({ value: e, defaultValue: n = "", onValueChange: r, orientation: i = "horizontal", activation: a = "automatic", className: o, children: s }) {
+var le = (e) => e.replace(/[^A-Za-z0-9_-]/g, "_"), ue = (e, t) => `${e}-tab-${le(t)}`, de = (e, t) => `${e}-panel-${le(t)}`;
+function fe({ value: e, defaultValue: n = "", onValueChange: r, orientation: i = "horizontal", activation: a = "automatic", className: o, children: s }) {
 	let l = d(), [u, f] = h(n), m = e ?? u, g = c((t) => {
 		e === void 0 && f(t), r?.(t);
 	}, [e, r]), _ = p(() => ({
@@ -961,7 +1005,7 @@ function de({ value: e, defaultValue: n = "", onValueChange: r, orientation: i =
 		i,
 		a
 	]), v = ["ss-tabs", `ss-tabs--${i}`];
-	return o && v.push(o), /* @__PURE__ */ t(oe.Provider, {
+	return o && v.push(o), /* @__PURE__ */ t(se.Provider, {
 		value: _,
 		children: /* @__PURE__ */ t("div", {
 			className: v.join(" "),
@@ -969,8 +1013,8 @@ function de({ value: e, defaultValue: n = "", onValueChange: r, orientation: i =
 		})
 	});
 }
-function fe({ className: e, onKeyDown: n, ...r }) {
-	let { orientation: i, select: a, activation: o } = se("TabList"), s = (e) => {
+function pe({ className: e, onKeyDown: n, ...r }) {
+	let { orientation: i, select: a, activation: o } = ce("TabList"), s = (e) => {
 		if (n?.(e), e.defaultPrevented) return;
 		let t = Array.from(e.currentTarget.querySelectorAll("[role=\"tab\"]:not([disabled])")), r = t.indexOf(document.activeElement);
 		if (r === -1) return;
@@ -988,15 +1032,15 @@ function fe({ className: e, onKeyDown: n, ...r }) {
 		...r
 	});
 }
-function pe({ value: e, className: n, onClick: r, disabled: i, children: a, ...o }) {
-	let s = se("Tab"), c = s.value === e, l = ["ss-tab"];
+function me({ value: e, className: n, onClick: r, disabled: i, children: a, ...o }) {
+	let s = ce("Tab"), c = s.value === e, l = ["ss-tab"];
 	return c && l.push("ss-tab--selected"), n && l.push(n), /* @__PURE__ */ t("button", {
 		type: "button",
 		role: "tab",
-		id: le(s.baseId, e),
+		id: ue(s.baseId, e),
 		"data-value": e,
 		"aria-selected": c,
-		"aria-controls": c ? ue(s.baseId, e) : void 0,
+		"aria-controls": c ? de(s.baseId, e) : void 0,
 		tabIndex: c ? 0 : -1,
 		disabled: i,
 		className: l.join(" "),
@@ -1007,14 +1051,14 @@ function pe({ value: e, className: n, onClick: r, disabled: i, children: a, ...o
 		children: a
 	});
 }
-function me({ value: e, className: n, children: r, ...i }) {
-	let a = se("TabPanel");
+function he({ value: e, className: n, children: r, ...i }) {
+	let a = ce("TabPanel");
 	if (a.value !== e) return null;
 	let o = ["ss-tabpanel"];
 	return n && o.push(n), /* @__PURE__ */ t("div", {
 		role: "tabpanel",
-		id: ue(a.baseId, e),
-		"aria-labelledby": le(a.baseId, e),
+		id: de(a.baseId, e),
+		"aria-labelledby": ue(a.baseId, e),
 		tabIndex: 0,
 		className: o.join(" "),
 		...i,
@@ -1022,13 +1066,41 @@ function me({ value: e, className: n, children: r, ...i }) {
 	});
 }
 //#endregion
-//#region src/internal/layers.ts
-var Z = [], he = a(null), ge = (e, t) => {
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/PageHeader/PageHeader.tsx
+function ge({ title: e, description: r, breadcrumb: i, actions: a, className: o }) {
+	let s = ["ss-page-header"];
+	return o && s.push(o), /* @__PURE__ */ n("header", {
+		className: s.join(" "),
+		children: [/* @__PURE__ */ n("div", {
+			className: "ss-page-header-text",
+			children: [
+				i && /* @__PURE__ */ t("div", {
+					className: "ss-page-header-breadcrumb",
+					children: i
+				}),
+				/* @__PURE__ */ t("h1", {
+					className: "ss-page-header-title",
+					children: e
+				}),
+				r && /* @__PURE__ */ t("p", {
+					className: "ss-page-header-description",
+					children: r
+				})
+			]
+		}), a && /* @__PURE__ */ t("div", {
+			className: "ss-page-header-actions",
+			children: a
+		})]
+	});
+}
+//#endregion
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/internal/layers.ts
+var Z = [], _e = a(null), ve = (e, t) => {
 	for (let n = e.parent; n; n = n.parent) if (n === t) return !0;
 	return !1;
 };
-function _e(e, t) {
-	let n = l(he), r = m();
+function ye(e, t) {
+	let n = l(_e), r = m();
 	if (!r.current) {
 		let e = {
 			parent: n,
@@ -1038,10 +1110,10 @@ function _e(e, t) {
 			layer: e,
 			isTop: () => {
 				if (!Z.includes(e)) return !1;
-				let t = Z.filter((e) => !Z.some((t) => ge(t, e)));
+				let t = Z.filter((e) => !Z.some((t) => ve(t, e)));
 				return t[t.length - 1] === e;
 			},
-			owns: (t) => Z.some((n) => (n === e || ge(n, e)) && !!n.getElement()?.contains(t))
+			owns: (t) => Z.some((n) => (n === e || ve(n, e)) && !!n.getElement()?.contains(t))
 		};
 	}
 	r.current.layer.parent = n;
@@ -1053,16 +1125,16 @@ function _e(e, t) {
 	}, [e, i]), r.current;
 }
 //#endregion
-//#region src/internal/portal.ts
-function ve(e) {
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/internal/portal.ts
+function be(e) {
 	return typeof document > "u" ? null : (typeof e == "function" ? e() : e) ?? document.body;
 }
-var ye = "a[href], area[href], button:not([disabled]), input:not([disabled]):not([type=\"hidden\"]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]:not([tabindex=\"-1\"]), [contenteditable=\"true\"]";
+var xe = "a[href], area[href], button:not([disabled]), input:not([disabled]):not([type=\"hidden\"]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]:not([tabindex=\"-1\"]), [contenteditable=\"true\"]";
 function Q(e) {
-	return Array.from(e.querySelectorAll(ye)).filter((e) => !e.hasAttribute("hidden") && e.getAttribute("aria-hidden") !== "true");
+	return Array.from(e.querySelectorAll(xe)).filter((e) => !e.hasAttribute("hidden") && e.getAttribute("aria-hidden") !== "true");
 }
 var $ = /* @__PURE__ */ new WeakMap();
-function be(e) {
+function Se(e) {
 	let t = e.body, n = $.get(t);
 	if (!n) {
 		n = {
@@ -1087,18 +1159,18 @@ function be(e) {
 	};
 }
 //#endregion
-//#region src/components/Modal/Modal.tsx
-function xe({ open: e, onClose: r, title: i, "aria-label": a, role: o = "dialog", container: s, initialFocusRef: c, closeOnBackdropClick: l = !0, footer: f, className: p, children: h }) {
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Modal/Modal.tsx
+function Ce({ open: e, onClose: r, title: i, "aria-label": a, role: o = "dialog", container: s, initialFocusRef: c, closeOnBackdropClick: l = !0, footer: f, className: p, children: h }) {
 	let _ = d(), v = m(null), y = m(r);
 	y.current = r;
 	let b = m(c);
 	b.current = c;
-	let x = e ? ve(s) : null, S = _e(!!x, v);
+	let x = e ? be(s) : null, S = ye(!!x, v);
 	if (u(() => {
 		if (!x) return;
 		let e = v.current;
 		if (!e) return;
-		let t = e.ownerDocument, n = t.activeElement instanceof HTMLElement ? t.activeElement : null, r = be(t);
+		let t = e.ownerDocument, n = t.activeElement instanceof HTMLElement ? t.activeElement : null, r = Se(t);
 		(b.current?.current ?? Q(e)[0] ?? e).focus();
 		let i = (t) => {
 			S.isTop() && t.target instanceof Node && !S.owns(t.target) && (Q(e)[0] ?? e).focus();
@@ -1126,7 +1198,7 @@ function xe({ open: e, onClose: r, title: i, "aria-label": a, role: o = "dialog"
 	}, w = (e) => {
 		S.isTop() && l && e.target === e.currentTarget && y.current();
 	}, T = ["ss-modal"];
-	return p && T.push(p), g(/* @__PURE__ */ t(he.Provider, {
+	return p && T.push(p), g(/* @__PURE__ */ t(_e.Provider, {
 		value: S.layer,
 		children: /* @__PURE__ */ t("div", {
 			className: "ss-modal-backdrop",
@@ -1160,16 +1232,16 @@ function xe({ open: e, onClose: r, title: i, "aria-label": a, role: o = "dialog"
 	}), x);
 }
 //#endregion
-//#region src/components/Toast/toast-context.ts
-var Se = a(null);
-function Ce() {
-	let e = l(Se);
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Toast/toast-context.ts
+var we = a(null);
+function Te() {
+	let e = l(we);
 	if (!e) throw Error("useToast must be used inside <ToastProvider>");
 	return e;
 }
 //#endregion
-//#region src/components/Toast/Toast.tsx
-function we({ toast: e, duration: r, dismissLabel: i, onDismiss: a }) {
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Toast/Toast.tsx
+function Ee({ toast: e, duration: r, dismissLabel: i, onDismiss: a }) {
 	let [o, s] = h(!1), c = m(r), l = m(!1), d = m(!1);
 	u(() => {
 		if (r <= 0 || o) return;
@@ -1219,17 +1291,17 @@ function we({ toast: e, duration: r, dismissLabel: i, onDismiss: a }) {
 		})]
 	});
 }
-var Te = 0;
-function Ee({ container: e, defaultDuration: r = 5e3, max: i = 5, dismissLabel: a = "Dismiss notification", children: o }) {
+var De = 0;
+function Oe({ container: e, defaultDuration: r = 5e3, max: i = 5, dismissLabel: a = "Dismiss notification", children: o }) {
 	let [s, l] = h([]), [d, f] = h(null);
 	u(() => {
-		f(ve(e));
+		f(be(e));
 	}, [e]);
 	let m = c((e) => {
 		l((t) => t.filter((t) => t.id !== e));
 	}, []), _ = c(() => l([]), []), v = c((e) => {
-		Te += 1;
-		let t = `ss-toast-${Te}`;
+		De += 1;
+		let t = `ss-toast-${De}`;
 		return l((n) => [...n, {
 			...e,
 			id: t
@@ -1242,13 +1314,13 @@ function Ee({ container: e, defaultDuration: r = 5e3, max: i = 5, dismissLabel: 
 		v,
 		m,
 		_
-	]), b = s.filter((e) => (e.politeness ?? (e.tone === "error" ? "assertive" : "polite")) === "polite"), x = s.filter((e) => !b.includes(e)), S = (e) => /* @__PURE__ */ t(we, {
+	]), b = s.filter((e) => (e.politeness ?? (e.tone === "error" ? "assertive" : "polite")) === "polite"), x = s.filter((e) => !b.includes(e)), S = (e) => /* @__PURE__ */ t(Ee, {
 		toast: e,
 		duration: e.duration ?? r,
 		dismissLabel: a,
 		onDismiss: m
 	}, e.id);
-	return /* @__PURE__ */ n(Se.Provider, {
+	return /* @__PURE__ */ n(we.Provider, {
 		value: y,
 		children: [o, d ? g(/* @__PURE__ */ n("div", {
 			className: "ss-toast-viewport",
@@ -1269,15 +1341,15 @@ function Ee({ container: e, defaultDuration: r = 5e3, max: i = 5, dismissLabel: 
 	});
 }
 //#endregion
-//#region src/components/Chat/Chat.tsx
-function De(e, t) {
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Chat/Chat.tsx
+function ke(e, t) {
 	let n = e instanceof Date ? e : new Date(e);
 	return Number.isNaN(n.getTime()) ? "" : n.toLocaleTimeString(t, {
 		hour: "2-digit",
 		minute: "2-digit"
 	});
 }
-function Oe({ role: e, text: r, timestamp: i, author: a, locale: o, className: s }) {
+function Ae({ role: e, text: r, timestamp: i, author: a, locale: o, className: s }) {
 	let c = ["ss-chat-bubble", `ss-chat-bubble--${e}`];
 	s && c.push(s);
 	let l = i === void 0 ? null : new Date(i), u = l !== null && !Number.isNaN(l.getTime());
@@ -1295,12 +1367,12 @@ function Oe({ role: e, text: r, timestamp: i, author: a, locale: o, className: s
 			u && i !== void 0 ? /* @__PURE__ */ t("time", {
 				className: "ss-chat-time",
 				dateTime: l.toISOString(),
-				children: De(i, o)
+				children: ke(i, o)
 			}) : null
 		]
 	});
 }
-function ke({ label: e = "Assistant is typing", className: n }) {
+function je({ label: e = "Assistant is typing", className: n }) {
 	let [r, i] = h(0);
 	u(() => {
 		if (typeof window.matchMedia == "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -1326,7 +1398,7 @@ function ke({ label: e = "Assistant is typing", className: n }) {
 		}, e))
 	});
 }
-function Ae({ messages: e, typing: r = !1, label: i = "Conversation", userLabel: a = "You", assistantLabel: o = "MarSel", typingLabel: s = `${o} is typing`, locale: c, className: l }) {
+function Me({ messages: e, typing: r = !1, label: i = "Conversation", userLabel: a = "You", assistantLabel: o = "MarSel", typingLabel: s = `${o} is typing`, locale: c, className: l }) {
 	let d = m(null), f = m(!0);
 	u(() => {
 		let e = d.current;
@@ -1345,23 +1417,23 @@ function Ae({ messages: e, typing: r = !1, label: i = "Conversation", userLabel:
 			let t = e.currentTarget;
 			f.current = t.scrollHeight - t.scrollTop - t.clientHeight < 24;
 		},
-		children: [e.map((e) => /* @__PURE__ */ t(Oe, {
+		children: [e.map((e) => /* @__PURE__ */ t(Ae, {
 			role: e.role,
 			text: e.text,
 			timestamp: e.timestamp,
 			author: e.role === "user" ? a : o,
 			locale: c
-		}, e.id)), r ? /* @__PURE__ */ t(ke, { label: s }) : null]
+		}, e.id)), r ? /* @__PURE__ */ t(je, { label: s }) : null]
 	});
 }
 //#endregion
-//#region src/components/Popover/Popover.tsx
-var je = typeof document > "u" ? u : f;
-function Me({ open: e, onClose: n, anchorRef: r, placement: i = "bottom-start", offset: a = 4, matchAnchorWidth: o = !1, container: s, role: c = "dialog", "aria-label": l, "aria-labelledby": d, id: f, autoFocus: p = !0, returnFocus: h = !0, className: _, children: v }) {
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Popover/Popover.tsx
+var Ne = typeof document > "u" ? u : f;
+function Pe({ open: e, onClose: n, anchorRef: r, placement: i = "bottom-start", offset: a = 4, matchAnchorWidth: o = !1, container: s, role: c = "dialog", "aria-label": l, "aria-labelledby": d, id: f, autoFocus: p = !0, returnFocus: h = !0, className: _, children: v }) {
 	let y = m(null), b = m(n);
 	b.current = n;
-	let x = m(!1), S = e ? ve(s) : null, C = _e(!!S, y);
-	if (je(() => {
+	let x = m(!1), S = e ? be(s) : null, C = ye(!!S, y);
+	if (Ne(() => {
 		let e = y.current, t = r.current;
 		if (!S || !e || !t) return;
 		let n = e.ownerDocument.defaultView ?? window, s = () => {
@@ -1424,7 +1496,7 @@ function Me({ open: e, onClose: n, anchorRef: r, placement: i = "bottom-start", 
 		let o = Q(C.layer.parent?.getElement() ?? t.ownerDocument.body).filter((e) => !t.contains(e)), s = o.indexOf(n), c = e.shiftKey ? n : o[s + 1] ?? (C.layer.parent ? o[0] : void 0) ?? n;
 		b.current(), c.focus({ preventScroll: !0 });
 	}, T = ["ss-popover"];
-	return _ && T.push(_), g(/* @__PURE__ */ t(he.Provider, {
+	return _ && T.push(_), g(/* @__PURE__ */ t(_e.Provider, {
 		value: C.layer,
 		children: /* @__PURE__ */ t("div", {
 			ref: y,
@@ -1440,9 +1512,9 @@ function Me({ open: e, onClose: n, anchorRef: r, placement: i = "bottom-start", 
 	}), S);
 }
 //#endregion
-//#region src/components/Menu/Menu.tsx
-var Ne = a(null), Pe = (e) => Array.from(e.querySelectorAll("[role=\"menuitem\"]:not([aria-disabled=\"true\"])"));
-function Fe({ label: r, "aria-label": i, children: a, placement: o = "bottom-start", offset: s, matchButtonWidth: l, container: f, onOpenChange: p, className: g, menuClassName: _, popoverClassName: v }) {
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Menu/Menu.tsx
+var Fe = a(null), Ie = (e) => Array.from(e.querySelectorAll("[role=\"menuitem\"]:not([aria-disabled=\"true\"])"));
+function Le({ label: r, "aria-label": i, children: a, placement: o = "bottom-start", offset: s, matchButtonWidth: l, container: f, onOpenChange: p, className: g, menuClassName: _, popoverClassName: v }) {
 	let y = d(), b = d(), x = m(null), S = m(null), [C, w] = h(!1), T = m(p);
 	T.current = p;
 	let E = c((e) => {
@@ -1455,13 +1527,13 @@ function Fe({ label: r, "aria-label": i, children: a, placement: o = "bottom-sta
 	};
 	u(() => {
 		if (!C || !S.current) return;
-		let e = Pe(S.current);
+		let e = Ie(S.current);
 		(D === "last" ? e[e.length - 1] : e[0])?.focus();
 	}, [C, D]), u(() => () => window.clearTimeout(k.current.timer), []);
 	let M = (e) => {
 		e.key === "ArrowDown" ? (e.preventDefault(), j("first")) : e.key === "ArrowUp" && (e.preventDefault(), j("last"));
 	}, N = (e) => {
-		let t = Pe(e.currentTarget);
+		let t = Ie(e.currentTarget);
 		if (t.length === 0) return;
 		let n = t.indexOf(document.activeElement), r;
 		if (e.key === "ArrowDown") r = t[(n + 1) % t.length];
@@ -1500,7 +1572,7 @@ function Fe({ label: r, "aria-label": i, children: a, placement: o = "bottom-sta
 		onClick: () => C ? A() : j("first"),
 		onKeyDown: M,
 		children: r
-	}), /* @__PURE__ */ t(Me, {
+	}), /* @__PURE__ */ t(Pe, {
 		open: C,
 		onClose: A,
 		anchorRef: x,
@@ -1511,7 +1583,7 @@ function Fe({ label: r, "aria-label": i, children: a, placement: o = "bottom-sta
 		role: "none",
 		autoFocus: !1,
 		className: v,
-		children: /* @__PURE__ */ t(Ne.Provider, {
+		children: /* @__PURE__ */ t(Fe.Provider, {
 			value: { close: A },
 			children: /* @__PURE__ */ t("div", {
 				ref: S,
@@ -1526,8 +1598,8 @@ function Fe({ label: r, "aria-label": i, children: a, placement: o = "bottom-sta
 		})
 	})] });
 }
-function Ie({ onSelect: e, disabled: n, className: r, children: i, render: a }) {
-	let o = l(Ne);
+function Re({ onSelect: e, disabled: n, className: r, children: i, render: a }) {
+	let o = l(Fe);
 	if (!o) throw Error("MenuItem must be rendered inside <Menu>");
 	let s = ["ss-menu-item"];
 	n && s.push("ss-menu-item--disabled"), r && s.push(r);
@@ -1556,8 +1628,8 @@ function Ie({ onSelect: e, disabled: n, className: r, children: i, render: a }) 
 	});
 }
 //#endregion
-//#region src/components/Accordion/Accordion.tsx
-function Le({ title: e, headingLevel: r = 2, children: i, collapsedLabel: a = "Read more", expandedLabel: o = "Read less", defaultExpanded: s = !1, className: c }) {
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Accordion/Accordion.tsx
+function ze({ title: e, headingLevel: r = 2, children: i, collapsedLabel: a = "Read more", expandedLabel: o = "Read less", defaultExpanded: s = !1, className: c }) {
 	let [l, u] = h(s), f = d(), p = `h${r}`, m = ["ss-accordion"];
 	return c && m.push(c), /* @__PURE__ */ n("div", {
 		className: m.join(" "),
@@ -1602,8 +1674,8 @@ function Le({ title: e, headingLevel: r = 2, children: i, collapsedLabel: a = "R
 	});
 }
 //#endregion
-//#region src/components/ColoredIcon/ColoredIcon.tsx
-function Re({ icon: e, size: n = "sm", color: r = "violet-400", className: i }) {
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/ColoredIcon/ColoredIcon.tsx
+function Be({ icon: e, size: n = "sm", color: r = "violet-400", className: i }) {
 	let a = ["ss-colored-icon", `ss-colored-icon--${n}`];
 	return i && a.push(i), /* @__PURE__ */ t("span", {
 		className: a.join(" "),
@@ -1616,8 +1688,8 @@ function Re({ icon: e, size: n = "sm", color: r = "violet-400", className: i }) 
 	});
 }
 //#endregion
-//#region src/components/ContactBadge/ContactBadge.tsx
-function ze({ icon: e, label: r, text: i, className: a }) {
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/ContactBadge/ContactBadge.tsx
+function Ve({ icon: e, label: r, text: i, className: a }) {
 	let o = ["ss-contact-badge"];
 	return a && o.push(a), /* @__PURE__ */ n("div", {
 		className: o.join(" "),
@@ -1637,8 +1709,8 @@ function ze({ icon: e, label: r, text: i, className: a }) {
 	});
 }
 //#endregion
-//#region src/components/LabeledStack/LabeledStack.tsx
-function Be({ values: e, colors: r, tones: i, renderValueFns: a = [], className: o }) {
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/LabeledStack/LabeledStack.tsx
+function He({ values: e, colors: r, tones: i, renderValueFns: a = [], className: o }) {
 	let s = ["ss-labeled-stack"];
 	return o && s.push(o), /* @__PURE__ */ t("div", {
 		className: s.join(" "),
@@ -1653,8 +1725,8 @@ function Be({ values: e, colors: r, tones: i, renderValueFns: a = [], className:
 	});
 }
 //#endregion
-//#region src/components/FileDropzone/FileDropzone.tsx
-function Ve(e) {
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/FileDropzone/FileDropzone.tsx
+function Ue(e) {
 	return /* @__PURE__ */ t("svg", {
 		viewBox: "0 0 20 20",
 		...e,
@@ -1664,20 +1736,20 @@ function Ve(e) {
 		})
 	});
 }
-var He = (e) => e?.[0];
-function Ue({ description: e, file: r, onFileSelect: i, onRemove: a, accept: o, error: s, warning: c, size: l = "default", browseLabel: u = "Upload from computer", removeLabel: f = "Remove file", id: p, className: g }) {
+var We = (e) => e?.[0];
+function Ge({ description: e, file: r, onFileSelect: i, onRemove: a, accept: o, error: s, warning: c, size: l = "default", browseLabel: u = "Upload from computer", removeLabel: f = "Remove file", id: p, className: g }) {
 	let _ = d(), v = p ?? _, y = `${v}-error`, b = `${v}-warning`, x = m(null), [S, C] = h(!1), [w, T] = h(!1), E = (e) => {
 		e.preventDefault(), e.stopPropagation();
 	}, D = (e) => {
 		E(e), C(!1);
-		let t = He(e.dataTransfer?.files);
+		let t = We(e.dataTransfer?.files);
 		t && i(t);
 	}, O = (e) => {
 		E(e), C(!0);
 	}, k = (e) => {
 		E(e), C(!1);
 	}, A = (e) => {
-		let t = He(e.target.files);
+		let t = We(e.target.files);
 		t && i(t);
 	}, j = () => {
 		a(), x.current && (x.current.value = "");
@@ -1694,7 +1766,7 @@ function Ue({ description: e, file: r, onFileSelect: i, onRemove: a, accept: o, 
 			onDragOver: O,
 			onDragLeave: k,
 			children: [
-				/* @__PURE__ */ t(Re, { icon: Ve }),
+				/* @__PURE__ */ t(Be, { icon: Ue }),
 				/* @__PURE__ */ t("div", {
 					className: "ss-dropzone-description",
 					children: e
@@ -1777,8 +1849,8 @@ function Ue({ description: e, file: r, onFileSelect: i, onRemove: a, accept: o, 
 	});
 }
 //#endregion
-//#region src/components/Textarea/Textarea.tsx
-var We = o(function({ label: e, hint: r, error: i, className: a, id: o, required: s, "aria-describedby": c, ...l }, u) {
+//#region ../../../tmp/claude-1000/-data-code-socialscore/dbf32b95-c515-4837-8548-1454a8a7b175/scratchpad/ui-build/packages/ui/src/components/Textarea/Textarea.tsx
+var Ke = o(function({ label: e, hint: r, error: i, className: a, id: o, required: s, "aria-describedby": c, ...l }, u) {
 	let f = d(), p = o ?? f, m = `${p}-hint`, h = `${p}-error`, g = !!i, _ = [
 		c,
 		r ? m : void 0,
@@ -1818,7 +1890,7 @@ var We = o(function({ label: e, hint: r, error: i, className: a, id: o, required
 			})
 		]
 	});
-}), Ge = o(function({ label: e, variant: r = "primary", Icon: i, className: a, value: o, checked: s, disabled: c, ...l }, u) {
+}), qe = o(function({ label: e, variant: r = "primary", Icon: i, className: a, value: o, checked: s, disabled: c, ...l }, u) {
 	let d = ["ss-radio-tab", `ss-radio-tab--${r}`];
 	s && d.push("ss-radio-tab--checked"), c && d.push("ss-radio-tab--disabled"), a && d.push(a);
 	let f = ["ss-radio-tab-face", `ss-radio-tab-face--${r}`];
@@ -1840,10 +1912,10 @@ var We = o(function({ label: e, hint: r, error: i, className: a, id: o, required
 			}), e ?? o]
 		})]
 	});
-}), Ke = a(null);
-function qe({ name: e, legend: r, value: i, onValueChange: a, disabled: o, className: s, children: c, ...l }) {
+}), Je = a(null);
+function Ye({ name: e, legend: r, value: i, onValueChange: a, disabled: o, className: s, children: c, ...l }) {
 	let u = d(), f = s ? `ss-radio-group ${s}` : "ss-radio-group";
-	return /* @__PURE__ */ t(Ke.Provider, {
+	return /* @__PURE__ */ t(Je.Provider, {
 		value: {
 			name: e ?? u,
 			value: i,
@@ -1861,8 +1933,8 @@ function qe({ name: e, legend: r, value: i, onValueChange: a, disabled: o, class
 		})
 	});
 }
-var Je = o(function({ label: e, className: r, disabled: i, value: a, checked: o, onChange: s, name: c, ...u }, d) {
-	let f = l(Ke), p = i ?? f?.disabled, m = ["ss-radio-row"];
+var Xe = o(function({ label: e, className: r, disabled: i, value: a, checked: o, onChange: s, name: c, ...u }, d) {
+	let f = l(Je), p = i ?? f?.disabled, m = ["ss-radio-row"];
 	p && m.push("ss-radio-row--disabled"), r && m.push(r);
 	let h = f !== null && typeof a == "string";
 	return /* @__PURE__ */ n("label", {
@@ -1886,6 +1958,6 @@ var Je = o(function({ label: e, className: r, disabled: i, value: a, checked: o,
 	});
 });
 //#endregion
-export { Le as Accordion, A as Badge, _ as Button, M as Card, F as ChartFrame, Oe as ChatBubble, Ae as ChatThread, w as Checkbox, Re as ColoredIcon, ze as ContactBadge, R as DEFAULT_LEVEL_NAMES, L as DEFAULT_LEVEL_THRESHOLDS, I as EmptyState, Ue as FileDropzone, O as InfoIcon, S as Input, Be as LabeledStack, B as LevelIndicator, U as LockedSection, Fe as Menu, Ie as MenuItem, xe as Modal, q as Pagination, Me as Popover, Je as Radio, qe as RadioGroup, C as Select, P as Spinner, T as Switch, pe as Tab, fe as TabList, me as TabPanel, Ge as TabRadio, ae as Table, de as Tabs, We as Textarea, Ee as ToastProvider, E as Tooltip, ke as TypingIndicator, z as getLevel, G as pageWindow, v as paletteColors, x as paletteValue, y as paletteVar, b as tokenValue, Ce as useToast };
+export { ze as Accordion, A as Badge, _ as Button, M as Card, F as ChartFrame, Ae as ChatBubble, Me as ChatThread, w as Checkbox, Be as ColoredIcon, Ve as ContactBadge, R as DEFAULT_LEVEL_NAMES, L as DEFAULT_LEVEL_THRESHOLDS, I as EmptyState, Ge as FileDropzone, O as InfoIcon, S as Input, He as LabeledStack, B as LevelIndicator, U as LockedSection, Le as Menu, Re as MenuItem, Ce as Modal, ge as PageHeader, q as Pagination, Pe as Popover, Xe as Radio, Ye as RadioGroup, C as Select, P as Spinner, T as Switch, me as Tab, pe as TabList, he as TabPanel, qe as TabRadio, oe as Table, fe as Tabs, Ke as Textarea, Oe as ToastProvider, E as Tooltip, je as TypingIndicator, z as getLevel, G as pageWindow, v as paletteColors, x as paletteValue, y as paletteVar, b as tokenValue, Te as useToast };
 
 //# sourceMappingURL=index.js.map

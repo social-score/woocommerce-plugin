@@ -15,6 +15,22 @@ defined( 'ABSPATH' ) || exit;
 class Api_Client {
 
 	/**
+	 * Seconds to wait for an answer.
+	 *
+	 * @var int
+	 */
+	private $timeout;
+
+	/**
+	 * Creates a client.
+	 *
+	 * @param int $timeout Seconds to wait for an answer.
+	 */
+	public function __construct( $timeout = 15 ) {
+		$this->timeout = (int) $timeout;
+	}
+
+	/**
 	 * Calls the API with the store key. Returns an array with `status`, `data` and `retry_after`
 	 * (seconds or null), or a WP_Error when the request could not be made.
 	 *
@@ -57,7 +73,7 @@ class Api_Client {
 		}
 		$args = array(
 			'method'      => $method,
-			'timeout'     => 15,
+			'timeout'     => $this->timeout,
 			'redirection' => 0,
 			'headers'     => array_merge(
 				array(

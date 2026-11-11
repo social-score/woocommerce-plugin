@@ -30,6 +30,7 @@ class Plugin {
 		( new Sync() )->register();
 		( new Enrichment() )->register();
 		( new Privacy() )->register();
+		( new Pixel() )->register();
 
 		if ( is_admin() ) {
 			( new Admin_Page() )->register();

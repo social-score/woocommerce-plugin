@@ -19,11 +19,12 @@
   --ss-color-white: #ffffff;
   --ss-color-black: #000000;
 
-  --ss-color-gray-50: #f8f8f8;
-  --ss-color-gray-100: #f1f1f1;
-  --ss-color-gray-200: #e0e0e0;
-  --ss-color-gray-300: #d4d4d4;
-  --ss-color-gray-400: #bbbbbb;
+  /* Cool greys tinted toward navy-900, so surfaces sit with the navy text. */
+  --ss-color-gray-50: #f8f9fb;
+  --ss-color-gray-100: #f2f3f7;
+  --ss-color-gray-200: #e4e6ee;
+  --ss-color-gray-300: #d2d5e0;
+  --ss-color-gray-400: #a8acbd;
   /* Added for AA: placeholder text (was #9ca3af, 2.5:1 on white). Dark enough for
      4.5:1 on gray-100 too, where an input can sit on a muted panel. */
   --ss-color-gray-500: #686e79;
@@ -139,18 +140,18 @@
   /* ---- Typography -------------------------------------------------------- */
   --ss-font-sans: Inter, sans-serif;
 
-  /* Named by role, smallest first. Values are the 2023 design's sizes. */
-  --ss-font-size-micro: 0.625rem; /* 10px */
-  --ss-font-size-caption: 0.875rem; /* 14px */
-  --ss-font-size-body: 1rem; /* 16px */
-  --ss-font-size-body-lg: 1.125rem; /* 18px */
-  --ss-font-size-subtitle: 1.25rem; /* 20px */
-  --ss-font-size-title-sm: 1.3rem; /* 20.8px, h5 */
+  /* Named by role, smallest first. A dashboard scale: 14px body, 30px page title. */
+  --ss-font-size-micro: 0.75rem; /* 12px, labels and table headers */
+  --ss-font-size-caption: 0.8125rem; /* 13px, helper text and table cells */
+  --ss-font-size-body: 0.875rem; /* 14px */
+  --ss-font-size-body-lg: 1rem; /* 16px */
+  --ss-font-size-subtitle: 1.125rem; /* 18px, card titles */
+  --ss-font-size-title-sm: 1.25rem; /* 20px, h5 */
   --ss-font-size-title: 1.5rem; /* 24px */
-  --ss-font-size-title-lg: 1.75rem; /* 28px */
-  --ss-font-size-display-sm: 2rem; /* 32px */
-  --ss-font-size-display: 2.25rem; /* 36px, h1 */
-  --ss-font-size-display-lg: 2.625rem; /* 42px */
+  --ss-font-size-title-lg: 1.625rem; /* 26px */
+  --ss-font-size-display-sm: 1.75rem; /* 28px */
+  --ss-font-size-display: 1.875rem; /* 30px, h1 */
+  --ss-font-size-display-lg: 2.25rem; /* 36px */
 
   --ss-font-weight-thin: 100;
   --ss-font-weight-extralight: 200;
@@ -178,16 +179,19 @@
   --ss-radius-full: 9999px;
 
   /* ---- Shadows ------------------------------------------------------------ */
-  --ss-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --ss-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  /* Tinted with navy-900, never black. xs: cards. lg: menus, popovers, modals. */
+  --ss-shadow-xs: 0 1px 2px rgb(17 20 65 / 0.04);
+  --ss-shadow-md: 0 4px 12px -2px rgb(17 20 65 / 0.08), 0 2px 4px -2px rgb(17 20 65 / 0.04);
+  --ss-shadow-lg: 0 12px 24px -6px rgb(17 20 65 / 0.12);
   /* Even glow on all sides: tooltips and floating cards. */
-  --ss-shadow-all: 0px 0px 20px rgba(0, 0, 0, 0.15);
+  --ss-shadow-all: 0 8px 24px rgb(17 20 65 / 0.12);
 
   /* ---- Layout sizes -------------------------------------------------------- */
   /* Fixed widths and heights that carry a design decision. Anything else uses the
      spacing scale (`w-96`, `max-w-125`); theme.css exposes these as `w-nav`, `max-w-form`. */
   --ss-size-nav: 18.75rem; /* 300px, side navigation expanded */
   --ss-size-nav-collapsed: 10rem; /* 160px, side navigation collapsed */
+  --ss-size-nav-rail: 4.5rem; /* 72px, icon-only side navigation */
   --ss-size-form: 25rem; /* 400px, a single-column form */
   --ss-size-dropzone-tall: 20rem; /* 320px, FileDropzone size="tall" */
   --ss-size-chart-panel: 39.0625rem; /* 625px, one Compare section with a chart and its table */

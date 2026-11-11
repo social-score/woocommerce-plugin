@@ -1,5 +1,5 @@
 import type { PluginHost } from '../host.js';
-import type { BatchResult, CheckResult, CheckSubject, CostEstimate, CustomerExport, CustomerInput, HookCreated, HookInput, OrderInput, Page, CheckedCustomer, Profile, RedactCustomerResult, RowId, SegmentSummary, StoreOverview, StoreSettingsResponse, TriggerSettings, UninstallResult } from '../types/index.js';
+import type { BatchResult, CheckResult, CheckSubject, CostEstimate, CustomerExport, CustomerInput, HookCreated, HookInput, OrderInput, Page, PixelState, CheckedCustomer, Profile, RedactCustomerResult, RowId, SegmentSummary, SessionAnswer, StoreOverview, StoreSettingsResponse, TriggerSettings, UninstallResult } from '../types/index.js';
 /**
  * `external_id` to SocialScore id of the rows a batch stored. Keep it: an `order.created` event carries
  * our `order_id`, not the shop's order id.
@@ -35,6 +35,14 @@ export declare class ApiClient {
     runCheck(subject: CheckSubject, idempotencyKey?: string): Promise<CheckResult>;
     getCustomerProfile(externalId: string): Promise<Profile>;
     getOrderProfile(externalId: string): Promise<Profile>;
+    /** The worst visit of the customer over 30 days, from the visitors the customer row confirms. */
+    getCustomerSession(externalId: string): Promise<SessionAnswer>;
+    /** The worst visit tied to the order. */
+    getOrderSession(externalId: string): Promise<SessionAnswer>;
+    /** 404 `pixel_not_enabled` where the environment does not serve the Pixel. */
+    getPixel(): Promise<PixelState>;
+    /** Main role only: another member's key gets 403 `permission_required`. */
+    setPixel(enabled: boolean): Promise<PixelState>;
     getOverview(): Promise<StoreOverview>;
     listCheckedCustomers(page: number, pageSize: number): Promise<Page<CheckedCustomer>>;
     /** Ready segments with a size band. A store key may read them; it never writes. */

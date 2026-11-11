@@ -94,8 +94,75 @@ class Privacy {
 			}
 		}
 		return array(
-			'data' => $out,
+			'data' => array_merge( $out, self::visit_id_groups( $email_address ) ),
 			'done' => true,
+		);
+	}
+
+	/**
+	 * Export groups for the Pixel visit and session ids kept on the orders of an email address. They are held
+	 * here, in the shop, so they are exported whether or not the store is connected.
+	 *
+	 * @param string $email_address Email address of the data subject.
+	 * @return array
+	 */
+	public static function visit_id_groups( $email_address ) {
+		$groups = array();
+		foreach ( self::orders_of( $email_address ) as $order ) {
+			if ( ! is_object( $order ) || ! method_exists( $order, 'get_meta' ) ) {
+				continue;
+			}
+			$visitor = (string) $order->get_meta( Pixel::META_VISITOR );
+			$session = (string) $order->get_meta( Pixel::META_SESSION );
+			if ( '' === $visitor && '' === $session ) {
+				continue;
+			}
+			$rows = array(
+				array(
+					'name'  => __( 'Order', 'socialscore' ),
+					'value' => (string) $order->get_id(),
+				),
+			);
+			if ( '' !== $visitor ) {
+				$rows[] = array(
+					'name'  => __( 'Visit id', 'socialscore' ),
+					'value' => $visitor,
+				);
+			}
+			if ( '' !== $session ) {
+				$rows[] = array(
+					'name'  => __( 'Session id', 'socialscore' ),
+					'value' => $session,
+				);
+			}
+			$groups[] = array(
+				'group_id'          => 'socialscore-pixel',
+				'group_label'       => __( 'SocialScore Pixel', 'socialscore' ),
+				'group_description' => __( 'The visit and session ids the SocialScore Pixel stored on this customer\'s orders.', 'socialscore' ),
+				'item_id'           => 'socialscore-pixel-order-' . (string) $order->get_id(),
+				'data'              => $rows,
+			);
+		}
+		return $groups;
+	}
+
+	/**
+	 * Orders billed to an email address.
+	 *
+	 * @param string $email_address Email address.
+	 * @return array
+	 */
+	private static function orders_of( $email_address ) {
+		$email = strtolower( trim( (string) $email_address ) );
+		if ( '' === $email || ! function_exists( 'wc_get_orders' ) ) {
+			return array();
+		}
+		return (array) wc_get_orders(
+			array(
+				'billing_email' => $email,
+				'limit'         => -1,
+				'return'        => 'objects',
+			)
 		);
 	}
 
@@ -231,6 +298,11 @@ class Privacy {
 		$retained = false;
 		$messages = array();
 
+		// The Pixel visit ids on this customer's orders are ours, so they go whether or not the store is connected.
+		if ( $this->erase_visit_ids( $email_address ) ) {
+			$removed = true;
+		}
+
 		if ( Connection::is_connected() ) {
 			$client = new Api_Client();
 			foreach ( self::external_ids( $email_address ) as $external_id ) {
@@ -259,5 +331,29 @@ class Privacy {
 			'messages'       => array_values( array_unique( $messages ) ),
 			'done'           => true,
 		);
+	}
+
+	/**
+	 * Removes the Pixel visit and session ids from the orders of an email address.
+	 *
+	 * @param string $email_address Email address of the data subject.
+	 * @return bool True when an order lost an id.
+	 */
+	private function erase_visit_ids( $email_address ) {
+		$changed = false;
+		$orders  = self::orders_of( $email_address );
+		foreach ( (array) $orders as $order ) {
+			if ( ! is_object( $order ) || ! method_exists( $order, 'delete_meta_data' ) ) {
+				continue;
+			}
+			$had = '' !== (string) $order->get_meta( Pixel::META_VISITOR ) || '' !== (string) $order->get_meta( Pixel::META_SESSION );
+			if ( $had ) {
+				$order->delete_meta_data( Pixel::META_VISITOR );
+				$order->delete_meta_data( Pixel::META_SESSION );
+				$order->save_meta_data();
+				$changed = true;
+			}
+		}
+		return $changed;
 	}
 }

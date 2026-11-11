@@ -151,14 +151,16 @@
   --radius-4xl: var(--ss-radius-4xl);
 
   --shadow-*: initial;
+  --shadow-xs: var(--ss-shadow-xs);
   --shadow-md: var(--ss-shadow-md);
   --shadow-lg: var(--ss-shadow-lg);
   --shadow-all: var(--ss-shadow-all);
 
-  /* Named widths: w-nav, w-nav-collapsed, w-form, max-w-form. Container sizes keep
+  /* Named widths: w-nav, w-nav-collapsed, w-nav-rail, w-form, max-w-form. Container sizes keep
      Tailwind's defaults (max-w-sm, max-w-xl, …). */
   --container-nav: var(--ss-size-nav);
   --container-nav-collapsed: var(--ss-size-nav-collapsed);
+  --container-nav-rail: var(--ss-size-nav-rail);
   --container-form: var(--ss-size-form);
 
   --z-index-base: var(--ss-z-base);
