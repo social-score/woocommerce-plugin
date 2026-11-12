@@ -205,4 +205,31 @@ ss_assert( 1 === substr_count( $html, '"type":"purchase"' ), 'classic shortcode 
 $html = wp_remote_retrieve_body( ss_get( wc_get_checkout_url(), $jar ) );
 ss_assert( 1 === substr_count( $html, '"type":"begin_checkout"' ), 'classic shortcode checkout page pushes begin_checkout once' );
 ss_assert( 1 === preg_match( '/setAttribute\("data-site","' . $SITE . '"\)/', $html ), 'classic checkout page has the loader with data-site' );
+// 9. Login: the wp-login request itself makes no Pixel lookup, the next storefront page prints one data-less
+//    login event, and the page after that prints none.
+Pixel::forget();
+@unlink( '/shared/api.log' );
+$login_cookies = array();
+for ( $try = 0; $try < 4 && count( $login_cookies ) < 2; $try++ ) {
+	if ( $try ) {
+		sleep( 3 );
+	}
+	$login         = wp_remote_post(
+		'http://wordpress/wp-login.php',
+		array(
+			'redirection' => 0,
+			'timeout'     => 60,
+			'cookies'     => array( 'wordpress_test_cookie' => 'WP Cookie check' ),
+			'body'        => array( 'log' => 'admin', 'pwd' => 'admin', 'wp-submit' => 'Log In', 'testcookie' => 1 ),
+		)
+	);
+	$login_cookies = is_wp_error( $login ) ? array() : wp_remote_retrieve_cookies( $login );
+}
+ss_assert( count( $login_cookies ) > 1, 'logged in over HTTP' );
+$lookups = array_filter( ss_log(), fn( $e ) => '/api/v2/stores/st_1/pixel' === $e['path'] );
+ss_assert( array() === $lookups, 'the login request made no Pixel lookup' );
+$html = wp_remote_retrieve_body( ss_get( $url, $login_cookies ) );
+ss_assert( 1 === substr_count( $html, '"type":"login","data":{}' ), 'the next storefront page pushes one login event with no data' );
+$html = wp_remote_retrieve_body( ss_get( $url, $login_cookies ) );
+ss_assert( 0 === substr_count( $html, '"type":"login"' ), 'the page after that has no login event' );
 echo "pixel done\n";

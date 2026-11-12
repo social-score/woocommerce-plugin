@@ -107,11 +107,28 @@ class PixelTest extends TestCase {
 		$this->assertArrayNotHasKey( '_ss_pixel_login', $this->user_meta[7] );
 	}
 
-	public function test_a_login_is_not_remembered_while_the_pixel_is_off() {
+	public function test_a_login_is_not_remembered_while_the_cached_state_is_off() {
 		$this->connect_store( 'st_1' );
 		$this->pixel_answer( false );
+		Pixel::state();
+		$this->http = array();
 		( new Pixel() )->remember_login( 'anna', (object) array( 'ID' => 7 ) );
 		$this->assertSame( array(), $this->user_meta );
+		$this->assertSame( array(), $this->http );
+	}
+
+	public function test_a_login_with_a_cold_cache_asks_nobody_and_is_kept_for_the_next_page() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		( new Pixel() )->remember_login( 'anna', (object) array( 'ID' => 7 ) );
+		$this->assertSame( array(), $this->http, 'a login makes no lookup request' );
+		$this->assertArrayHasKey( '_ss_pixel_login', $this->user_meta[7] );
+	}
+
+	public function test_a_login_is_not_remembered_when_the_store_is_not_connected() {
+		( new Pixel() )->remember_login( 'anna', (object) array( 'ID' => 7 ) );
+		$this->assertSame( array(), $this->user_meta );
+		$this->assertSame( array(), $this->http );
 	}
 
 	public function test_a_visitor_who_is_not_logged_in_gets_no_login_event() {

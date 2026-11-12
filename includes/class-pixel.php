@@ -91,7 +91,7 @@ class Pixel {
 	}
 
 	/**
-	 * A successful login: remember it for the user's next storefront page. The login request itself is
+	 * A successful login: remember it for the user's next storefront page, without a lookup of the Pixel state. The login request itself is
 	 * usually a redirect, so the event is printed by the page that follows. Only the time is kept, never an id
 	 * in the event.
 	 *
@@ -101,7 +101,13 @@ class Pixel {
 	 */
 	public function remember_login( $user_login, $user = null ) {
 		unset( $user_login );
-		if ( ! is_object( $user ) || empty( $user->ID ) || '' === $this->active_site_id() ) {
+		if ( ! is_object( $user ) || empty( $user->ID ) || ! Connection::is_connected() ) {
+			return;
+		}
+		// Never ask the API here: a login, wp-admin ones included, must not wait for a lookup. Only a cached "off"
+		// skips the note; with a cold cache it is kept and the next storefront page decides.
+		$cached = get_transient( self::TRANSIENT . md5( (string) Connection::store_id() ) );
+		if ( is_array( $cached ) && empty( $cached['enabled'] ) ) {
 			return;
 		}
 		update_user_meta( (int) $user->ID, self::META_LOGIN, time() );
