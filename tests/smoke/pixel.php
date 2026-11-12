@@ -1,5 +1,5 @@
 <?php
-// Pixel: loader on the storefront, switch through the proxy, shop events, and the order to visit link
+// Pixel: loader on the storefront, switch through the proxy, shop events, and no cookie copy onto orders
 // for the classic and the block (Store API) checkout. Runs while the store is still connected as st_1.
 use SocialScore\Pixel;
 
@@ -85,7 +85,7 @@ ss_assert( false !== strpos( $body, 'data-site' ), 'switched on again: the loade
 $admin = wp_remote_retrieve_body( wp_remote_get( 'http://wordpress/wp-admin/admin.php?page=socialscore', array( 'cookies' => $cookies, 'timeout' => 60 ) ) );
 ss_assert( false === strpos( $admin, 'pixel.socialscore.io' ) && false === strpos( $admin, 'data-site' ), 'the admin has no loader' );
 
-// 3. Classic checkout: the order gets the two ids from the cookies.
+// 3. Classic checkout: old Pixel cookies in the request are not copied onto the order.
 wc_load_cart();
 update_option( 'woocommerce_cod_settings', array( 'enabled' => 'yes' ) );
 WC()->payment_gateways()->init();
@@ -96,14 +96,14 @@ $_COOKIE['ss_pv'] = $V4_A;
 $_COOKIE['ss_ps'] = $V4_B;
 $id1   = WC()->checkout()->create_order( $address );
 $order = wc_get_order( $id1 );
-ss_assert( $order && $V4_A === $order->get_meta( '_ss_pixel_visitor' ) && $V4_B === $order->get_meta( '_ss_pixel_session' ), 'classic checkout stores both ids in the order meta (HPOS: ' . ( \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled() ? 'on' : 'off' ) . ')' );
+ss_assert( $order && '' === $order->get_meta( '_ss_pixel_visitor' ) && '' === $order->get_meta( '_ss_pixel_session' ), 'classic checkout stores no visit or session id in the order meta (HPOS: ' . ( \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled() ? 'on' : 'off' ) . ')' );
 WC()->cart->empty_cart();
 WC()->cart->add_to_cart( $product->get_id(), 1 );
 $_COOKIE['ss_pv'] = "' OR 1=1 --";
 $_COOKIE['ss_ps'] = '3f2b8c1e-5d4a-1b7e-9c3d-1a2b3c4d5e6f';
 $id2    = WC()->checkout()->create_order( $address );
 $order2 = wc_get_order( $id2 );
-ss_assert( $order2 && '' === $order2->get_meta( '_ss_pixel_visitor' ) && '' === $order2->get_meta( '_ss_pixel_session' ), 'classic checkout ignores a cookie that is not a UUIDv4 (and the order is still made)' );
+ss_assert( $order2 && '' === $order2->get_meta( '_ss_pixel_visitor' ) && '' === $order2->get_meta( '_ss_pixel_session' ), 'classic checkout with a junk cookie still makes the order and stores no id' );
 
 // 4. Block checkout through the Store API route.
 WC()->cart->empty_cart();
@@ -122,9 +122,9 @@ $out = rest_do_request( $req );
 $data = $out->get_data();
 ss_assert( 200 === $out->get_status() && ! empty( $data['order_id'] ), 'Store API checkout made an order (HTTP ' . $out->get_status() . ' ' . ( 200 === $out->get_status() ? '' : wp_json_encode( $data ) ) . ')' );
 $order3 = wc_get_order( (int) $data['order_id'] );
-ss_assert( $V4_B === $order3->get_meta( '_ss_pixel_visitor' ) && $V4_A === $order3->get_meta( '_ss_pixel_session' ), 'block checkout (Store API) stores both ids in the order meta' );
+ss_assert( '' === $order3->get_meta( '_ss_pixel_visitor' ) && '' === $order3->get_meta( '_ss_pixel_session' ), 'block checkout (Store API) stores no visit or session id in the order meta' );
 
-// 5. The ids reach SocialScore in orders:batch, and an order without them sends no empty field.
+// 5. orders:batch carries no visit or session id field for any of the three orders.
 @unlink( '/shared/api.log' );
 foreach ( array( $id1, $id2, (int) $data['order_id'] ) as $oid ) {
 	\SocialScore\Sync::queue_unique( \SocialScore\Sync::HOOK_ORDER, array( $oid, 0 ) );
@@ -138,9 +138,9 @@ foreach ( ss_log() as $entry ) {
 		}
 	}
 }
-ss_assert( isset( $rows[ (string) $id1 ] ) && $V4_A === ( $rows[ (string) $id1 ]['pixel_visitor_id'] ?? null ) && $V4_B === ( $rows[ (string) $id1 ]['pixel_session_id'] ?? null ), 'orders:batch carries pixel_visitor_id and pixel_session_id (classic order)' );
-ss_assert( isset( $rows[ (string) $data['order_id'] ] ) && $V4_B === ( $rows[ (string) $data['order_id'] ]['pixel_visitor_id'] ?? null ), 'orders:batch carries them for the block order' );
-ss_assert( isset( $rows[ (string) $id2 ] ) && ! array_key_exists( 'pixel_visitor_id', $rows[ (string) $id2 ] ) && ! array_key_exists( 'pixel_session_id', $rows[ (string) $id2 ] ), 'an order with an invalid cookie sends neither field' );
+foreach ( array( $id1, $id2, (int) $data['order_id'] ) as $oid ) {
+	ss_assert( isset( $rows[ (string) $oid ] ) && ! array_key_exists( 'pixel_visitor_id', $rows[ (string) $oid ] ) && ! array_key_exists( 'pixel_session_id', $rows[ (string) $oid ] ), 'orders:batch row of order ' . $oid . ' has neither pixel_visitor_id nor pixel_session_id' );
+}
 
 // 6. Events over real HTTP: add to cart that reloads the page, checkout start, one purchase per order.
 $jar = array();

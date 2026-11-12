@@ -36,6 +36,7 @@ if ( function_exists( 'as_unschedule_all_actions' ) ) {
 
 delete_metadata( 'user', 0, '_socialscore_labels', '', true );
 delete_metadata( 'user', 0, '_socialscore_checked', '', true );
+delete_metadata( 'user', 0, '_ss_pixel_login', '', true );
 
 // Order meta: classic post meta, and the HPOS meta table when it exists.
 delete_post_meta_by_key( '_socialscore_labels' );

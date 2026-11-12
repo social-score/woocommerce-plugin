@@ -18,7 +18,6 @@ class PixelTest extends TestCase {
 
 	protected function setUp(): void {
 		parent::setUp();
-		unset( $_COOKIE['ss_pv'], $_COOKIE['ss_ps'] );
 		$this->inline = array();
 		Functions\when( 'is_admin' )->justReturn( false );
 		Functions\when( 'is_product' )->justReturn( false );
@@ -39,97 +38,86 @@ class PixelTest extends TestCase {
 		);
 	}
 
-	protected function tearDown(): void {
-		unset( $_COOKIE['ss_pv'], $_COOKIE['ss_ps'] );
-		parent::tearDown();
-	}
-
 	private function pixel_answer( $enabled = true, $site = self::SITE ) {
 		$this->http_responder = fn() => self::response( 200, array( 'enabled' => $enabled, 'site_id' => $site, 'snippet_url' => 'https://pixel.socialscore.io/v1/p.js' ) );
 	}
 
-	// UUIDs and cookies ---------------------------------------------------------------------------------------
+	// No device storage, no order link by cookie ---------------------------------------------------------------
 
-	public function test_only_uuid_v4_passes() {
-		$this->assertSame( self::V4_A, Pixel::uuid( self::V4_A ) );
-		$this->assertSame( self::V4_A, Pixel::uuid( strtoupper( self::V4_A ) ), 'case is normalised' );
-		foreach ( array( '', 'abc', '3f2b8c1e-5d4a-1b7e-9c3d-1a2b3c4d5e6f', '3f2b8c1e-5d4a-4b7e-7c3d-1a2b3c4d5e6f', self::V4_A . "\n", self::V4_A . 'x', '<script>', array( self::V4_A ), null, 12 ) as $bad ) {
-			$this->assertSame( '', Pixel::uuid( $bad ), 'rejects ' . json_encode( $bad ) );
-		}
+	public function test_no_order_is_linked_by_cookie_any_more() {
+		$this->assertFalse( method_exists( Pixel::class, 'link_order' ) );
+		$this->assertFalse( method_exists( Pixel::class, 'link_order_and_save' ) );
+		$this->assertFalse( method_exists( Pixel::class, 'cookie_uuid' ) );
 	}
 
-	public function test_cookie_uuid_reads_only_valid_strings() {
-		$this->assertSame( '', Pixel::cookie_uuid( 'ss_pv' ) );
-		$_COOKIE['ss_pv'] = self::V4_A;
-		$this->assertSame( self::V4_A, Pixel::cookie_uuid( 'ss_pv' ) );
-		$_COOKIE['ss_pv'] = array( self::V4_A );
-		$this->assertSame( '', Pixel::cookie_uuid( 'ss_pv' ) );
-		$_COOKIE['ss_pv'] = '1; DROP TABLE';
-		$this->assertSame( '', Pixel::cookie_uuid( 'ss_pv' ) );
-	}
-
-	// Order link: classic and block checkout ---------------------------------------------------------------------
-
-	public function test_classic_checkout_stores_both_ids_in_order_meta() {
-		$_COOKIE['ss_pv'] = self::V4_A;
-		$_COOKIE['ss_ps'] = self::V4_B;
-		$order            = new \WC_Order();
-		$this->assertTrue( ( new Pixel() )->link_order( $order ) );
-		$this->assertSame( self::V4_A, $order->meta['_ss_pixel_visitor'] );
-		$this->assertSame( self::V4_B, $order->meta['_ss_pixel_session'] );
-		$this->assertSame( 0, $order->meta_saves, 'the classic hook runs before the order is saved, so it only sets meta' );
-	}
-
-	public function test_block_checkout_stores_ids_and_saves_the_meta() {
-		$_COOKIE['ss_pv'] = self::V4_A;
-		$_COOKIE['ss_ps'] = self::V4_B;
-		$order            = new \WC_Order();
-		( new Pixel() )->link_order_and_save( $order );
-		$this->assertSame( self::V4_A, $order->meta['_ss_pixel_visitor'] );
-		$this->assertSame( self::V4_B, $order->meta['_ss_pixel_session'] );
-		$this->assertSame( 1, $order->meta_saves );
-		( new Pixel() )->link_order_and_save( $order );
-		$this->assertSame( 1, $order->meta_saves, 'nothing changed, nothing written again' );
-	}
-
-	public function test_invalid_cookie_is_ignored_and_the_other_one_still_counts() {
-		$_COOKIE['ss_pv'] = 'not-a-uuid';
-		$_COOKIE['ss_ps'] = self::V4_B;
-		$order            = new \WC_Order();
-		( new Pixel() )->link_order( $order );
-		$this->assertArrayNotHasKey( '_ss_pixel_visitor', $order->meta );
-		$this->assertSame( self::V4_B, $order->meta['_ss_pixel_session'] );
-	}
-
-	public function test_no_cookie_leaves_an_earlier_value_alone() {
-		$order                           = new \WC_Order();
-		$order->meta['_ss_pixel_visitor'] = self::V4_A;
-		$this->assertFalse( ( new Pixel() )->link_order( $order ) );
-		$_COOKIE['ss_pv'] = '<b>';
-		$this->assertFalse( ( new Pixel() )->link_order( $order ) );
-		$this->assertSame( self::V4_A, $order->meta['_ss_pixel_visitor'] );
-	}
-
-	public function test_both_hooks_are_registered_also_in_the_admin() {
+	public function test_only_the_login_hook_is_registered_in_the_admin() {
 		Functions\when( 'is_admin' )->justReturn( true );
-		Functions\expect( 'add_action' )->with( 'woocommerce_checkout_create_order', \Mockery::any(), 10, 1 )->once();
-		Functions\expect( 'add_action' )->with( 'woocommerce_store_api_checkout_update_order_from_request', \Mockery::any(), 10, 1 )->once();
-		Functions\expect( 'add_action' )->with( 'woocommerce_store_api_checkout_order_processed', \Mockery::any(), 10, 1 )->once();
+		Functions\expect( 'add_action' )->with( 'wp_login', \Mockery::any(), 10, 2 )->once();
+		Functions\expect( 'add_action' )->with( 'woocommerce_checkout_create_order', \Mockery::any(), \Mockery::any(), \Mockery::any() )->never();
+		Functions\expect( 'add_action' )->with( 'woocommerce_store_api_checkout_update_order_from_request', \Mockery::any(), \Mockery::any(), \Mockery::any() )->never();
+		Functions\expect( 'add_action' )->with( 'woocommerce_store_api_checkout_order_processed', \Mockery::any(), \Mockery::any(), \Mockery::any() )->never();
 		Functions\expect( 'add_action' )->with( 'wp_enqueue_scripts', \Mockery::any() )->never();
 		( new Pixel() )->register();
 		$this->addToAssertionCount( 1 ); // The Mockery expectations above are checked at tear down.
 	}
 
-	// Mapper ----------------------------------------------------------------------------------------------------
-
-	public function test_mapper_sends_the_ids_and_leaves_out_bad_ones() {
+	public function test_the_order_row_carries_no_visit_or_session_id() {
 		$order                            = new \WC_Order( array( 'id' => 5 ) );
 		$order->meta['_ss_pixel_visitor'] = self::V4_A;
-		$order->meta['_ss_pixel_session'] = 'javascript:alert(1)';
+		$order->meta['_ss_pixel_session'] = self::V4_B;
 		$row                              = Mapper::order( $order );
-		$this->assertSame( self::V4_A, $row['pixel_visitor_id'] );
+		$this->assertArrayNotHasKey( 'pixel_visitor_id', $row );
 		$this->assertArrayNotHasKey( 'pixel_session_id', $row );
-		$this->assertArrayNotHasKey( 'pixel_visitor_id', Mapper::order( new \WC_Order() ) );
+	}
+
+	// Login ------------------------------------------------------------------------------------------------------
+
+	private function login_setup( $user_id = 7 ) {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		Functions\when( 'get_current_user_id' )->justReturn( $user_id );
+		Functions\when( 'delete_user_meta' )->alias(
+			function ( $id, $k ) {
+				unset( $this->user_meta[ $id ][ $k ] );
+				return true;
+			}
+		);
+	}
+
+	public function test_a_login_is_pushed_once_on_the_next_page_with_no_data() {
+		$this->login_setup();
+		( new Pixel() )->remember_login( 'anna', (object) array( 'ID' => 7 ) );
+		$this->assertArrayHasKey( '_ss_pixel_login', $this->user_meta[7] );
+		( new Pixel() )->enqueue();
+		$this->assertSame(
+			'window.ssPixel=window.ssPixel||[];window.ssPixel.push({"type":"login","data":{}});',
+			$this->inline['socialscore-pixel'][1]
+		);
+		$this->assertStringNotContainsString( '7', $this->inline['socialscore-pixel'][1], 'no user id' );
+		$this->inline = array();
+		( new Pixel() )->enqueue();
+		$this->assertCount( 1, $this->inline['socialscore-pixel'], 'the second page has no login event' );
+	}
+
+	public function test_a_stale_login_is_dropped_without_an_event() {
+		$this->login_setup();
+		$this->user_meta[7]['_ss_pixel_login'] = time() - Pixel::LOGIN_TTL - 5;
+		( new Pixel() )->enqueue();
+		$this->assertCount( 1, $this->inline['socialscore-pixel'] );
+		$this->assertArrayNotHasKey( '_ss_pixel_login', $this->user_meta[7] );
+	}
+
+	public function test_a_login_is_not_remembered_while_the_pixel_is_off() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer( false );
+		( new Pixel() )->remember_login( 'anna', (object) array( 'ID' => 7 ) );
+		$this->assertSame( array(), $this->user_meta );
+	}
+
+	public function test_a_visitor_who_is_not_logged_in_gets_no_login_event() {
+		$this->login_setup( 0 );
+		( new Pixel() )->enqueue();
+		$this->assertCount( 1, $this->inline['socialscore-pixel'] );
 	}
 
 	// State and loader -------------------------------------------------------------------------------------------

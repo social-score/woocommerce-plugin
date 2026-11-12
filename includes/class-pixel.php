@@ -10,18 +10,22 @@ namespace SocialScore;
 defined( 'ABSPATH' ) || exit;
 
 /**
- * The Pixel is a security tool: the script collects on every visit regardless of consent and only records the banner choice; nothing here reads consent.
- * The server only (a) prints the loader and the shop events when the Pixel is on and (b) copies the first-party
- * cookies ss_pv and ss_ps onto the order when it is made. The browser never links a visit to an order.
+ * The Pixel writes nothing to the visitor's device and sends no visitor or session id; the server derives the session.
+ * This class only prints the loader and the shop events when the Pixel is on. The purchase event (with the order id)
+ * is what links an order to its visit; no cookie is copied onto the order.
  */
 class Pixel {
 
-	const TRANSIENT       = 'socialscore_pixel_';
-	const STATE_TTL       = 600;
-	const FAILED_TTL      = 60;
-	const LOOKUP_TIMEOUT  = 2;
+	const TRANSIENT      = 'socialscore_pixel_';
+	const STATE_TTL      = 600;
+	const FAILED_TTL     = 60;
+	const LOOKUP_TIMEOUT = 2;
+	// Legacy order meta of plugin versions before contract v4. Nothing writes them any more; the privacy
+	// export and eraser and the uninstall still handle orders that carry them.
 	const META_VISITOR    = '_ss_pixel_visitor';
 	const META_SESSION    = '_ss_pixel_session';
+	const META_LOGIN      = '_ss_pixel_login';
+	const LOGIN_TTL       = 600;
 	const META_PURCHASE   = '_ss_pixel_purchase_sent';
 	const SESSION_EVENTS  = 'socialscore_pixel_events';
 	const MAX_QUEUED      = 20;
@@ -29,7 +33,6 @@ class Pixel {
 	const HANDLE_EVENTS   = 'socialscore-pixel-events';
 	const SITE_ID_PATTERN = '/^ps_[a-z2-7]{16}$/D';
 	const SOURCE_PATTERN  = '/^(shopify)?$/D';
-	const UUID_PATTERN    = '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/D';
 	const JSON_FLAGS      = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 
 	/**
@@ -69,15 +72,13 @@ class Pixel {
 	private $checkout_started = false;
 
 	/**
-	 * Registers hooks. The order link works in every request that creates an order; the storefront
+	 * Registers hooks. The login is noted in every request that logs a user in; the storefront
 	 * output only outside the admin.
 	 *
 	 * @return void
 	 */
 	public function register() {
-		add_action( 'woocommerce_checkout_create_order', array( $this, 'link_order' ), 10, 1 );
-		add_action( 'woocommerce_store_api_checkout_update_order_from_request', array( $this, 'link_order' ), 10, 1 );
-		add_action( 'woocommerce_store_api_checkout_order_processed', array( $this, 'link_order_and_save' ), 10, 1 );
+		add_action( 'wp_login', array( $this, 'remember_login' ), 10, 2 );
 
 		if ( is_admin() ) {
 			return;
@@ -90,64 +91,38 @@ class Pixel {
 	}
 
 	/**
-	 * Valid UUIDv4 in lower case, or an empty string.
+	 * A successful login: remember it for the user's next storefront page. The login request itself is
+	 * usually a redirect, so the event is printed by the page that follows. Only the time is kept, never an id
+	 * in the event.
 	 *
-	 * @param mixed $value Candidate.
-	 * @return string
-	 */
-	public static function uuid( $value ) {
-		$value = is_string( $value ) ? strtolower( $value ) : '';
-		return 1 === preg_match( self::UUID_PATTERN, $value ) ? $value : '';
-	}
-
-	/**
-	 * Value of a cookie the Pixel snippet writes, when it is a UUIDv4.
-	 *
-	 * @param string $name Cookie name.
-	 * @return string
-	 */
-	public static function cookie_uuid( $name ) {
-		if ( ! isset( $_COOKIE[ $name ] ) || ! is_string( $_COOKIE[ $name ] ) ) {
-			return '';
-		}
-		return self::uuid( sanitize_text_field( wp_unslash( $_COOKIE[ $name ] ) ) );
-	}
-
-	/**
-	 * Copies the visit cookies onto an order that is being created. A value that is not a UUIDv4 is ignored
-	 * and an earlier valid value stays.
-	 *
-	 * @param \WC_Order $order Order.
-	 * @return bool True when the order meta changed.
-	 */
-	public function link_order( $order ) {
-		if ( ! is_object( $order ) || ! method_exists( $order, 'update_meta_data' ) ) {
-			return false;
-		}
-		$changed = false;
-		foreach ( array(
-			self::META_VISITOR => 'ss_pv',
-			self::META_SESSION => 'ss_ps',
-		) as $meta_key => $cookie ) {
-			$value = self::cookie_uuid( $cookie );
-			if ( '' !== $value && $order->get_meta( $meta_key ) !== $value ) {
-				$order->update_meta_data( $meta_key, $value );
-				$changed = true;
-			}
-		}
-		return $changed;
-	}
-
-	/**
-	 * Block checkout, after the order exists: the same link, written through.
-	 *
-	 * @param \WC_Order $order Order.
+	 * @param string   $user_login Login name.
+	 * @param \WP_User $user       User.
 	 * @return void
 	 */
-	public function link_order_and_save( $order ) {
-		if ( $this->link_order( $order ) ) {
-			$order->save_meta_data();
+	public function remember_login( $user_login, $user = null ) {
+		unset( $user_login );
+		if ( ! is_object( $user ) || empty( $user->ID ) || '' === $this->active_site_id() ) {
+			return;
 		}
+		update_user_meta( (int) $user->ID, self::META_LOGIN, time() );
+	}
+
+	/**
+	 * The login event of the current user, once, when the login was recent.
+	 *
+	 * @return array|null The event, or null when there is none.
+	 */
+	private function login_event() {
+		$user_id = (int) get_current_user_id();
+		if ( $user_id <= 0 ) {
+			return null;
+		}
+		$at = (int) get_user_meta( $user_id, self::META_LOGIN, true );
+		if ( 0 === $at ) {
+			return null;
+		}
+		delete_user_meta( $user_id, self::META_LOGIN );
+		return ( time() - $at ) <= self::LOGIN_TTL ? self::event( 'login', array() ) : null;
 	}
 
 	/**
@@ -255,7 +230,7 @@ class Pixel {
 	private static function event( $type, array $data ) {
 		return array(
 			'type' => $type,
-			'data' => $data,
+			'data' => $data ? $data : new \stdClass(),
 		);
 	}
 
@@ -321,6 +296,11 @@ class Pixel {
 			if ( $event ) {
 				$events[] = $event;
 			}
+		}
+
+		$login = $this->login_event();
+		if ( $login ) {
+			$events[] = $login;
 		}
 
 		$session = function_exists( 'WC' ) ? WC()->session : null;

@@ -11,7 +11,8 @@ WooCommerce 8.0+, HPOS compatible. GPL-2.0-or-later. Slug and text domain: `soci
 | REST proxy `/wp-json/socialscore/v1/proxy/*` (nonce, `manage_woocommerce`, path allow-list; the key stays on the server) | `includes/class-rest-proxy.php` |
 | First import and real-time sync (Action Scheduler, batches of 500, backoff, `Retry-After`) | `includes/class-sync.php`, `class-mapper.php` |
 | Automatic checks with an Idempotency-Key per order/customer, labels and order notes | `includes/class-enrichment.php`, `class-labels.php` |
-| Personal data export and erase (`wp_privacy_personal_data_exporters` / `_erasers`) call `GET .../customers/{id}/export` and `DELETE .../customers/{id}` for the account id and the guest id of the email; the export also lists, and the eraser removes, the Pixel visit and session ids kept on the email's orders (`_ss_pixel_visitor`, `_ss_pixel_session`) | `includes/class-privacy.php` |
+| Personal data export and erase (`wp_privacy_personal_data_exporters` / `_erasers`) call `GET .../customers/{id}/export` and `DELETE .../customers/{id}` for the account id and the guest id of the email; the export also lists, and the eraser removes, the Pixel visit and session ids that older plugin versions left on the email's orders (`_ss_pixel_visitor`, `_ss_pixel_session`; the plugin no longer writes them) | `includes/class-privacy.php` |
+| Pixel on the storefront: loader, shop events, and a `login` event on the page after a login (no cookie copied onto orders, no user id sent) | `includes/class-pixel.php` |
 | Order meta box (HPOS aware), user profile section, orders list column | `includes/class-check-panels.php` |
 | Admin dashboard (plugin-core `StoreDashboard`) | `includes/class-admin-page.php`, `src/js/dashboard.tsx` |
 

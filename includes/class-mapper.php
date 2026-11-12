@@ -185,8 +185,6 @@ class Mapper {
 				'shipping_city'        => self::cut( $ship_city, 256 ),
 				'shipping_postcode'    => self::cut( $ship_postcode, 32 ),
 				'shipping_country'     => self::country( $ship_country ),
-				'pixel_visitor_id'     => Pixel::uuid( $order->get_meta( Pixel::META_VISITOR ) ),
-				'pixel_session_id'     => Pixel::uuid( $order->get_meta( Pixel::META_SESSION ) ),
 			)
 		);
 	}
