@@ -55,9 +55,8 @@ npm run dist && docker compose -f tests/smoke/docker-compose.yml run --rm smoke;
 `vendor-js/` holds `@socialscore/ui` and `@socialscore/plugin-core` unpacked from `npm pack` (consumed with `file:`;
 unpacked because Plugin Check refuses compressed files in the zip) until GitHub Packages publishing exists. To update
 one, extract the new tarball over its folder, then run `npm install` and `npm run gen:messages` to refresh
-`includes/class-messages.php`, the translatable catalogue of the shared screens. The catalogue already has the
-plugin-core 0.4.0 texts (signals, `info_bot`, no bot score); until 0.4.0 is vendored, `adaptSession` in `src/js/host.ts`
-makes the 0.3.1 panel show the new session answers, and it is deleted with that re-vendor.
+`includes/class-messages.php`, the translatable catalogue of the shared screens. The catalogue has the
+plugin-core 0.4.0 texts (signals, `info_bot`, no bot score).
 
 ## Release zip
 

@@ -186,9 +186,26 @@ var P = {
 	"session.title": "Visit on the shop",
 	"session.class.human": "Human",
 	"session.class.lurker": "Passive visitor",
-	"session.class.bad_bot": "Bad bot",
+	"session.class.info_bot": "Known bot",
 	"session.class.ai_agent": "AI agent",
-	"session.botScore": "Bot score: {score}",
+	"session.class.bad_bot": "Bad bot",
+	"session.signals": "Why the Pixel classified the visit this way",
+	"session.signal.webdriver": "Controlled by an automation tool",
+	"session.signal.headless_ua": "Headless browser",
+	"session.signal.software_gpu": "Software graphics renderer, as in virtual machines",
+	"session.signal.empty_screen": "No screen size reported",
+	"session.signal.no_interaction": "No mouse, key or scroll",
+	"session.signal.idle_heartbeats": "Stayed on the page with no activity",
+	"session.signal.page_burst": "Many pages in a very short time",
+	"session.signal.device_farm": "Device farm: many devices run by one operator",
+	"session.signal.fp_many_ips": "The same device from many networks",
+	"session.signal.impossible_device": "Device values that no real device has",
+	"session.signal.tz_country_mismatch": "Time zone does not fit the country",
+	"session.signal.lang_country_mismatch": "Browser language does not fit the country",
+	"session.signal.robotic_typing": "Typing with machine-like rhythm",
+	"session.signal.signature_agent": "Signed as an AI agent",
+	"session.signal.declared_bot": "Declares itself as a bot",
+	"session.signal.declared_agent": "Declares itself as an AI agent",
 	"session.pages": "Pages read: {count}",
 	"session.lastSeen": "Last seen {date}",
 	"session.deviceFarm": "A visit came from a device farm. Treat it with caution.",
@@ -454,10 +471,31 @@ function W(e) {
 var G = {
 	human: "success",
 	lurker: "neutral",
-	bad_bot: "error",
-	ai_agent: "warning"
-};
-function K({ kind: e, externalId: n }) {
+	info_bot: "neutral",
+	ai_agent: "warning",
+	bad_bot: "error"
+}, K = [
+	"webdriver",
+	"headless_ua",
+	"software_gpu",
+	"empty_screen",
+	"no_interaction",
+	"idle_heartbeats",
+	"page_burst",
+	"device_farm",
+	"fp_many_ips",
+	"impossible_device",
+	"tz_country_mismatch",
+	"lang_country_mismatch",
+	"robotic_typing",
+	"signature_agent",
+	"declared_bot",
+	"declared_agent"
+];
+function q(e) {
+	return K.includes(e);
+}
+function oe({ kind: e, externalId: n }) {
 	let r = z(), i = V(), { data: a, error: o } = W(t(() => e === "order" ? r.getOrderSession(n) : r.getCustomerSession(n), [
 		r,
 		e,
@@ -471,14 +509,15 @@ function K({ kind: e, externalId: n }) {
 		children: [
 			/* @__PURE__ */ l("p", {
 				className: "ss-pc-text",
-				children: [
-					/* @__PURE__ */ c(u, {
-						variant: s ? G[a.class] : "neutral",
-						children: s ? i(`session.class.${a.class}`) : a.class
-					}),
-					" ",
-					/* @__PURE__ */ c("span", { children: i("session.botScore", { score: a.botScore }) })
-				]
+				children: [/* @__PURE__ */ c(u, {
+					variant: s ? G[a.class] : "neutral",
+					children: s ? i(`session.class.${a.class}`) : a.class
+				}), " "]
+			}),
+			a.signals && a.signals.length > 0 && /* @__PURE__ */ c("ul", {
+				className: "ss-pc-muted",
+				"aria-label": i("session.signals"),
+				children: a.signals.map((e) => /* @__PURE__ */ c("li", { children: q(e) ? i(`session.signal.${e}`) : e }, e))
 			}),
 			/* @__PURE__ */ l("p", {
 				className: "ss-pc-muted",
@@ -497,7 +536,7 @@ function K({ kind: e, externalId: n }) {
 }
 //#endregion
 //#region src/screens/CheckPanel.tsx
-function q({ kind: e, externalId: t }) {
+function se({ kind: e, externalId: t }) {
 	let n = z(), r = B(), i = V(), [u, p] = o(!1), [m, h] = o(), [_, v] = o(), y = a(void 0);
 	return /* @__PURE__ */ c(f, {
 		title: i("check.title"),
@@ -506,7 +545,7 @@ function q({ kind: e, externalId: t }) {
 		children: /* @__PURE__ */ l("div", {
 			className: "ss-pc-panel",
 			children: [
-				/* @__PURE__ */ c(K, {
+				/* @__PURE__ */ c(oe, {
 					kind: e,
 					externalId: t
 				}),
@@ -550,12 +589,12 @@ function q({ kind: e, externalId: t }) {
 		})
 	});
 }
-function oe(e) {
-	return /* @__PURE__ */ c(q, { ...e }, `${e.kind}:${e.externalId}`);
+function ce(e) {
+	return /* @__PURE__ */ c(se, { ...e }, `${e.kind}:${e.externalId}`);
 }
 //#endregion
 //#region src/screens/ConnectScreen.tsx
-function se({ connectUrl: e }) {
+function le({ connectUrl: e }) {
 	let t = B(), n = V();
 	return /* @__PURE__ */ l(f, {
 		title: n("connect.title"),
@@ -574,10 +613,10 @@ function se({ connectUrl: e }) {
 }
 //#endregion
 //#region src/components/FieldRow.tsx
-function ce(e, t, n) {
+function ue(e, t, n) {
 	return typeof e == "boolean" ? e ? t : n : typeof e == "object" ? JSON.stringify(e) : String(e);
 }
-function le({ label: e, field: t }) {
+function de({ label: e, field: t }) {
 	let n = V(), r = t.confidenceLevel, i = [
 		t.sourceDetail ? `${L(t.source)}: ${t.sourceDetail}` : n("profile.source", { source: L(t.source) }),
 		t.reason ? n("profile.reason", { reason: t.reason }) : "",
@@ -593,7 +632,7 @@ function le({ label: e, field: t }) {
 			children: [
 				/* @__PURE__ */ c("span", {
 					className: "ss-pc-field-value",
-					children: t.masked ? n("profile.masked") : t.value === void 0 ? n("profile.noValue") : ce(t.value, n("common.yes"), n("common.no"))
+					children: t.masked ? n("profile.masked") : t.value === void 0 ? n("profile.noValue") : ue(t.value, n("common.yes"), n("common.no"))
 				}),
 				r && /* @__PURE__ */ c(u, {
 					variant: r,
@@ -615,7 +654,7 @@ function J(e) {
 }
 //#endregion
 //#region src/screens/ProfileView.tsx
-var ue = [
+var fe = [
 	"identity",
 	"contact",
 	"digitalFootprint",
@@ -626,7 +665,7 @@ var ue = [
 	"segments",
 	"ownData"
 ];
-function de(e) {
+function pe(e) {
 	let t = [];
 	return Object.entries(e).forEach(([e, n]) => {
 		(Array.isArray(n) ? n : [n]).forEach((n, r) => {
@@ -660,11 +699,11 @@ function Y({ kind: e, externalId: n, onBack: r }) {
 		i,
 		e,
 		n
-	])), h = o?.categories ?? {}, _ = ue.map((e) => {
+	])), h = o?.categories ?? {}, _ = fe.map((e) => {
 		let t = h[e];
 		return {
 			name: e,
-			rows: t && t.status === "available" ? de(t.fields) : []
+			rows: t && t.status === "available" ? pe(t.fields) : []
 		};
 	}).filter((e) => e.rows.length > 0);
 	return /* @__PURE__ */ l("div", {
@@ -692,7 +731,7 @@ function Y({ kind: e, externalId: n, onBack: r }) {
 				headingLevel: 3,
 				children: /* @__PURE__ */ c("dl", {
 					className: "ss-pc-fields",
-					children: t.map((e) => /* @__PURE__ */ c(le, {
+					children: t.map((e) => /* @__PURE__ */ c(de, {
 						label: e.label,
 						field: e.field
 					}, e.key))
@@ -709,12 +748,12 @@ var X = [
 	"orderNewCustomer",
 	"orderAnyCustomer",
 	"manualOnly"
-], fe = {
+], me = {
 	active: "success",
 	disconnected: "warning",
 	uninstalled: "error"
 };
-function pe() {
+function he() {
 	let e = z(), n = B(), i = V(), { data: a, error: s, loading: u } = W(t(() => e.getPixel(), [e])), [d, f] = o(), [p, m] = o(!1), [h, g] = o();
 	if (r(() => {
 		a && f(a);
@@ -815,7 +854,7 @@ function Z() {
 			k && /* @__PURE__ */ l("p", {
 				className: "ss-pc-status",
 				children: [/* @__PURE__ */ l("span", { children: [i("settings.status"), ": "] }), /* @__PURE__ */ c(u, {
-					variant: fe[k],
+					variant: me[k],
 					children: i(`settings.status.${k}`)
 				})]
 			}),
@@ -875,13 +914,13 @@ function Z() {
 					children: i("common.save")
 				})
 			}),
-			/* @__PURE__ */ c(pe, {})
+			/* @__PURE__ */ c(he, {})
 		]
 	});
 }
 //#endregion
 //#region src/screens/StoreDashboard.tsx
-var me = [
+var ge = [
 	"overview",
 	"profiles",
 	"segments",
@@ -894,7 +933,7 @@ function Q({ level: e }) {
 		children: t(`level.${e}`)
 	}) : null;
 }
-function he({ openProfile: e }) {
+function _e({ openProfile: e }) {
 	let n = z(), r = V(), { data: i, error: a, loading: o, reload: s } = W(t(() => n.getOverview(), [n]));
 	if (a !== void 0) return /* @__PURE__ */ c(U, {
 		error: a,
@@ -977,7 +1016,7 @@ function he({ openProfile: e }) {
 	});
 }
 var $ = 20;
-function ge({ openProfile: e }) {
+function ve({ openProfile: e }) {
 	let n = z(), r = V(), [i, a] = o(1), { data: s, error: l, loading: u, reload: f } = W(t(() => n.listCheckedCustomers(i, $), [n, i]));
 	if (l !== void 0) return /* @__PURE__ */ c(U, {
 		error: l,
@@ -1041,7 +1080,7 @@ function ge({ openProfile: e }) {
 		empty: /* @__PURE__ */ c(m, { title: r("profiles.empty") })
 	});
 }
-function _e() {
+function ye() {
 	let e = z(), n = V(), { data: r, error: i, loading: a, reload: o } = W(t(() => e.listSegments(), [e]));
 	if (i !== void 0) return /* @__PURE__ */ c(U, {
 		error: i,
@@ -1068,7 +1107,7 @@ function _e() {
 		empty: /* @__PURE__ */ c(m, { title: n("segments.empty") })
 	})] });
 }
-function ve({ initialProfile: e, initialTab: t = "overview" }) {
+function be({ initialProfile: e, initialTab: t = "overview" }) {
 	let n = V(), [r, i] = o(t), [a, s] = o(e);
 	return a ? /* @__PURE__ */ c(Y, {
 		kind: a.kind,
@@ -1085,22 +1124,22 @@ function ve({ initialProfile: e, initialTab: t = "overview" }) {
 			children: [
 				/* @__PURE__ */ c(y, {
 					"aria-label": n("dashboard.tabs"),
-					children: me.map((e) => /* @__PURE__ */ c(v, {
+					children: ge.map((e) => /* @__PURE__ */ c(v, {
 						value: e,
 						children: n(`dashboard.tab.${e}`)
 					}, e))
 				}),
 				/* @__PURE__ */ c(b, {
 					value: "overview",
-					children: /* @__PURE__ */ c(he, { openProfile: s })
+					children: /* @__PURE__ */ c(_e, { openProfile: s })
 				}),
 				/* @__PURE__ */ c(b, {
 					value: "profiles",
-					children: /* @__PURE__ */ c(ge, { openProfile: s })
+					children: /* @__PURE__ */ c(ve, { openProfile: s })
 				}),
 				/* @__PURE__ */ c(b, {
 					value: "segments",
-					children: /* @__PURE__ */ c(_e, {})
+					children: /* @__PURE__ */ c(ye, {})
 				}),
 				/* @__PURE__ */ c(b, {
 					value: "settings",
@@ -1111,6 +1150,6 @@ function ve({ initialProfile: e, initialTab: t = "overview" }) {
 	});
 }
 //#endregion
-export { M as ApiClient, O as ApiError, oe as CheckPanel, se as ConnectScreen, te as PluginProvider, Y as ProfileView, Z as SettingsScreen, ve as StoreDashboard, k as batchIdMap, P as messages, F as profilePath };
+export { M as ApiClient, O as ApiError, ce as CheckPanel, le as ConnectScreen, te as PluginProvider, Y as ProfileView, Z as SettingsScreen, be as StoreDashboard, k as batchIdMap, P as messages, F as profilePath };
 
 //# sourceMappingURL=index.js.map

@@ -1,4 +1,4 @@
-import { adaptSession, createHost, parseProfile, profileUrl, proxyUrl } from '../../src/js/host';
+import { createHost, parseProfile, profileUrl, proxyUrl } from '../../src/js/host';
 
 describe('proxyUrl', () => {
 	it('joins pretty permalinks', () => {
@@ -87,26 +87,6 @@ describe('createHost', () => {
 		const host = createHost({ ...config, translations: { 'error.rateLimited': 'Твърде много заявки: {seconds} s' } });
 		expect(host.t?.('error.rateLimited', { seconds: 7 })).toBe('Твърде много заявки: 7 s');
 		expect(host.t?.('unknown.key')).toBe('unknown.key');
-	});
-
-	it('shows no bot score and labels the info_bot class for the 0.3.1 panel', () => {
-		const host = createHost({ ...config, translations: { 'session.class.info_bot': 'Known bot' } });
-		expect(host.t?.('session.botScore')).toBe('');
-		expect(adaptSession({ class: 'info_bot', pages: 1 }, { 'session.class.info_bot': 'Known bot' })).toEqual({ class: 'Known bot', pages: 1 });
-		expect(adaptSession({ class: 'human', signals: [], pages: 1 }, {})).toEqual({ class: 'human', signals: [], pages: 1 });
-		expect(adaptSession(null, {})).toBeNull();
-	});
-
-	it('adapts a session answer that has no bot_score, and leaves other answers alone', async () => {
-		const answer = { class: 'info_bot', signals: ['declared_bot'], device_farm: false, pages: 2, last_seen_at: '2026-11-12T10:00:00Z' };
-		globalThis.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify(answer), { status: 200 })) as unknown as typeof fetch;
-		const host = createHost({ ...config, translations: { 'session.class.info_bot': 'Known bot' } });
-		const session = await host.apiFetch('/api/v2/stores/4/orders/12/session');
-		expect(await session.json()).toEqual({ ...answer, class: 'Known bot' });
-
-		globalThis.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify({ class: 'info_bot' }), { status: 200 })) as unknown as typeof fetch;
-		const other = await host.apiFetch('/api/v2/stores/4/customers?page=1');
-		expect(await other.json()).toEqual({ class: 'info_bot' });
 	});
 
 	it('toast writes an accessible status line', () => {
