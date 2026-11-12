@@ -57,13 +57,42 @@ function toRecord(init: HeadersInit | undefined): Record<string, string> {
 	return out;
 }
 
+/** Classes the vendored plugin-core 0.3.1 panel knows how to label. */
+const LEGACY_CLASSES = ['human', 'lurker', 'bad_bot', 'ai_agent'];
+
+/**
+ * Contract v4 answers carry no bot score, have `info_bot` as a class and list `signals`. The
+ * vendored plugin-core 0.3.1 panel cannot show that shape: it prints a raw `info_bot` and a score
+ * that is not there. Until plugin-core 0.4.0 is vendored this gives the panel a class it can label.
+ * Delete it, and the `session.botScore` branch of `t`, with that re-vendor.
+ */
+export function adaptSession(answer: unknown, translations: Record<string, string>): unknown {
+	if (!answer || typeof answer !== 'object') {
+		return answer;
+	}
+	const session = answer as Record<string, unknown>;
+	if (typeof session.class === 'string' && !LEGACY_CLASSES.includes(session.class)) {
+		return { ...session, class: translations[`session.class.${session.class}`] ?? session.class };
+	}
+	return answer;
+}
+
 export function createHost(config: HostConfig): PluginHost {
 	const translations = config.translations ?? {};
 	return {
 		platform: 'woocommerce',
-		apiFetch(path, init = {}) {
+		async apiFetch(path, init = {}) {
 			const headers = { ...toRecord(init.headers), 'X-WP-Nonce': config.nonce };
-			return fetch(proxyUrl(config.restUrl, path), { ...init, headers, credentials: 'same-origin' });
+			const response = await fetch(proxyUrl(config.restUrl, path), { ...init, headers, credentials: 'same-origin' });
+			if (!response.ok || !/\/session$/.test(path.split('?')[0])) {
+				return response;
+			}
+			try {
+				const body = adaptSession(await response.clone().json(), translations);
+				return new Response(JSON.stringify(body), { status: response.status, headers: { 'Content-Type': 'application/json' } });
+			} catch {
+				return response;
+			}
 		},
 		navigate(to) {
 			if (/^https?:\/\//.test(to)) {
@@ -92,6 +121,9 @@ export function createHost(config: HostConfig): PluginHost {
 			}, 5000);
 		},
 		t(key, vars) {
+			if (key === 'session.botScore') {
+				return '';
+			}
 			const text = translations[key] ?? key;
 			return vars ? text.replace(/\{(\w+)\}/g, (whole, name) => (name in vars ? String(vars[name]) : whole)) : text;
 		},
