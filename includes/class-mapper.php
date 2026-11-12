@@ -146,8 +146,8 @@ class Mapper {
 	}
 
 	/**
-	 * Row for orders:batch. Items carry product data only, no personal data. The visit ids are the Pixel cookies the
-	 * server stored when the order was made; a value that is not a UUIDv4 is left out.
+	 * Row for orders:batch. Items carry product data only, no personal data. cart_token is the checkout reference the
+	 * order carried from its own checkout (Pixel::capture_*); a value that is not a UUIDv4 is left out.
 	 *
 	 * @param \WC_Order $order Order.
 	 * @return array
@@ -185,8 +185,20 @@ class Mapper {
 				'shipping_city'        => self::cut( $ship_city, 256 ),
 				'shipping_postcode'    => self::cut( $ship_postcode, 32 ),
 				'shipping_country'     => self::country( $ship_country ),
+				'cart_token'           => self::checkout_ref( $order ),
 			)
 		);
+	}
+
+	/**
+	 * The checkout reference kept on an order, or an empty string when it has none or the value is not a UUIDv4.
+	 *
+	 * @param \WC_Order $order Order.
+	 * @return string
+	 */
+	private static function checkout_ref( $order ) {
+		$ref = (string) $order->get_meta( Pixel::META_REF );
+		return 1 === preg_match( Pixel::REF_PATTERN, $ref ) ? $ref : '';
 	}
 
 	/**

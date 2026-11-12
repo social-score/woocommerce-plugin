@@ -12,7 +12,10 @@ defined( 'ABSPATH' ) || exit;
 /**
  * The Pixel writes nothing to the visitor's device and sends no visitor or session id; the server derives the session.
  * This class only prints the loader and the shop events when the Pixel is on. The purchase event (with the order id)
- * is what links an order to its visit; no cookie is copied onto the order.
+ * is kept for analytics only. The one order link is the checkout reference: the plugin makes a random UUIDv4 in the
+ * WooCommerce session when it renders the checkout, the Pixel sends it as cart_token with begin_checkout, the checkout
+ * posts it back (hidden field, or Store API extension data in the Checkout block) and an order keeps it only when it
+ * equals the one in the session of the buyer who placed that order. No cookie is copied onto the order.
  */
 class Pixel {
 
@@ -22,10 +25,16 @@ class Pixel {
 	const LOOKUP_TIMEOUT = 2;
 	// Legacy order meta of plugin versions before contract v4. Nothing writes them any more; the privacy
 	// export and eraser and the uninstall still handle orders that carry them.
-	const META_VISITOR    = '_ss_pixel_visitor';
-	const META_SESSION    = '_ss_pixel_session';
-	const META_LOGIN      = '_ss_pixel_login';
-	const LOGIN_TTL       = 600;
+	const META_VISITOR = '_ss_pixel_visitor';
+	const META_SESSION = '_ss_pixel_session';
+	const META_LOGIN   = '_ss_pixel_login';
+	const LOGIN_TTL    = 600;
+	// Checkout reference: order meta, session key, posted field name, Store API extension namespace.
+	const META_REF        = '_ss_checkout_ref';
+	const SESSION_REF     = 'socialscore_checkout_ref';
+	const REF_FIELD       = 'ss_checkout_ref';
+	const REF_NAMESPACE   = 'socialscore';
+	const REF_PATTERN     = '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/D';
 	const META_PURCHASE   = '_ss_pixel_purchase_sent';
 	const SESSION_EVENTS  = 'socialscore_pixel_events';
 	const MAX_QUEUED      = 20;
@@ -88,6 +97,144 @@ class Pixel {
 		add_action( 'woocommerce_thankyou', array( $this, 'purchase' ), 10, 1 );
 		add_action( 'woocommerce_before_checkout_form', array( $this, 'begin_checkout_classic' ), 10, 0 );
 		add_filter( 'woocommerce_loop_add_to_cart_args', array( $this, 'loop_button_args' ), 10, 2 );
+
+		// The checkout reference: classic form field and Checkout block extension data.
+		add_action( 'woocommerce_checkout_after_customer_details', array( $this, 'print_ref_field' ), 10, 0 );
+		add_action( 'woocommerce_checkout_create_order', array( $this, 'capture_classic_ref' ), 10, 2 );
+		add_action( 'woocommerce_store_api_checkout_update_order_from_request', array( $this, 'capture_block_ref' ), 10, 2 );
+		add_action( 'woocommerce_cart_emptied', array( $this, 'forget_ref' ), 10, 0 );
+		add_action( 'init', array( $this, 'register_store_api_data' ), 10, 0 );
+	}
+
+	/**
+	 * The checkout reference of this shopper's WooCommerce session: a random UUIDv4 made on first use and kept until
+	 * the cart is emptied by an order. Empty when there is no session.
+	 *
+	 * @return string
+	 */
+	private function checkout_ref() {
+		$session = function_exists( 'WC' ) ? WC()->session : null;
+		if ( ! $session ) {
+			return '';
+		}
+		$ref = $session->get( self::SESSION_REF );
+		if ( ! is_string( $ref ) || 1 !== preg_match( self::REF_PATTERN, $ref ) ) {
+			$ref = wp_generate_uuid4();
+			$session->set( self::SESSION_REF, $ref );
+		}
+		return $ref;
+	}
+
+	/**
+	 * Classic checkout: the reference as a hidden field of the form, only while the Pixel is on and the cart has items.
+	 *
+	 * @return void
+	 */
+	public function print_ref_field() {
+		if ( '' === $this->active_site_id() ) {
+			return;
+		}
+		$cart = function_exists( 'WC' ) ? WC()->cart : null;
+		if ( ! $cart || $cart->is_empty() ) {
+			return;
+		}
+		$ref = $this->checkout_ref();
+		if ( '' !== $ref ) {
+			echo '<input type="hidden" name="' . esc_attr( self::REF_FIELD ) . '" value="' . esc_attr( $ref ) . '" />';
+		}
+	}
+
+	/**
+	 * Keeps a posted reference on the order, only when it is the one of this shopper's own session. A reference the
+	 * order did not carry from its own checkout (missing, malformed, or someone else's) is dropped.
+	 *
+	 * @param \WC_Order $order  Order, not yet saved.
+	 * @param mixed     $posted The posted value.
+	 * @return void
+	 */
+	private function accept_ref( $order, $posted ) {
+		if ( ! is_string( $posted ) || 1 !== preg_match( self::REF_PATTERN, $posted ) || ! $order || '' !== (string) $order->get_meta( self::META_REF ) ) {
+			return;
+		}
+		$session = function_exists( 'WC' ) ? WC()->session : null;
+		$own     = $session ? $session->get( self::SESSION_REF ) : null;
+		if ( is_string( $own ) && hash_equals( $own, $posted ) ) {
+			$order->update_meta_data( self::META_REF, $posted );
+		}
+	}
+
+	/**
+	 * Classic checkout: reads the hidden field. WooCommerce has verified its checkout nonce before this hook runs.
+	 *
+	 * @param \WC_Order $order Order, not yet saved.
+	 * @param array     $data  Posted checkout data.
+	 * @return void
+	 */
+	public function capture_classic_ref( $order, $data = array() ) {
+		unset( $data );
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- The WooCommerce checkout nonce is verified before woocommerce_checkout_create_order.
+		$posted = isset( $_POST[ self::REF_FIELD ] ) ? sanitize_text_field( wp_unslash( $_POST[ self::REF_FIELD ] ) ) : '';
+		$this->accept_ref( $order, $posted );
+	}
+
+	/**
+	 * Checkout block: reads the Store API extension data the block posted with the order.
+	 *
+	 * @param \WC_Order        $order   Order, not yet saved.
+	 * @param \WP_REST_Request $request Checkout request.
+	 * @return void
+	 */
+	public function capture_block_ref( $order, $request ) {
+		$extensions = is_object( $request ) ? $request->get_param( 'extensions' ) : null;
+		$posted     = is_array( $extensions ) && isset( $extensions[ self::REF_NAMESPACE ][ self::REF_FIELD ] ) ? $extensions[ self::REF_NAMESPACE ][ self::REF_FIELD ] : '';
+		$this->accept_ref( $order, $posted );
+	}
+
+	/**
+	 * An emptied cart ends the checkout: the next one gets a new reference.
+	 *
+	 * @return void
+	 */
+	public function forget_ref() {
+		$session = function_exists( 'WC' ) ? WC()->session : null;
+		if ( $session ) {
+			$session->set( self::SESSION_REF, null );
+		}
+	}
+
+	/**
+	 * Tells the Store API that the Checkout block may post the reference under its own extension namespace. It is
+	 * never returned in a response.
+	 *
+	 * @return void
+	 */
+	public function register_store_api_data() {
+		if ( ! function_exists( 'woocommerce_store_api_register_endpoint_data' ) ) {
+			return;
+		}
+		woocommerce_store_api_register_endpoint_data(
+			array(
+				'endpoint'        => 'checkout',
+				'namespace'       => self::REF_NAMESPACE,
+				'schema_callback' => static function () {
+					return array(
+						self::REF_FIELD => array(
+							'description' => 'Checkout reference made by the SocialScore plugin.',
+							'type'        => array( 'string', 'null' ),
+							'context'     => array(),
+							'arg_options' => array(
+								'validate_callback' => static function ( $value ) {
+									return null === $value || ( is_string( $value ) && ( '' === $value || 1 === preg_match( self::REF_PATTERN, $value ) ) );
+								},
+							),
+						),
+					);
+				},
+				'data_callback'   => static function () {
+					return array();
+				},
+			)
+		);
 	}
 
 	/**
@@ -334,14 +481,16 @@ class Pixel {
 			return null;
 		}
 		$this->checkout_started = true;
-		return self::event(
-			'begin_checkout',
-			array(
-				'value'    => (float) $cart->get_total( 'edit' ),
-				'currency' => (string) get_woocommerce_currency(),
-				'items'    => count( $cart->get_cart() ),
-			)
+		$data                   = array(
+			'value'    => (float) $cart->get_total( 'edit' ),
+			'currency' => (string) get_woocommerce_currency(),
+			'items'    => count( $cart->get_cart() ),
 		);
+		$ref                    = $this->checkout_ref();
+		if ( '' !== $ref ) {
+			$data['cart_token'] = $ref;
+		}
+		return self::event( 'begin_checkout', $data );
 	}
 
 	/**
@@ -384,6 +533,14 @@ class Pixel {
 			'currency' => (string) get_woocommerce_currency(),
 			'storeApi' => esc_url_raw( rest_url( 'wc/store/v1/' ) ),
 		);
+		// The Checkout block posts the reference back as Store API extension data: the bundle reads it from here.
+		if ( function_exists( 'is_checkout' ) && is_checkout() && ! ( function_exists( 'is_order_received_page' ) && is_order_received_page() ) && ! ( function_exists( 'is_checkout_pay_page' ) && is_checkout_pay_page() ) ) {
+			$cart = function_exists( 'WC' ) ? WC()->cart : null;
+			$ref  = $cart && ! $cart->is_empty() ? $this->checkout_ref() : '';
+			if ( '' !== $ref ) {
+				$config['checkoutRef'] = $ref;
+			}
+		}
 		wp_add_inline_script( self::HANDLE_EVENTS, 'window.socialscorePixel=' . wp_json_encode( $config, self::JSON_FLAGS ) . ';', 'before' );
 	}
 

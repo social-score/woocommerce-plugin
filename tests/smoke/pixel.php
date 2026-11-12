@@ -94,22 +94,30 @@ WC()->cart->empty_cart();
 WC()->cart->add_to_cart( $product->get_id(), 1 );
 $_COOKIE['ss_pv'] = $V4_A;
 $_COOKIE['ss_ps'] = $V4_B;
+WC()->session->set( 'socialscore_checkout_ref', $V4_A );
+$_POST['ss_checkout_ref'] = $V4_A;
 $id1   = WC()->checkout()->create_order( $address );
 $order = wc_get_order( $id1 );
 ss_assert( $order && '' === $order->get_meta( '_ss_pixel_visitor' ) && '' === $order->get_meta( '_ss_pixel_session' ), 'classic checkout stores no visit or session id in the order meta (HPOS: ' . ( \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled() ? 'on' : 'off' ) . ')' );
+ss_assert( $V4_A === $order->get_meta( '_ss_checkout_ref' ), 'classic checkout keeps the posted checkout ref that is the one of its own session' );
 WC()->cart->empty_cart();
 WC()->cart->add_to_cart( $product->get_id(), 1 );
 $_COOKIE['ss_pv'] = "' OR 1=1 --";
 $_COOKIE['ss_ps'] = '3f2b8c1e-5d4a-1b7e-9c3d-1a2b3c4d5e6f';
+WC()->session->set( 'socialscore_checkout_ref', $V4_A );
+$_POST['ss_checkout_ref'] = $V4_B; // A ref the session never made.
 $id2    = WC()->checkout()->create_order( $address );
 $order2 = wc_get_order( $id2 );
 ss_assert( $order2 && '' === $order2->get_meta( '_ss_pixel_visitor' ) && '' === $order2->get_meta( '_ss_pixel_session' ), 'classic checkout with a junk cookie still makes the order and stores no id' );
+ss_assert( '' === (string) $order2->get_meta( '_ss_checkout_ref' ), 'classic checkout drops a posted ref that is not the one of its own session' );
+unset( $_POST['ss_checkout_ref'] );
 
 // 4. Block checkout through the Store API route.
 WC()->cart->empty_cart();
 WC()->cart->add_to_cart( $product->get_id(), 1 );
 $_COOKIE['ss_pv'] = $V4_B;
 $_COOKIE['ss_ps'] = $V4_A;
+WC()->session->set( 'socialscore_checkout_ref', $V4_B );
 $req = new WP_REST_Request( 'POST', '/wc/store/v1/checkout' );
 $req->set_header( 'Content-Type', 'application/json' );
 $req->set_header( 'Nonce', wp_create_nonce( 'wc_store_api' ) );
@@ -117,12 +125,15 @@ $req->set_body( wp_json_encode( array(
 	'billing_address'  => array( 'first_name' => 'Ana', 'last_name' => 'Ivanova', 'email' => 'blocks@example.test', 'country' => 'BG', 'address_1' => 'A 1', 'city' => 'Sofia', 'postcode' => '1000', 'phone' => '0888123456', 'state' => '', 'address_2' => '', 'company' => '' ),
 	'shipping_address' => array( 'first_name' => 'Ana', 'last_name' => 'Ivanova', 'country' => 'BG', 'address_1' => 'A 1', 'city' => 'Sofia', 'postcode' => '1000', 'phone' => '', 'state' => '', 'address_2' => '', 'company' => '' ),
 	'payment_method'   => 'cod',
+	'extensions'       => array( 'socialscore' => array( 'ss_checkout_ref' => $V4_B ) ),
 ) ) );
 $out = rest_do_request( $req );
 $data = $out->get_data();
 ss_assert( 200 === $out->get_status() && ! empty( $data['order_id'] ), 'Store API checkout made an order (HTTP ' . $out->get_status() . ' ' . ( 200 === $out->get_status() ? '' : wp_json_encode( $data ) ) . ')' );
 $order3 = wc_get_order( (int) $data['order_id'] );
 ss_assert( '' === $order3->get_meta( '_ss_pixel_visitor' ) && '' === $order3->get_meta( '_ss_pixel_session' ), 'block checkout (Store API) stores no visit or session id in the order meta' );
+ss_assert( $V4_B === $order3->get_meta( '_ss_checkout_ref' ), 'block checkout keeps the ref posted as Store API extension data' );
+ss_assert( false === strpos( wp_json_encode( $data ), 'ss_checkout_ref' ), 'the Store API response does not return the ref' );
 
 // 5. orders:batch carries no visit or session id field for any of the three orders.
 @unlink( '/shared/api.log' );
@@ -138,6 +149,9 @@ foreach ( ss_log() as $entry ) {
 		}
 	}
 }
+ss_assert( isset( $rows[ (string) $id1 ]['cart_token'] ) && $V4_A === $rows[ (string) $id1 ]['cart_token'], 'orders:batch row of the classic order carries its checkout ref as cart_token' );
+ss_assert( isset( $rows[ (string) $data['order_id'] ]['cart_token'] ) && $V4_B === $rows[ (string) $data['order_id'] ]['cart_token'], 'orders:batch row of the block order carries its checkout ref as cart_token' );
+ss_assert( ! array_key_exists( 'cart_token', $rows[ (string) $id2 ] ), 'orders:batch row of the order with a foreign ref has no cart_token' );
 foreach ( array( $id1, $id2, (int) $data['order_id'] ) as $oid ) {
 	ss_assert( isset( $rows[ (string) $oid ] ) && ! array_key_exists( 'pixel_visitor_id', $rows[ (string) $oid ] ) && ! array_key_exists( 'pixel_session_id', $rows[ (string) $oid ] ), 'orders:batch row of order ' . $oid . ' has neither pixel_visitor_id nor pixel_session_id' );
 }
@@ -159,6 +173,10 @@ $html = wp_remote_retrieve_body( ss_get( $url, $jar ) );
 ss_assert( false === strpos( $html, '"type":"add_to_cart"' ), 'the next page does not repeat it' );
 $html = wp_remote_retrieve_body( ss_get( wc_get_checkout_url(), $jar ) );
 ss_assert( 1 === substr_count( $html, '"type":"begin_checkout"' ) && false !== strpos( $html, '"items":1' ), 'checkout page pushes begin_checkout once' );
+ss_assert( 1 === preg_match( '/"type":"begin_checkout","data":\{[^}]*"cart_token":"([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})"/', $html, $ref_match ), 'begin_checkout carries a UUIDv4 cart_token' );
+ss_assert( false !== strpos( $html, 'name="ss_checkout_ref" value="' . $ref_match[1] . '"' ) || false !== strpos( $html, '"checkoutRef":"' . $ref_match[1] . '"' ), 'the same ref reaches the checkout (classic hidden field or block config)' );
+$html2 = wp_remote_retrieve_body( ss_get( wc_get_checkout_url(), $jar ) );
+ss_assert( false !== strpos( $html2, '"cart_token":"' . $ref_match[1] . '"' ), 'a reload of the checkout keeps the ref of the session' );
 
 // A shop manager who opens a thank-you page is not the buyer: no purchase event, and the flag stays for the buyer.
 $thanks = $order->get_checkout_order_received_url();
