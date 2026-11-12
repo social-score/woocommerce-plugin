@@ -113,7 +113,8 @@ export interface SegmentsFields {
 }
 export interface OnSiteBehaviorFields {
     lastClass: ProfileField<SessionClassName>;
-    lastBotScore: ProfileField<number>;
+    lastSignals?: ProfileField<string[]>;
+    lastAgentSystem?: ProfileField<string>;
     sessions30d: ProfileField<number>;
     lastSeenAt: ProfileField<string>;
     deviceFarm: ProfileField<boolean>;

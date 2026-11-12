@@ -1,5 +1,5 @@
 <?php
-// Pixel: loader on the storefront, switch through the proxy, shop events, and the order to visit link
+// Pixel: loader on the storefront, switch through the proxy, shop events, and no cookie copy onto orders
 // for the classic and the block (Store API) checkout. Runs while the store is still connected as st_1.
 use SocialScore\Pixel;
 
@@ -85,7 +85,7 @@ ss_assert( false !== strpos( $body, 'data-site' ), 'switched on again: the loade
 $admin = wp_remote_retrieve_body( wp_remote_get( 'http://wordpress/wp-admin/admin.php?page=socialscore', array( 'cookies' => $cookies, 'timeout' => 60 ) ) );
 ss_assert( false === strpos( $admin, 'pixel.socialscore.io' ) && false === strpos( $admin, 'data-site' ), 'the admin has no loader' );
 
-// 3. Classic checkout: the order gets the two ids from the cookies.
+// 3. Classic checkout: old Pixel cookies in the request are not copied onto the order.
 wc_load_cart();
 update_option( 'woocommerce_cod_settings', array( 'enabled' => 'yes' ) );
 WC()->payment_gateways()->init();
@@ -94,22 +94,30 @@ WC()->cart->empty_cart();
 WC()->cart->add_to_cart( $product->get_id(), 1 );
 $_COOKIE['ss_pv'] = $V4_A;
 $_COOKIE['ss_ps'] = $V4_B;
+WC()->session->set( 'socialscore_checkout_ref', $V4_A );
+$_POST['ss_checkout_ref'] = $V4_A;
 $id1   = WC()->checkout()->create_order( $address );
 $order = wc_get_order( $id1 );
-ss_assert( $order && $V4_A === $order->get_meta( '_ss_pixel_visitor' ) && $V4_B === $order->get_meta( '_ss_pixel_session' ), 'classic checkout stores both ids in the order meta (HPOS: ' . ( \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled() ? 'on' : 'off' ) . ')' );
+ss_assert( $order && '' === $order->get_meta( '_ss_pixel_visitor' ) && '' === $order->get_meta( '_ss_pixel_session' ), 'classic checkout stores no visit or session id in the order meta (HPOS: ' . ( \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled() ? 'on' : 'off' ) . ')' );
+ss_assert( $V4_A === $order->get_meta( '_ss_checkout_ref' ), 'classic checkout keeps the posted checkout ref that is the one of its own session' );
 WC()->cart->empty_cart();
 WC()->cart->add_to_cart( $product->get_id(), 1 );
 $_COOKIE['ss_pv'] = "' OR 1=1 --";
 $_COOKIE['ss_ps'] = '3f2b8c1e-5d4a-1b7e-9c3d-1a2b3c4d5e6f';
+WC()->session->set( 'socialscore_checkout_ref', $V4_A );
+$_POST['ss_checkout_ref'] = $V4_B; // A ref the session never made.
 $id2    = WC()->checkout()->create_order( $address );
 $order2 = wc_get_order( $id2 );
-ss_assert( $order2 && '' === $order2->get_meta( '_ss_pixel_visitor' ) && '' === $order2->get_meta( '_ss_pixel_session' ), 'classic checkout ignores a cookie that is not a UUIDv4 (and the order is still made)' );
+ss_assert( $order2 && '' === $order2->get_meta( '_ss_pixel_visitor' ) && '' === $order2->get_meta( '_ss_pixel_session' ), 'classic checkout with a junk cookie still makes the order and stores no id' );
+ss_assert( '' === (string) $order2->get_meta( '_ss_checkout_ref' ), 'classic checkout drops a posted ref that is not the one of its own session' );
+unset( $_POST['ss_checkout_ref'] );
 
 // 4. Block checkout through the Store API route.
 WC()->cart->empty_cart();
 WC()->cart->add_to_cart( $product->get_id(), 1 );
 $_COOKIE['ss_pv'] = $V4_B;
 $_COOKIE['ss_ps'] = $V4_A;
+WC()->session->set( 'socialscore_checkout_ref', $V4_B );
 $req = new WP_REST_Request( 'POST', '/wc/store/v1/checkout' );
 $req->set_header( 'Content-Type', 'application/json' );
 $req->set_header( 'Nonce', wp_create_nonce( 'wc_store_api' ) );
@@ -117,14 +125,17 @@ $req->set_body( wp_json_encode( array(
 	'billing_address'  => array( 'first_name' => 'Ana', 'last_name' => 'Ivanova', 'email' => 'blocks@example.test', 'country' => 'BG', 'address_1' => 'A 1', 'city' => 'Sofia', 'postcode' => '1000', 'phone' => '0888123456', 'state' => '', 'address_2' => '', 'company' => '' ),
 	'shipping_address' => array( 'first_name' => 'Ana', 'last_name' => 'Ivanova', 'country' => 'BG', 'address_1' => 'A 1', 'city' => 'Sofia', 'postcode' => '1000', 'phone' => '', 'state' => '', 'address_2' => '', 'company' => '' ),
 	'payment_method'   => 'cod',
+	'extensions'       => array( 'socialscore' => array( 'ss_checkout_ref' => $V4_B ) ),
 ) ) );
 $out = rest_do_request( $req );
 $data = $out->get_data();
 ss_assert( 200 === $out->get_status() && ! empty( $data['order_id'] ), 'Store API checkout made an order (HTTP ' . $out->get_status() . ' ' . ( 200 === $out->get_status() ? '' : wp_json_encode( $data ) ) . ')' );
 $order3 = wc_get_order( (int) $data['order_id'] );
-ss_assert( $V4_B === $order3->get_meta( '_ss_pixel_visitor' ) && $V4_A === $order3->get_meta( '_ss_pixel_session' ), 'block checkout (Store API) stores both ids in the order meta' );
+ss_assert( '' === $order3->get_meta( '_ss_pixel_visitor' ) && '' === $order3->get_meta( '_ss_pixel_session' ), 'block checkout (Store API) stores no visit or session id in the order meta' );
+ss_assert( $V4_B === $order3->get_meta( '_ss_checkout_ref' ), 'block checkout keeps the ref posted as Store API extension data' );
+ss_assert( false === strpos( wp_json_encode( $data ), 'ss_checkout_ref' ), 'the Store API response does not return the ref' );
 
-// 5. The ids reach SocialScore in orders:batch, and an order without them sends no empty field.
+// 5. orders:batch carries no visit or session id field for any of the three orders.
 @unlink( '/shared/api.log' );
 foreach ( array( $id1, $id2, (int) $data['order_id'] ) as $oid ) {
 	\SocialScore\Sync::queue_unique( \SocialScore\Sync::HOOK_ORDER, array( $oid, 0 ) );
@@ -138,9 +149,12 @@ foreach ( ss_log() as $entry ) {
 		}
 	}
 }
-ss_assert( isset( $rows[ (string) $id1 ] ) && $V4_A === ( $rows[ (string) $id1 ]['pixel_visitor_id'] ?? null ) && $V4_B === ( $rows[ (string) $id1 ]['pixel_session_id'] ?? null ), 'orders:batch carries pixel_visitor_id and pixel_session_id (classic order)' );
-ss_assert( isset( $rows[ (string) $data['order_id'] ] ) && $V4_B === ( $rows[ (string) $data['order_id'] ]['pixel_visitor_id'] ?? null ), 'orders:batch carries them for the block order' );
-ss_assert( isset( $rows[ (string) $id2 ] ) && ! array_key_exists( 'pixel_visitor_id', $rows[ (string) $id2 ] ) && ! array_key_exists( 'pixel_session_id', $rows[ (string) $id2 ] ), 'an order with an invalid cookie sends neither field' );
+ss_assert( isset( $rows[ (string) $id1 ]['cart_token'] ) && $V4_A === $rows[ (string) $id1 ]['cart_token'], 'orders:batch row of the classic order carries its checkout ref as cart_token' );
+ss_assert( isset( $rows[ (string) $data['order_id'] ]['cart_token'] ) && $V4_B === $rows[ (string) $data['order_id'] ]['cart_token'], 'orders:batch row of the block order carries its checkout ref as cart_token' );
+ss_assert( ! array_key_exists( 'cart_token', $rows[ (string) $id2 ] ), 'orders:batch row of the order with a foreign ref has no cart_token' );
+foreach ( array( $id1, $id2, (int) $data['order_id'] ) as $oid ) {
+	ss_assert( isset( $rows[ (string) $oid ] ) && ! array_key_exists( 'pixel_visitor_id', $rows[ (string) $oid ] ) && ! array_key_exists( 'pixel_session_id', $rows[ (string) $oid ] ), 'orders:batch row of order ' . $oid . ' has neither pixel_visitor_id nor pixel_session_id' );
+}
 
 // 6. Events over real HTTP: add to cart that reloads the page, checkout start, one purchase per order.
 $jar = array();
@@ -159,6 +173,10 @@ $html = wp_remote_retrieve_body( ss_get( $url, $jar ) );
 ss_assert( false === strpos( $html, '"type":"add_to_cart"' ), 'the next page does not repeat it' );
 $html = wp_remote_retrieve_body( ss_get( wc_get_checkout_url(), $jar ) );
 ss_assert( 1 === substr_count( $html, '"type":"begin_checkout"' ) && false !== strpos( $html, '"items":1' ), 'checkout page pushes begin_checkout once' );
+ss_assert( 1 === preg_match( '/"type":"begin_checkout","data":\{[^}]*"cart_token":"([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})"/', $html, $ref_match ), 'begin_checkout carries a UUIDv4 cart_token' );
+ss_assert( false !== strpos( $html, 'name="ss_checkout_ref" value="' . $ref_match[1] . '"' ) || false !== strpos( $html, '"checkoutRef":"' . $ref_match[1] . '"' ), 'the same ref reaches the checkout (classic hidden field or block config)' );
+$html2 = wp_remote_retrieve_body( ss_get( wc_get_checkout_url(), $jar ) );
+ss_assert( false !== strpos( $html2, '"cart_token":"' . $ref_match[1] . '"' ), 'a reload of the checkout keeps the ref of the session' );
 
 // A shop manager who opens a thank-you page is not the buyer: no purchase event, and the flag stays for the buyer.
 $thanks = $order->get_checkout_order_received_url();
@@ -205,4 +223,31 @@ ss_assert( 1 === substr_count( $html, '"type":"purchase"' ), 'classic shortcode 
 $html = wp_remote_retrieve_body( ss_get( wc_get_checkout_url(), $jar ) );
 ss_assert( 1 === substr_count( $html, '"type":"begin_checkout"' ), 'classic shortcode checkout page pushes begin_checkout once' );
 ss_assert( 1 === preg_match( '/setAttribute\("data-site","' . $SITE . '"\)/', $html ), 'classic checkout page has the loader with data-site' );
+// 9. Login: the wp-login request itself makes no Pixel lookup, the next storefront page prints one data-less
+//    login event, and the page after that prints none.
+Pixel::forget();
+@unlink( '/shared/api.log' );
+$login_cookies = array();
+for ( $try = 0; $try < 4 && count( $login_cookies ) < 2; $try++ ) {
+	if ( $try ) {
+		sleep( 3 );
+	}
+	$login         = wp_remote_post(
+		'http://wordpress/wp-login.php',
+		array(
+			'redirection' => 0,
+			'timeout'     => 60,
+			'cookies'     => array( 'wordpress_test_cookie' => 'WP Cookie check' ),
+			'body'        => array( 'log' => 'admin', 'pwd' => 'admin', 'wp-submit' => 'Log In', 'testcookie' => 1 ),
+		)
+	);
+	$login_cookies = is_wp_error( $login ) ? array() : wp_remote_retrieve_cookies( $login );
+}
+ss_assert( count( $login_cookies ) > 1, 'logged in over HTTP' );
+$lookups = array_filter( ss_log(), fn( $e ) => '/api/v2/stores/st_1/pixel' === $e['path'] );
+ss_assert( array() === $lookups, 'the login request made no Pixel lookup' );
+$html = wp_remote_retrieve_body( ss_get( $url, $login_cookies ) );
+ss_assert( 1 === substr_count( $html, '"type":"login","data":{}' ), 'the next storefront page pushes one login event with no data' );
+$html = wp_remote_retrieve_body( ss_get( $url, $login_cookies ) );
+ss_assert( 0 === substr_count( $html, '"type":"login"' ), 'the page after that has no login event' );
 echo "pixel done\n";

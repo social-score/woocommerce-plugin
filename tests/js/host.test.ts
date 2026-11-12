@@ -40,7 +40,28 @@ describe('profile routing', () => {
 	});
 });
 
+/** jsdom has no fetch Response; this is enough for `ok`, `status`, `clone` and `json`. */
+class FakeResponse {
+	readonly ok: boolean;
+	constructor(private readonly text: string, private readonly init: { status: number }) {
+		this.ok = init.status >= 200 && init.status < 300;
+	}
+	get status(): number {
+		return this.init.status;
+	}
+	clone(): FakeResponse {
+		return new FakeResponse(this.text, this.init);
+	}
+	json(): Promise<unknown> {
+		return Promise.resolve(JSON.parse(this.text));
+	}
+}
+
 describe('createHost', () => {
+	beforeAll(() => {
+		(globalThis as unknown as { Response: unknown }).Response = FakeResponse;
+	});
+
 	const config = { restUrl: 'https://shop.test/wp-json/socialscore/v1/proxy', nonce: 'n0nce', dashboardUrl: 'https://shop.test/wp-admin/admin.php?page=socialscore' };
 
 	afterEach(() => {

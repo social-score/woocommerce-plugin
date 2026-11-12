@@ -11,7 +11,9 @@ WooCommerce 8.0+, HPOS compatible. GPL-2.0-or-later. Slug and text domain: `soci
 | REST proxy `/wp-json/socialscore/v1/proxy/*` (nonce, `manage_woocommerce`, path allow-list; the key stays on the server) | `includes/class-rest-proxy.php` |
 | First import and real-time sync (Action Scheduler, batches of 500, backoff, `Retry-After`) | `includes/class-sync.php`, `class-mapper.php` |
 | Automatic checks with an Idempotency-Key per order/customer, labels and order notes | `includes/class-enrichment.php`, `class-labels.php` |
-| Personal data export and erase (`wp_privacy_personal_data_exporters` / `_erasers`) call `GET .../customers/{id}/export` and `DELETE .../customers/{id}` for the account id and the guest id of the email; the export also lists, and the eraser removes, the Pixel visit and session ids kept on the email's orders (`_ss_pixel_visitor`, `_ss_pixel_session`) | `includes/class-privacy.php` |
+| Personal data export and erase (`wp_privacy_personal_data_exporters` / `_erasers`) call `GET .../customers/{id}/export` and `DELETE .../customers/{id}` for the account id and the guest id of the email; the export also lists, and the eraser removes, the checkout reference (`_ss_checkout_ref`) and the Pixel visit and session ids that older plugin versions left on the email's orders (`_ss_pixel_visitor`, `_ss_pixel_session`; the plugin no longer writes those two) | `includes/class-privacy.php` |
+| Pixel on the storefront: loader, shop events, and a `login` event on the page after a login (no cookie copied onto orders, no user id sent) | `includes/class-pixel.php` |
+| Checkout reference, the only order link: the plugin makes a random UUIDv4 in the WooCommerce session when it renders the checkout (classic and Checkout block), the Pixel sends it as `cart_token` with `begin_checkout`, the checkout posts it back (hidden field `ss_checkout_ref`, or Store API extension data `socialscore.ss_checkout_ref`), and an order keeps it in `_ss_checkout_ref` only when it equals the one in the buyer's own session. It is synced as the order's `cart_token`. The `purchase` event's order id is for analytics only | `includes/class-pixel.php`, `includes/class-mapper.php`, `src/js/pixel-events.ts` |
 | Order meta box (HPOS aware), user profile section, orders list column | `includes/class-check-panels.php` |
 | Admin dashboard (plugin-core `StoreDashboard`) | `includes/class-admin-page.php`, `src/js/dashboard.tsx` |
 
@@ -53,7 +55,8 @@ npm run dist && docker compose -f tests/smoke/docker-compose.yml run --rm smoke;
 `vendor-js/` holds `@socialscore/ui` and `@socialscore/plugin-core` unpacked from `npm pack` (consumed with `file:`;
 unpacked because Plugin Check refuses compressed files in the zip) until GitHub Packages publishing exists. To update
 one, extract the new tarball over its folder, then run `npm install` and `npm run gen:messages` to refresh
-`includes/class-messages.php`, the translatable catalogue of the shared screens.
+`includes/class-messages.php`, the translatable catalogue of the shared screens. The catalogue has the
+plugin-core 0.4.0 texts (signals, `info_bot`, no bot score).
 
 ## Release zip
 

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createReporter, init, watchBlocks, watchClassic, watchStoreSync, type PixelEvent } from '../../src/js/pixel-events';
+import { createReporter, init, syncCheckoutRef, watchBlocks, watchClassic, watchStoreSync, type PixelEvent } from '../../src/js/pixel-events';
 
 function collector() {
 	const events: PixelEvent[] = [];
@@ -251,6 +251,41 @@ describe('init', () => {
 
 	it('does not throw when the queue is broken', () => {
 		expect(() => init({ ssPixel: 5, wp: null })).not.toThrow();
+	});
+});
+
+describe('checkout reference for the Checkout block', () => {
+	const REF = '3f2b8c1e-5d4a-4b7e-9c3d-1a2b3c4d5e6f';
+
+	it('hands the reference to the checkout store as extension data of the socialscore namespace', () => {
+		const calls: any[] = [];
+		const data: any = { dispatch: (store: string) => (store === 'wc/store/checkout' ? { setExtensionData: (...a: any[]) => calls.push(a) } : undefined) };
+		expect(syncCheckoutRef(data, REF)).toBe(true);
+		expect(calls).toEqual([['socialscore', { ss_checkout_ref: REF }]]);
+	});
+
+	it('falls back to the older action name and reports a missing store', () => {
+		const calls: any[] = [];
+		const old: any = { dispatch: () => ({ __internalSetExtensionData: (...a: any[]) => calls.push(a) }) };
+		expect(syncCheckoutRef(old, REF)).toBe(true);
+		expect(calls).toHaveLength(1);
+		expect(syncCheckoutRef({ dispatch: () => undefined } as any, REF)).toBe(false);
+		expect(syncCheckoutRef({} as any, REF)).toBe(false);
+	});
+
+	it('init sends it once the checkout store exists, and sends nothing when the page has no reference', () => {
+		const calls: any[] = [];
+		const target = new EventTarget() as any;
+		target.socialscorePixel = { currency: 'EUR', checkoutRef: REF };
+		init(target);
+		target.wp = { data: { select: () => undefined, subscribe: () => () => undefined, dispatch: () => ({ setExtensionData: (...a: any[]) => calls.push(a) }) } };
+		target.dispatchEvent(new Event('load'));
+		expect(calls).toEqual([['socialscore', { ss_checkout_ref: REF }]]);
+
+		const none: any[] = [];
+		const bare: any = { ssPixel: [], socialscorePixel: { currency: 'EUR' }, wp: { data: { select: () => undefined, subscribe: () => () => undefined, dispatch: () => ({ setExtensionData: (...a: any[]) => none.push(a) }) } } };
+		init(bare);
+		expect(none).toEqual([]);
 	});
 });
 

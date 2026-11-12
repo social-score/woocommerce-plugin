@@ -26,8 +26,14 @@ interface CartStore {
 	hasFinishedResolution?: (selector: string) => boolean;
 }
 
+interface CheckoutDispatch {
+	setExtensionData?: (namespace: string, data: Record<string, unknown>, replace?: boolean) => void;
+	__internalSetExtensionData?: (namespace: string, data: Record<string, unknown>, replace?: boolean) => void;
+}
+
 interface WpData {
 	select: (store: string) => CartStore | undefined;
+	dispatch?: (store: string) => CheckoutDispatch | undefined;
 	subscribe: (listener: () => void, store?: string) => () => void;
 }
 
@@ -125,6 +131,21 @@ export function watchBlocks(data: WpData, report: Report, lookup?: Lookup): bool
 }
 
 /**
+ * Checkout block: hands the server-made checkout reference to the block as Store API extension data, so it is posted
+ * back with the order. Returns false when the checkout store is not there (yet). Older WooCommerce names the action
+ * __internalSetExtensionData.
+ */
+export function syncCheckoutRef(data: WpData, ref: string): boolean {
+	const actions = typeof data.dispatch === 'function' ? data.dispatch('wc/store/checkout') : undefined;
+	const set = actions?.setExtensionData ?? actions?.__internalSetExtensionData;
+	if (!actions || typeof set !== 'function') {
+		return false;
+	}
+	set.call(actions, 'socialscore', { ss_checkout_ref: ref });
+	return true;
+}
+
+/**
  * Block product buttons (Interactivity API): WooCommerce fires no jQuery event and no data-store change there. The
  * only signal with a product is `wc-blocks_store_sync_required` on window, which names the product ids added but
  * not the quantity (reported as 1) or the price, which `lookup` reads.
@@ -168,7 +189,12 @@ export function init(win: any): void {
 		// shop has loaded them, and look again once the page has finished loading.
 		let classic = false;
 		let blocks = false;
+		const ref = win.socialscorePixel?.checkoutRef;
+		let refSent = typeof ref !== 'string' || ref === '';
 		const attach = () => {
+			if (!refSent && win.wp?.data) {
+				refSent = syncCheckoutRef(win.wp.data, ref);
+			}
 			if (!classic && typeof win.jQuery === 'function') {
 				classic = true;
 				watchClassic(win.jQuery, report);
@@ -179,7 +205,7 @@ export function init(win: any): void {
 		};
 		attach();
 		if (typeof win.addEventListener === 'function') {
-			if (!classic || !blocks) {
+			if (!classic || !blocks || !refSent) {
 				win.addEventListener('load', () => {
 					try {
 						attach();

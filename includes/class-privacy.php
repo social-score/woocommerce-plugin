@@ -100,7 +100,7 @@ class Privacy {
 	}
 
 	/**
-	 * Export groups for the Pixel visit and session ids kept on the orders of an email address. They are held
+	 * Export groups for the Pixel visit, session and checkout reference ids kept on the orders of an email address. They are held
 	 * here, in the shop, so they are exported whether or not the store is connected.
 	 *
 	 * @param string $email_address Email address of the data subject.
@@ -114,7 +114,8 @@ class Privacy {
 			}
 			$visitor = (string) $order->get_meta( Pixel::META_VISITOR );
 			$session = (string) $order->get_meta( Pixel::META_SESSION );
-			if ( '' === $visitor && '' === $session ) {
+			$ref     = (string) $order->get_meta( Pixel::META_REF );
+			if ( '' === $visitor && '' === $session && '' === $ref ) {
 				continue;
 			}
 			$rows = array(
@@ -135,10 +136,16 @@ class Privacy {
 					'value' => $session,
 				);
 			}
+			if ( '' !== $ref ) {
+				$rows[] = array(
+					'name'  => __( 'Checkout reference', 'socialscore' ),
+					'value' => $ref,
+				);
+			}
 			$groups[] = array(
 				'group_id'          => 'socialscore-pixel',
 				'group_label'       => __( 'SocialScore Pixel', 'socialscore' ),
-				'group_description' => __( 'The visit and session ids the SocialScore Pixel stored on this customer\'s orders.', 'socialscore' ),
+				'group_description' => __( 'The visit, session and checkout reference ids the SocialScore Pixel stored on this customer\'s orders.', 'socialscore' ),
 				'item_id'           => 'socialscore-pixel-order-' . (string) $order->get_id(),
 				'data'              => $rows,
 			);
@@ -334,7 +341,7 @@ class Privacy {
 	}
 
 	/**
-	 * Removes the Pixel visit and session ids from the orders of an email address.
+	 * Removes the Pixel visit, session and checkout reference ids from the orders of an email address.
 	 *
 	 * @param string $email_address Email address of the data subject.
 	 * @return bool True when an order lost an id.
@@ -346,10 +353,11 @@ class Privacy {
 			if ( ! is_object( $order ) || ! method_exists( $order, 'delete_meta_data' ) ) {
 				continue;
 			}
-			$had = '' !== (string) $order->get_meta( Pixel::META_VISITOR ) || '' !== (string) $order->get_meta( Pixel::META_SESSION );
+			$had = '' !== (string) $order->get_meta( Pixel::META_VISITOR ) || '' !== (string) $order->get_meta( Pixel::META_SESSION ) || '' !== (string) $order->get_meta( Pixel::META_REF );
 			if ( $had ) {
 				$order->delete_meta_data( Pixel::META_VISITOR );
 				$order->delete_meta_data( Pixel::META_SESSION );
+				$order->delete_meta_data( Pixel::META_REF );
 				$order->save_meta_data();
 				$changed = true;
 			}

@@ -18,7 +18,6 @@ class PixelTest extends TestCase {
 
 	protected function setUp(): void {
 		parent::setUp();
-		unset( $_COOKIE['ss_pv'], $_COOKIE['ss_ps'] );
 		$this->inline = array();
 		Functions\when( 'is_admin' )->justReturn( false );
 		Functions\when( 'is_product' )->justReturn( false );
@@ -39,97 +38,103 @@ class PixelTest extends TestCase {
 		);
 	}
 
-	protected function tearDown(): void {
-		unset( $_COOKIE['ss_pv'], $_COOKIE['ss_ps'] );
-		parent::tearDown();
-	}
-
 	private function pixel_answer( $enabled = true, $site = self::SITE ) {
 		$this->http_responder = fn() => self::response( 200, array( 'enabled' => $enabled, 'site_id' => $site, 'snippet_url' => 'https://pixel.socialscore.io/v1/p.js' ) );
 	}
 
-	// UUIDs and cookies ---------------------------------------------------------------------------------------
+	// No device storage, no order link by cookie ---------------------------------------------------------------
 
-	public function test_only_uuid_v4_passes() {
-		$this->assertSame( self::V4_A, Pixel::uuid( self::V4_A ) );
-		$this->assertSame( self::V4_A, Pixel::uuid( strtoupper( self::V4_A ) ), 'case is normalised' );
-		foreach ( array( '', 'abc', '3f2b8c1e-5d4a-1b7e-9c3d-1a2b3c4d5e6f', '3f2b8c1e-5d4a-4b7e-7c3d-1a2b3c4d5e6f', self::V4_A . "\n", self::V4_A . 'x', '<script>', array( self::V4_A ), null, 12 ) as $bad ) {
-			$this->assertSame( '', Pixel::uuid( $bad ), 'rejects ' . json_encode( $bad ) );
-		}
+	public function test_no_order_is_linked_by_cookie_any_more() {
+		$this->assertFalse( method_exists( Pixel::class, 'link_order' ) );
+		$this->assertFalse( method_exists( Pixel::class, 'link_order_and_save' ) );
+		$this->assertFalse( method_exists( Pixel::class, 'cookie_uuid' ) );
 	}
 
-	public function test_cookie_uuid_reads_only_valid_strings() {
-		$this->assertSame( '', Pixel::cookie_uuid( 'ss_pv' ) );
-		$_COOKIE['ss_pv'] = self::V4_A;
-		$this->assertSame( self::V4_A, Pixel::cookie_uuid( 'ss_pv' ) );
-		$_COOKIE['ss_pv'] = array( self::V4_A );
-		$this->assertSame( '', Pixel::cookie_uuid( 'ss_pv' ) );
-		$_COOKIE['ss_pv'] = '1; DROP TABLE';
-		$this->assertSame( '', Pixel::cookie_uuid( 'ss_pv' ) );
-	}
-
-	// Order link: classic and block checkout ---------------------------------------------------------------------
-
-	public function test_classic_checkout_stores_both_ids_in_order_meta() {
-		$_COOKIE['ss_pv'] = self::V4_A;
-		$_COOKIE['ss_ps'] = self::V4_B;
-		$order            = new \WC_Order();
-		$this->assertTrue( ( new Pixel() )->link_order( $order ) );
-		$this->assertSame( self::V4_A, $order->meta['_ss_pixel_visitor'] );
-		$this->assertSame( self::V4_B, $order->meta['_ss_pixel_session'] );
-		$this->assertSame( 0, $order->meta_saves, 'the classic hook runs before the order is saved, so it only sets meta' );
-	}
-
-	public function test_block_checkout_stores_ids_and_saves_the_meta() {
-		$_COOKIE['ss_pv'] = self::V4_A;
-		$_COOKIE['ss_ps'] = self::V4_B;
-		$order            = new \WC_Order();
-		( new Pixel() )->link_order_and_save( $order );
-		$this->assertSame( self::V4_A, $order->meta['_ss_pixel_visitor'] );
-		$this->assertSame( self::V4_B, $order->meta['_ss_pixel_session'] );
-		$this->assertSame( 1, $order->meta_saves );
-		( new Pixel() )->link_order_and_save( $order );
-		$this->assertSame( 1, $order->meta_saves, 'nothing changed, nothing written again' );
-	}
-
-	public function test_invalid_cookie_is_ignored_and_the_other_one_still_counts() {
-		$_COOKIE['ss_pv'] = 'not-a-uuid';
-		$_COOKIE['ss_ps'] = self::V4_B;
-		$order            = new \WC_Order();
-		( new Pixel() )->link_order( $order );
-		$this->assertArrayNotHasKey( '_ss_pixel_visitor', $order->meta );
-		$this->assertSame( self::V4_B, $order->meta['_ss_pixel_session'] );
-	}
-
-	public function test_no_cookie_leaves_an_earlier_value_alone() {
-		$order                           = new \WC_Order();
-		$order->meta['_ss_pixel_visitor'] = self::V4_A;
-		$this->assertFalse( ( new Pixel() )->link_order( $order ) );
-		$_COOKIE['ss_pv'] = '<b>';
-		$this->assertFalse( ( new Pixel() )->link_order( $order ) );
-		$this->assertSame( self::V4_A, $order->meta['_ss_pixel_visitor'] );
-	}
-
-	public function test_both_hooks_are_registered_also_in_the_admin() {
+	public function test_only_the_login_hook_is_registered_in_the_admin() {
 		Functions\when( 'is_admin' )->justReturn( true );
-		Functions\expect( 'add_action' )->with( 'woocommerce_checkout_create_order', \Mockery::any(), 10, 1 )->once();
-		Functions\expect( 'add_action' )->with( 'woocommerce_store_api_checkout_update_order_from_request', \Mockery::any(), 10, 1 )->once();
-		Functions\expect( 'add_action' )->with( 'woocommerce_store_api_checkout_order_processed', \Mockery::any(), 10, 1 )->once();
+		Functions\expect( 'add_action' )->with( 'wp_login', \Mockery::any(), 10, 2 )->once();
+		Functions\expect( 'add_action' )->with( 'woocommerce_checkout_create_order', \Mockery::any(), \Mockery::any(), \Mockery::any() )->never();
+		Functions\expect( 'add_action' )->with( 'woocommerce_store_api_checkout_update_order_from_request', \Mockery::any(), \Mockery::any(), \Mockery::any() )->never();
+		Functions\expect( 'add_action' )->with( 'woocommerce_store_api_checkout_order_processed', \Mockery::any(), \Mockery::any(), \Mockery::any() )->never();
 		Functions\expect( 'add_action' )->with( 'wp_enqueue_scripts', \Mockery::any() )->never();
 		( new Pixel() )->register();
 		$this->addToAssertionCount( 1 ); // The Mockery expectations above are checked at tear down.
 	}
 
-	// Mapper ----------------------------------------------------------------------------------------------------
-
-	public function test_mapper_sends_the_ids_and_leaves_out_bad_ones() {
+	public function test_the_order_row_carries_no_visit_or_session_id() {
 		$order                            = new \WC_Order( array( 'id' => 5 ) );
 		$order->meta['_ss_pixel_visitor'] = self::V4_A;
-		$order->meta['_ss_pixel_session'] = 'javascript:alert(1)';
+		$order->meta['_ss_pixel_session'] = self::V4_B;
 		$row                              = Mapper::order( $order );
-		$this->assertSame( self::V4_A, $row['pixel_visitor_id'] );
+		$this->assertArrayNotHasKey( 'pixel_visitor_id', $row );
 		$this->assertArrayNotHasKey( 'pixel_session_id', $row );
-		$this->assertArrayNotHasKey( 'pixel_visitor_id', Mapper::order( new \WC_Order() ) );
+	}
+
+	// Login ------------------------------------------------------------------------------------------------------
+
+	private function login_setup( $user_id = 7 ) {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		Functions\when( 'get_current_user_id' )->justReturn( $user_id );
+		Functions\when( 'delete_user_meta' )->alias(
+			function ( $id, $k ) {
+				unset( $this->user_meta[ $id ][ $k ] );
+				return true;
+			}
+		);
+	}
+
+	public function test_a_login_is_pushed_once_on_the_next_page_with_no_data() {
+		$this->login_setup();
+		( new Pixel() )->remember_login( 'anna', (object) array( 'ID' => 7 ) );
+		$this->assertArrayHasKey( '_ss_pixel_login', $this->user_meta[7] );
+		( new Pixel() )->enqueue();
+		$this->assertSame(
+			'window.ssPixel=window.ssPixel||[];window.ssPixel.push({"type":"login","data":{}});',
+			$this->inline['socialscore-pixel'][1]
+		);
+		$this->assertStringNotContainsString( '7', $this->inline['socialscore-pixel'][1], 'no user id' );
+		$this->inline = array();
+		( new Pixel() )->enqueue();
+		$this->assertCount( 1, $this->inline['socialscore-pixel'], 'the second page has no login event' );
+	}
+
+	public function test_a_stale_login_is_dropped_without_an_event() {
+		$this->login_setup();
+		$this->user_meta[7]['_ss_pixel_login'] = time() - Pixel::LOGIN_TTL - 5;
+		( new Pixel() )->enqueue();
+		$this->assertCount( 1, $this->inline['socialscore-pixel'] );
+		$this->assertArrayNotHasKey( '_ss_pixel_login', $this->user_meta[7] );
+	}
+
+	public function test_a_login_is_not_remembered_while_the_cached_state_is_off() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer( false );
+		Pixel::state();
+		$this->http = array();
+		( new Pixel() )->remember_login( 'anna', (object) array( 'ID' => 7 ) );
+		$this->assertSame( array(), $this->user_meta );
+		$this->assertSame( array(), $this->http );
+	}
+
+	public function test_a_login_with_a_cold_cache_asks_nobody_and_is_kept_for_the_next_page() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		( new Pixel() )->remember_login( 'anna', (object) array( 'ID' => 7 ) );
+		$this->assertSame( array(), $this->http, 'a login makes no lookup request' );
+		$this->assertArrayHasKey( '_ss_pixel_login', $this->user_meta[7] );
+	}
+
+	public function test_a_login_is_not_remembered_when_the_store_is_not_connected() {
+		( new Pixel() )->remember_login( 'anna', (object) array( 'ID' => 7 ) );
+		$this->assertSame( array(), $this->user_meta );
+		$this->assertSame( array(), $this->http );
+	}
+
+	public function test_a_visitor_who_is_not_logged_in_gets_no_login_event() {
+		$this->login_setup( 0 );
+		( new Pixel() )->enqueue();
+		$this->assertCount( 1, $this->inline['socialscore-pixel'] );
 	}
 
 	// State and loader -------------------------------------------------------------------------------------------
@@ -282,6 +287,187 @@ class PixelTest extends TestCase {
 		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 0, 0, true ), 'session' => null ) );
 		( new Pixel() )->enqueue();
 		$this->assertCount( 1, $this->inline['socialscore-pixel'] );
+	}
+
+	// Checkout reference (server-confirmed order link) --------------------------------------------------------------
+
+	const REF_A = '3f2b8c1e-5d4a-4b7e-9c3d-1a2b3c4d5e6f';
+	const REF_B = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+
+	private function ref_session( $own = null ) {
+		$session = $this->session();
+		if ( $own ) {
+			$session->data['socialscore_checkout_ref'] = $own;
+		}
+		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 59.9, 2 ), 'session' => $session ) );
+		return $session;
+	}
+
+	public function test_the_checkout_makes_a_uuid_ref_in_the_session_and_begin_checkout_sends_it_as_cart_token() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		Functions\when( 'wp_generate_uuid4' )->justReturn( self::REF_A );
+		Functions\when( 'is_checkout' )->justReturn( true );
+		Functions\when( 'has_block' )->justReturn( true );
+		Functions\when( 'is_order_received_page' )->justReturn( false );
+		Functions\when( 'is_checkout_pay_page' )->justReturn( false );
+		$session = $this->ref_session();
+		( new Pixel() )->enqueue();
+		$this->assertSame( self::REF_A, $session->data['socialscore_checkout_ref'] );
+		$this->assertStringContainsString( '"items":2,"cart_token":"' . self::REF_A . '"}', $this->inline['socialscore-pixel'][1] );
+	}
+
+	public function test_a_block_checkout_page_gives_the_ref_to_the_events_bundle_config() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		Functions\when( 'is_checkout' )->justReturn( true );
+		Functions\when( 'has_block' )->justReturn( true );
+		Functions\when( 'is_order_received_page' )->justReturn( false );
+		Functions\when( 'is_checkout_pay_page' )->justReturn( false );
+		Functions\when( 'get_woocommerce_currency' )->justReturn( 'EUR' );
+		Functions\when( 'rest_url' )->justReturn( 'https://shop.test/wp-json/wc/store/v1/' );
+		if ( ! is_readable( SOCIALSCORE_DIR . 'build/pixel-events.asset.php' ) ) {
+			$this->markTestSkipped( 'build/pixel-events.asset.php is made by npm run build.' );
+		}
+		$this->ref_session( self::REF_A );
+		( new Pixel() )->enqueue();
+		$this->assertStringContainsString( '"checkoutRef":"' . self::REF_A . '"', $this->inline['socialscore-pixel-events'][0] );
+	}
+
+	public function test_the_ref_is_not_made_without_a_session_or_for_an_empty_cart() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		Functions\when( 'is_checkout' )->justReturn( true );
+		Functions\when( 'has_block' )->justReturn( true );
+		Functions\when( 'is_order_received_page' )->justReturn( false );
+		Functions\when( 'is_checkout_pay_page' )->justReturn( false );
+		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 59.9, 2 ), 'session' => null ) );
+		( new Pixel() )->enqueue();
+		$this->assertStringNotContainsString( 'cart_token', $this->inline['socialscore-pixel'][1] );
+	}
+
+	public function test_the_classic_form_prints_the_hidden_field_escaped_and_only_for_a_cart_with_items() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer();
+		$this->ref_session( self::REF_A );
+		ob_start();
+		( new Pixel() )->print_ref_field();
+		$this->assertSame( '<input type="hidden" name="ss_checkout_ref" value="' . self::REF_A . '" />', ob_get_clean() );
+
+		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 0, 0, true ), 'session' => $this->session() ) );
+		ob_start();
+		( new Pixel() )->print_ref_field();
+		$this->assertSame( '', ob_get_clean(), 'empty cart' );
+	}
+
+	public function test_the_classic_form_prints_nothing_while_the_pixel_is_off() {
+		$this->connect_store( 'st_1' );
+		$this->pixel_answer( false );
+		$this->ref_session( self::REF_A );
+		ob_start();
+		( new Pixel() )->print_ref_field();
+		$this->assertSame( '', ob_get_clean() );
+	}
+
+	public function test_the_classic_order_keeps_only_the_ref_of_its_own_session() {
+		$this->ref_session( self::REF_A );
+		$_POST['ss_checkout_ref'] = self::REF_A;
+		$own                      = new \WC_Order( array( 'id' => 5 ) );
+		( new Pixel() )->capture_classic_ref( $own, array() );
+		$this->assertSame( self::REF_A, $own->meta['_ss_checkout_ref'] );
+
+		$_POST['ss_checkout_ref'] = self::REF_B; // A ref copied from another shopper.
+		$foreign                  = new \WC_Order( array( 'id' => 6 ) );
+		( new Pixel() )->capture_classic_ref( $foreign, array() );
+		$this->assertArrayNotHasKey( '_ss_checkout_ref', $foreign->meta );
+
+		$_POST['ss_checkout_ref'] = 'not-a-uuid';
+		$bad                      = new \WC_Order( array( 'id' => 7 ) );
+		( new Pixel() )->capture_classic_ref( $bad, array() );
+		$this->assertArrayNotHasKey( '_ss_checkout_ref', $bad->meta );
+
+		unset( $_POST['ss_checkout_ref'] );
+		$none = new \WC_Order( array( 'id' => 8 ) );
+		( new Pixel() )->capture_classic_ref( $none, array() );
+		$this->assertArrayNotHasKey( '_ss_checkout_ref', $none->meta );
+	}
+
+	public function test_an_order_without_a_session_ref_never_takes_a_posted_one() {
+		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => null, 'session' => $this->session() ) );
+		$_POST['ss_checkout_ref'] = self::REF_A;
+		$order                    = new \WC_Order( array( 'id' => 5 ) );
+		( new Pixel() )->capture_classic_ref( $order, array() );
+		unset( $_POST['ss_checkout_ref'] );
+		$this->assertArrayNotHasKey( '_ss_checkout_ref', $order->meta );
+	}
+
+	private function request( $extensions ) {
+		return new class( $extensions ) {
+			private $e;
+			public function __construct( $e ) {
+				$this->e = $e;
+			}
+			public function get_param( $k ) {
+				return 'extensions' === $k ? $this->e : null;
+			}
+		};
+	}
+
+	public function test_the_block_order_keeps_the_ref_from_the_store_api_extension_data_only_when_it_is_its_own() {
+		$this->ref_session( self::REF_A );
+		$own = new \WC_Order( array( 'id' => 5 ) );
+		( new Pixel() )->capture_block_ref( $own, $this->request( array( 'socialscore' => array( 'ss_checkout_ref' => self::REF_A ) ) ) );
+		$this->assertSame( self::REF_A, $own->meta['_ss_checkout_ref'] );
+
+		$foreign = new \WC_Order( array( 'id' => 6 ) );
+		( new Pixel() )->capture_block_ref( $foreign, $this->request( array( 'socialscore' => array( 'ss_checkout_ref' => self::REF_B ) ) ) );
+		$this->assertArrayNotHasKey( '_ss_checkout_ref', $foreign->meta );
+
+		foreach ( array( null, array(), array( 'socialscore' => array() ), array( 'socialscore' => array( 'ss_checkout_ref' => array( self::REF_A ) ) ) ) as $extensions ) {
+			$none = new \WC_Order( array( 'id' => 7 ) );
+			( new Pixel() )->capture_block_ref( $none, $this->request( $extensions ) );
+			$this->assertArrayNotHasKey( '_ss_checkout_ref', $none->meta );
+		}
+	}
+
+	public function test_a_ref_already_on_the_order_is_not_replaced() {
+		$this->ref_session( self::REF_A );
+		$order                       = new \WC_Order( array( 'id' => 5 ) );
+		$order->meta['_ss_checkout_ref'] = self::REF_B;
+		( new Pixel() )->capture_block_ref( $order, $this->request( array( 'socialscore' => array( 'ss_checkout_ref' => self::REF_A ) ) ) );
+		$this->assertSame( self::REF_B, $order->meta['_ss_checkout_ref'] );
+	}
+
+	public function test_an_emptied_cart_drops_the_ref_so_the_next_checkout_gets_a_new_one() {
+		$session = $this->ref_session( self::REF_A );
+		( new Pixel() )->forget_ref();
+		$this->assertNull( $session->data['socialscore_checkout_ref'] );
+	}
+
+	public function test_the_order_row_syncs_the_ref_as_cart_token_and_leaves_out_anything_else() {
+		$order                       = new \WC_Order( array( 'id' => 5 ) );
+		$order->meta['_ss_checkout_ref'] = self::REF_A;
+		$this->assertSame( self::REF_A, Mapper::order( $order )['cart_token'] );
+
+		$order->meta['_ss_checkout_ref'] = 'x?key=1';
+		$this->assertArrayNotHasKey( 'cart_token', Mapper::order( $order ) );
+		$this->assertArrayNotHasKey( 'cart_token', Mapper::order( new \WC_Order( array( 'id' => 6 ) ) ) );
+	}
+
+	public function test_the_checkout_hooks_are_registered_on_the_storefront() {
+		$hooks = array();
+		Functions\when( 'add_action' )->alias(
+			function ( $hook, $cb, $prio = 10, $args = 1 ) use ( &$hooks ) {
+				$hooks[ $hook ] = array( $cb[1], $prio, $args );
+			}
+		);
+		Functions\when( 'add_filter' )->justReturn( true );
+		( new Pixel() )->register();
+		$this->assertSame( array( 'print_ref_field', 10, 0 ), $hooks['woocommerce_checkout_after_customer_details'] );
+		$this->assertSame( array( 'capture_classic_ref', 10, 2 ), $hooks['woocommerce_checkout_create_order'] );
+		$this->assertSame( array( 'capture_block_ref', 10, 2 ), $hooks['woocommerce_store_api_checkout_update_order_from_request'] );
+		$this->assertSame( array( 'forget_ref', 10, 0 ), $hooks['woocommerce_cart_emptied'] );
+		$this->assertSame( array( 'register_store_api_data', 10, 0 ), $hooks['init'] );
 	}
 
 	private function session() {
