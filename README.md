@@ -13,6 +13,7 @@ WooCommerce 8.0+, HPOS compatible. GPL-2.0-or-later. Slug and text domain: `soci
 | Automatic checks with an Idempotency-Key per order/customer, labels and order notes | `includes/class-enrichment.php`, `class-labels.php` |
 | Personal data export and erase (`wp_privacy_personal_data_exporters` / `_erasers`) call `GET .../customers/{id}/export` and `DELETE .../customers/{id}` for the account id and the guest id of the email; the export also lists, and the eraser removes, the Pixel visit and session ids that older plugin versions left on the email's orders (`_ss_pixel_visitor`, `_ss_pixel_session`; the plugin no longer writes them) | `includes/class-privacy.php` |
 | Pixel on the storefront: loader, shop events, and a `login` event on the page after a login (no cookie copied onto orders, no user id sent) | `includes/class-pixel.php` |
+| Known gap: the order link is the thank-you `purchase` event only. Contract v4 also names `cart_token` on `begin_checkout`; WooCommerce has no cart token and the plugin sends none, so an order whose buyer never reaches the thank-you page has no visit | `includes/class-pixel.php` |
 | Order meta box (HPOS aware), user profile section, orders list column | `includes/class-check-panels.php` |
 | Admin dashboard (plugin-core `StoreDashboard`) | `includes/class-admin-page.php`, `src/js/dashboard.tsx` |
 
@@ -54,7 +55,9 @@ npm run dist && docker compose -f tests/smoke/docker-compose.yml run --rm smoke;
 `vendor-js/` holds `@socialscore/ui` and `@socialscore/plugin-core` unpacked from `npm pack` (consumed with `file:`;
 unpacked because Plugin Check refuses compressed files in the zip) until GitHub Packages publishing exists. To update
 one, extract the new tarball over its folder, then run `npm install` and `npm run gen:messages` to refresh
-`includes/class-messages.php`, the translatable catalogue of the shared screens.
+`includes/class-messages.php`, the translatable catalogue of the shared screens. The catalogue already has the
+plugin-core 0.4.0 texts (signals, `info_bot`, no bot score); until 0.4.0 is vendored, `adaptSession` in `src/js/host.ts`
+makes the 0.3.1 panel show the new session answers, and it is deleted with that re-vendor.
 
 ## Release zip
 
