@@ -19,8 +19,13 @@ defined( 'ABSPATH' ) || exit;
  * - `unknown`: there is no list yet (first day, or the download keeps failing), or the address is private or reserved.
  *   **Fails open**: the request stays a known bot and is only marked `unverified_bot`.
  *
- * A shop behind a proxy or a CDN sees the proxy's address, which is in no range: it must give the real client address
- * through the filter `socialscore_client_ip`, or switch the check off with `socialscore_verify_declared_bots` (return false).
+ * Which files count: each token is matched only against the file of the crawler it names. Googlebot, GoogleOther,
+ * Google-InspectionTool and Storebot-Google against `common-crawlers.json`; AdsBot-Google and Mediapartners-Google against
+ * `special-crawlers.json`; Bingbot against `bingbot.json`. The user-triggered fetchers files (Apps Script, Site Verifier and
+ * others fetch from there for any user, with any user agent) are NOT downloaded and make nobody a verified bot.
+ *
+ * The address checked is the client's, not a proxy's: see Bot_Guard::client_ip() (Cloudflare is recognised from its published
+ * ranges, which this job also keeps; any other proxy makes the answer `unknown`).
  */
 class Bot_Verifier {
 
@@ -38,11 +43,12 @@ class Bot_Verifier {
 	 * @var array<string,string>
 	 */
 	const TOKENS = array(
-		'googlebot'             => 'google',
-		'googleother'           => 'google',
-		'google-inspectiontool' => 'google',
-		'storebot-google'       => 'google',
-		'adsbot-google'         => 'google',
+		'googlebot'             => 'google_common',
+		'googleother'           => 'google_common',
+		'google-inspectiontool' => 'google_common',
+		'storebot-google'       => 'google_common',
+		'adsbot-google'         => 'google_special',
+		'mediapartners-google'  => 'google_special',
 		'bingbot'               => 'bing',
 	);
 
@@ -53,20 +59,18 @@ class Bot_Verifier {
 	 * @var array<string,string[]>
 	 */
 	const SOURCES = array(
-		'google' => array(
-			'https://developers.google.com/static/crawling/ipranges/common-crawlers.json',
-			'https://developers.google.com/static/crawling/ipranges/special-crawlers.json',
-			'https://developers.google.com/static/crawling/ipranges/user-triggered-fetchers.json',
-			'https://developers.google.com/static/crawling/ipranges/user-triggered-fetchers-google.json',
-		),
-		'bing'   => array( 'https://www.bing.com/toolbox/bingbot.json' ),
+		'google_common'  => array( 'https://developers.google.com/static/crawling/ipranges/common-crawlers.json' ),
+		'google_special' => array( 'https://developers.google.com/static/crawling/ipranges/special-crawlers.json' ),
+		'bing'           => array( 'https://www.bing.com/toolbox/bingbot.json' ),
+		// Not an engine: the ranges of Cloudflare (plain text, one range a line), to tell its address from a client's.
+		'cloudflare'     => array( 'https://www.cloudflare.com/ips-v4', 'https://www.cloudflare.com/ips-v6' ), // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- Two lists of addresses read by the server, not content loaded into a page.
 	);
 
 	/**
 	 * The engine a user agent claims to be, or an empty string for one this class does not check.
 	 *
 	 * @param  string $user_agent User agent.
-	 * @return string google, bing or empty.
+	 * @return string google_common, google_special, bing or empty.
 	 */
 	public static function engine_for( $user_agent ) {
 		$low = strtolower( (string) $user_agent );
@@ -82,7 +86,7 @@ class Bot_Verifier {
 	 * Verifies an address against the stored ranges of an engine. Reads one option, nothing else.
 	 *
 	 * @param  string $ip     Client address.
-	 * @param  string $engine google or bing.
+	 * @param  string $engine google_common, google_special or bing.
 	 * @return string verified, failed or unknown.
 	 */
 	public static function verify( $ip, $engine ) {
@@ -100,6 +104,23 @@ class Bot_Verifier {
 			}
 		}
 		return self::FAILED;
+	}
+
+	/**
+	 * Whether an address belongs to Cloudflare, by its published ranges. False when the list is not there.
+	 *
+	 * @param  string $ip Address.
+	 * @return bool
+	 */
+	public static function is_cloudflare( $ip ) {
+		$stored = get_option( self::OPTION, array() );
+		$ranges = is_array( $stored ) && isset( $stored['cloudflare'] ) && is_array( $stored['cloudflare'] ) ? $stored['cloudflare'] : array();
+		foreach ( $ranges as $cidr ) {
+			if ( is_string( $cidr ) && self::in_range( $ip, $cidr ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -143,6 +164,14 @@ class Bot_Verifier {
 	 */
 	public static function parse( $json ) {
 		$out = array();
+		if ( is_string( $json ) ) { // A plain list, one range a line (Cloudflare).
+			foreach ( preg_split( '/\s+/', trim( $json ) ) as $line ) {
+				if ( self::valid_cidr( $line ) ) {
+					$out[] = $line;
+				}
+			}
+			return array_slice( $out, 0, self::MAX_CIDR );
+		}
 		if ( ! is_array( $json ) || ! isset( $json['prefixes'] ) || ! is_array( $json['prefixes'] ) ) {
 			return $out;
 		}
@@ -201,7 +230,8 @@ class Bot_Verifier {
 					$ok = false;
 					break;
 				}
-				$parsed = self::parse( json_decode( (string) wp_remote_retrieve_body( $answer ), true ) );
+				$body   = (string) wp_remote_retrieve_body( $answer );
+				$parsed = self::parse( 'cloudflare' === $engine ? $body : json_decode( $body, true ) );
 				if ( ! $parsed ) {
 					$ok = false;
 					break;

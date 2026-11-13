@@ -67,7 +67,7 @@ class Bot_Guard {
 		if ( '' === $engine ) {
 			return $verdict;
 		}
-		$ip     = (string) apply_filters( 'socialscore_client_ip', isset( $_SERVER['REMOTE_ADDR'] ) && is_string( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '' );
+		$ip     = self::client_ip();
 		$result = Bot_Verifier::verify( $ip, $engine );
 		if ( Bot_Verifier::FAILED === $result ) {
 			return array_merge(
@@ -82,6 +82,45 @@ class Bot_Guard {
 			$verdict['signals'][] = 'unverified_bot';
 		}
 		return $verdict;
+	}
+
+	/**
+	 * The address of the visitor, for the check of a declared Googlebot or Bingbot, or an empty string when it cannot be told.
+	 *
+	 * - The shop's own answer wins: the filter `socialscore_client_ip` (a shop behind a proxy it controls sets it).
+	 * - `REMOTE_ADDR` that is Cloudflare's (its published ranges) with a valid `CF-Connecting-IP`: that header is Cloudflare's
+	 *   own statement of the client, and it can be believed because the connection came from Cloudflare.
+	 * - A private address, a Cloudflare address without that header, or any request that carries forwarding headers
+	 *   (`CF-Connecting-IP`, `X-Forwarded-For`, `X-Real-IP`, `Forwarded`) from an address that is not Cloudflare's: a proxy
+	 *   stands in front and the real client is unknown, so the answer is empty and the check fails open (`unverified_bot`).
+	 * - Otherwise `REMOTE_ADDR`, a public address with nothing in front of it.
+	 *
+	 * A forwarding header from a public address that is not a proxy is never believed: it is the visitor's own claim.
+	 *
+	 * @return string
+	 */
+	public static function client_ip() {
+		$remote = isset( $_SERVER['REMOTE_ADDR'] ) && is_string( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+		$set    = (string) apply_filters( 'socialscore_client_ip', '' );
+		if ( '' !== $set ) {
+			return $set;
+		}
+		if ( false === filter_var( $remote, FILTER_VALIDATE_IP ) ) {
+			return '';
+		}
+		$cf = isset( $_SERVER['HTTP_CF_CONNECTING_IP'] ) && is_string( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) : '';
+		if ( Bot_Verifier::is_cloudflare( $remote ) ) {
+			return false !== filter_var( $cf, FILTER_VALIDATE_IP ) ? $cf : '';
+		}
+		if ( false === filter_var( $remote, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) ) {
+			return '';
+		}
+		foreach ( array( 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'HTTP_FORWARDED', 'HTTP_TRUE_CLIENT_IP' ) as $header ) {
+			if ( ! empty( $_SERVER[ $header ] ) ) {
+				return '';
+			}
+		}
+		return $remote;
 	}
 
 	/**

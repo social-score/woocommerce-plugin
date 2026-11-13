@@ -166,9 +166,11 @@ plugin sends it; reading it back into reports is later.
    `bing.com/toolbox/bingbot.json`; checked 13.11.2026). A daily wp-cron job downloads them into one option (`autoload=no`); an engine
    whose download fails or comes back empty keeps its old list. The check on a request is a comparison with that list: **no DNS, no
    network, no write**. A public address in none of the engine's ranges is a bad bot (`fake_bot`). No list yet (the first day), or a
-   private address, **fails open**: a known bot with the signal `unverified_bot`. A shop behind a proxy or CDN must give the real
-   client address in the filter `socialscore_client_ip`, or the proxy's address is in no range; `socialscore_verify_declared_bots`
-   returns false to switch the check off. Only these engines are checked; the other declared bots are taken at their word.
+   private address, or a proxy in front (Cloudflare without its header, or any forwarding header from an address that is not
+   Cloudflare's), **fails open**: a known bot with the signal `unverified_bot`, never a 403. Behind Cloudflare the real client is
+   `CF-Connecting-IP`, believed only because the connection came from Cloudflare's published ranges. A shop behind another proxy gives
+   the client address in the filter `socialscore_client_ip`; `socialscore_verify_declared_bots` returns false to switch the check off.
+   A forwarding header from any other address is the visitor's own claim and is never believed. Only these engines are checked; the other declared bots are taken at their word.
 10. **A real `wc-api` request is never touched**, judged the way WooCommerce judges it (a non-empty text name in the query, or the
     `/wc-api/<name>/` path). A webhook that is blocked is a lost payment, and the request builds no page. An empty name, a list or
     a name in the POST body is not an API request to WooCommerce: it builds the page, so the guard treats it as a page.
@@ -183,7 +185,7 @@ plugin sends it; reading it back into reports is later.
 - Server-side hits in the traffic report: later (decision 6).
 - Publishing to WordPress.org and the Shopify App Store (5.7): the owner. `readme.txt` now describes the reports page and the
   bot handling, because the external-services text must be true before review.
-- A shop behind a CDN must set `socialscore_client_ip` (or switch the check off) for the Googlebot and Bingbot check to be right.
+- A shop behind a CDN other than Cloudflare gets `unverified_bot` for Googlebot and Bingbot (nothing is blocked) unless it sets `socialscore_client_ip`.
 
 ## Tasks
 
@@ -223,6 +225,8 @@ plugin sends it; reading it back into reports is later.
 - [x] T37 {added} Store API filter moved to `rest_request_after_callbacks` (inside `dispatch()`), so the answers WooCommerce Blocks gets from `rest_do_request` are covered as well as the server's own
 - [x] T38 {added} Block-theme pages (twentytwentyfive): Store API data printed into the HTML does not pass any REST filter, so for a bad bot the page is cleaned on its way out (`Bot_Guard::start_buffer`/`clean_page`): `low_stock_remaining` becomes null and a stock-sized `add_to_cart.maximum` becomes 9999 in every mode; in substitute mode the minor-unit prices of every `prices` object (and price ranges) are replaced with the product's factor. Smoke on the real block theme looks for `4747`, `47.47` and the remaining stock in the whole product and shop page
 - [x] T39 {added} No quantity leaves the Store API in any mode: `low_stock_remaining` and the stock-sized `add_to_cart.maximum`
+- [x] T40 {added} `Bot_Verifier`: each token is checked only against the file of the crawler it names (Googlebot, GoogleOther, Google-InspectionTool, Storebot against `common-crawlers.json`; AdsBot and Mediapartners against `special-crawlers.json`; Bingbot against `bingbot.json`); the user-triggered fetcher files are not downloaded and verify nobody
+- [x] T41 {added} `Bot_Guard::client_ip()`: the address checked is the client's. A shop's `socialscore_client_ip` wins; Cloudflare (its published ranges, kept by the same daily job) with a valid `CF-Connecting-IP` gives that header; a private address, a Cloudflare address without the header, or forwarding headers from any other address mean a proxy is in front and the answer is unknown. A fake is only a public address with nothing in front of it and outside the ranges. Smoke: Googlebot from a "Cloudflare" address with the real address in the header is verified; without it, or with only `X-Forwarded-For`, never 403; a scraper's address in the header gets 403
 - [ ] T16 {added} Level 2 route and `level2` state (stage 6)
 - [ ] T17 {added} Mode screen in the dashboard `client`
 - [ ] T18 {added} Server-side hits into the traffic report

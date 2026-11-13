@@ -80,6 +80,7 @@ class Bot_Detector {
 		'google-inspectiontool',
 		'storebot-google',
 		'adsbot-google',
+		'mediapartners-google',
 	);
 
 	/**

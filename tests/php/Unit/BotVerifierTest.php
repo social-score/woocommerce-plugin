@@ -22,9 +22,11 @@ class BotVerifierTest extends TestCase {
 		$this->server_before = $_SERVER;
 		Bot_Guard::reset();
 		$this->options[ Bot_Verifier::OPTION ] = array(
-			'google'  => array( '66.249.64.0/19', '2001:4860:4801:10::/64' ),
-			'bing'    => array( '157.55.39.0/24', '40.77.167.0/24' ),
-			'fetched' => time(),
+			'google_common'  => array( '66.249.64.0/19', '2001:4860:4801:10::/64' ),
+			'google_special' => array( '198.51.100.0/27' ),
+			'bing'           => array( '157.55.39.0/24', '40.77.167.0/24' ),
+			'cloudflare'     => array( '173.245.48.0/20', '104.16.0.0/13', '2606:4700::/32' ),
+			'fetched'        => time(),
 		);
 		Functions\when( 'wp_remote_get' )->alias( fn( $url, $args = array() ) => wp_remote_request( $url, array_merge( $args, array( 'method' => 'GET' ) ) ) );
 		$this->connect_store();
@@ -36,9 +38,13 @@ class BotVerifierTest extends TestCase {
 		parent::tearDown();
 	}
 
-	private function as_bot( $ua, $ip ) {
+	private function as_bot( $ua, $ip, array $headers = array() ) {
 		$_SERVER['HTTP_USER_AGENT'] = $ua;
 		$_SERVER['REMOTE_ADDR']     = $ip;
+		unset( $_SERVER['HTTP_CF_CONNECTING_IP'], $_SERVER['HTTP_X_FORWARDED_FOR'], $_SERVER['HTTP_X_REAL_IP'], $_SERVER['HTTP_FORWARDED'], $_SERVER['HTTP_TRUE_CLIENT_IP'] );
+		foreach ( $headers as $name => $value ) {
+			$_SERVER[ $name ] = $value;
+		}
 		Bot_Guard::reset();
 		return Bot_Guard::current();
 	}
@@ -64,7 +70,7 @@ class BotVerifierTest extends TestCase {
 		$verdict = $this->as_bot( self::GOOGLEBOT, self::OTHER_IP );
 		$this->assertSame( 'info_bot', $verdict['class'] );
 		$this->assertContains( 'unverified_bot', $verdict['signals'] );
-		$this->options[ Bot_Verifier::OPTION ] = array( 'google' => array( '66.249.64.0/19' ) );
+		$this->options[ Bot_Verifier::OPTION ] = array( 'google_common' => array( '66.249.64.0/19' ) );
 		foreach ( array( '10.0.0.5', '127.0.0.1', '', 'not an address' ) as $ip ) {
 			$this->assertSame( 'info_bot', $this->as_bot( self::GOOGLEBOT, $ip )['class'], $ip );
 			$this->assertContains( 'unverified_bot', Bot_Guard::current()['signals'], $ip );
@@ -138,24 +144,29 @@ class BotVerifierTest extends TestCase {
 	}
 
 	public function test_the_daily_job_downloads_the_published_files_into_one_option() {
-		$google = array( 'prefixes' => array( array( 'ipv4Prefix' => '66.249.64.0/19' ) ) );
-		$bing   = array( 'prefixes' => array( array( 'ipv4Prefix' => '157.55.39.0/24' ) ) );
-		$by_url = array( 'https://www.bing.com/toolbox/bingbot.json' => $bing );
-		foreach ( Bot_Verifier::SOURCES['google'] as $i => $url ) {
-			$by_url[ $url ] = 0 === $i ? $google : array( 'prefixes' => array( array( 'ipv4Prefix' => '192.0.2.' . $i . '/32' ) ) );
-		}
+		$by_url = array(
+			'https://developers.google.com/static/crawling/ipranges/common-crawlers.json'  => array( 'prefixes' => array( array( 'ipv4Prefix' => '66.249.64.0/19' ) ) ),
+			'https://developers.google.com/static/crawling/ipranges/special-crawlers.json' => array( 'prefixes' => array( array( 'ipv4Prefix' => '66.249.90.0/27' ) ) ),
+			'https://www.bing.com/toolbox/bingbot.json'                                   => array( 'prefixes' => array( array( 'ipv4Prefix' => '157.55.39.0/24' ) ) ),
+			'https://www.cloudflare.com/ips-v4'                                           => "173.245.48.0/20\n103.21.244.0/22\n",
+			'https://www.cloudflare.com/ips-v6'                                           => "2400:cb00::/32\njunk\n",
+		);
 		$this->files( $by_url );
 		unset( $this->options[ Bot_Verifier::OPTION ] );
 
 		Bot_Verifier::refresh();
 
 		$stored = $this->options[ Bot_Verifier::OPTION ];
-		$this->assertContains( '66.249.64.0/19', $stored['google'] );
-		$this->assertCount( 4, $stored['google'], 'the four Google files are one list' );
+		$this->assertSame( array( '66.249.64.0/19' ), $stored['google_common'] );
+		$this->assertSame( array( '66.249.90.0/27' ), $stored['google_special'], 'each Google file under its own key' );
 		$this->assertSame( array( '157.55.39.0/24' ), $stored['bing'] );
+		$this->assertSame( array( '173.245.48.0/20', '103.21.244.0/22', '2400:cb00::/32' ), $stored['cloudflare'], 'a plain list, junk lines dropped' );
 		$this->assertSame( 'no', $this->autoload[ Bot_Verifier::OPTION ], 'not autoloaded' );
 		$urls = array_column( $this->http, 'url' );
 		$this->assertContains( 'https://developers.google.com/static/crawling/ipranges/common-crawlers.json', $urls );
+		foreach ( $urls as $url ) {
+			$this->assertStringNotContainsString( 'user-triggered', $url, 'the files of user-triggered fetchers are never downloaded' );
+		}
 		$this->assertContains( 'https://www.bing.com/toolbox/bingbot.json', $urls );
 	}
 
@@ -163,7 +174,7 @@ class BotVerifierTest extends TestCase {
 		$this->files( array( 'https://www.bing.com/toolbox/bingbot.json' => array( 'prefixes' => array( array( 'ipv4Prefix' => '40.77.167.0/24' ) ) ) ) );
 		Bot_Verifier::refresh();
 		$stored = $this->options[ Bot_Verifier::OPTION ];
-		$this->assertSame( array( '66.249.64.0/19', '2001:4860:4801:10::/64' ), $stored['google'], 'Google failed: the old list stays' );
+		$this->assertSame( array( '66.249.64.0/19', '2001:4860:4801:10::/64' ), $stored['google_common'], 'Google failed: the old list stays' );
 		$this->assertSame( array( '40.77.167.0/24' ), $stored['bing'] );
 		// An empty or garbled file is a failure too, never an empty list that would turn every Googlebot into a fake.
 		$this->files( array( 'https://www.bing.com/toolbox/bingbot.json' => array( 'prefixes' => array() ) ) );
@@ -193,5 +204,85 @@ class BotVerifierTest extends TestCase {
 		Functions\when( 'wp_next_scheduled' )->justReturn( time() + 100 );
 		Bot_Verifier::schedule();
 		$this->assertCount( 1, $calls, 'not scheduled twice' );
+	}
+
+	// Which file a token may be checked against ---------------------------------------------------------------------
+
+	public function test_googlebot_from_an_address_that_is_only_in_a_file_of_another_crawler_is_a_fake() {
+		// 198.51.100.9 is in the special-crawlers file (AdsBot), not in the common crawlers file.
+		$this->assertSame( 'bad_bot', $this->as_bot( self::GOOGLEBOT, '198.51.100.9' )['class'] );
+		$adsbot = 'AdsBot-Google (+http://www.google.com/adsbot.html)';
+		$this->assertSame( 'info_bot', $this->as_bot( $adsbot, '198.51.100.9' )['class'] );
+		$this->assertSame( 'bad_bot', $this->as_bot( $adsbot, self::GOOGLE_IP )['class'], 'AdsBot is not in the common file' );
+		$this->assertSame( 'info_bot', $this->as_bot( 'Mediapartners-Google', '198.51.100.9' )['class'] );
+		$this->assertSame( 'bad_bot', $this->as_bot( self::BINGBOT, '198.51.100.9' )['class'] );
+	}
+
+	public function test_an_address_that_is_only_a_user_triggered_fetcher_never_makes_a_verified_bot() {
+		// Apps Script and Site Verifier fetch for anyone from addresses Google lists as user-triggered. Those files are not
+		// kept, so such an address is in no range: a fake.
+		$fetcher = '74.125.210.10';
+		$this->assertSame( 'bad_bot', $this->as_bot( self::GOOGLEBOT, $fetcher )['class'] );
+		$this->assertContains( 'fake_bot', Bot_Guard::current()['signals'] );
+		$this->assertSame( array( 'google_common', 'google_special', 'bing', 'cloudflare' ), array_keys( Bot_Verifier::SOURCES ) );
+	}
+
+	// Behind a proxy or a CDN -----------------------------------------------------------------------------------------
+
+	public function test_the_real_googlebot_behind_cloudflare_is_verified_by_the_cloudflare_header() {
+		$verdict = $this->as_bot( self::GOOGLEBOT, '104.16.20.30', array( 'HTTP_CF_CONNECTING_IP' => self::GOOGLE_IP ) );
+		$this->assertSame( 'info_bot', $verdict['class'] );
+		$this->assertSame( array( 'declared_bot' ), $verdict['signals'] );
+		$this->assertSame( self::GOOGLE_IP, Bot_Guard::client_ip() );
+	}
+
+	public function test_a_scraper_behind_cloudflare_that_says_googlebot_is_a_fake() {
+		$verdict = $this->as_bot( self::GOOGLEBOT, '104.16.20.30', array( 'HTTP_CF_CONNECTING_IP' => self::OTHER_IP ) );
+		$this->assertSame( 'bad_bot', $verdict['class'] );
+	}
+
+	public function test_a_cloudflare_address_without_its_header_is_unknown_and_fails_open() {
+		$verdict = $this->as_bot( self::GOOGLEBOT, '104.16.20.30' );
+		$this->assertSame( 'info_bot', $verdict['class'] );
+		$this->assertContains( 'unverified_bot', $verdict['signals'] );
+		$this->assertSame( '', Bot_Guard::client_ip() );
+		$this->assertSame( 'info_bot', $this->as_bot( self::GOOGLEBOT, '104.16.20.30', array( 'HTTP_CF_CONNECTING_IP' => 'not an address' ) )['class'] );
+	}
+
+	public function test_a_forwarding_header_from_an_address_that_is_not_cloudflare_is_never_believed() {
+		// The visitor can write any header. A scraper sending CF-Connecting-IP: <a Google address> is not verified by it...
+		$verdict = $this->as_bot( self::GOOGLEBOT, self::OTHER_IP, array( 'HTTP_CF_CONNECTING_IP' => self::GOOGLE_IP ) );
+		$this->assertSame( 'info_bot', $verdict['class'], '...and, because a proxy may stand in front, it is not called fake either: unknown' );
+		$this->assertContains( 'unverified_bot', $verdict['signals'] );
+		foreach ( array( 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'HTTP_FORWARDED', 'HTTP_TRUE_CLIENT_IP' ) as $header ) {
+			$verdict = $this->as_bot( self::GOOGLEBOT, self::OTHER_IP, array( $header => self::GOOGLE_IP ) );
+			$this->assertContains( 'unverified_bot', $verdict['signals'], $header );
+			$this->assertSame( 'info_bot', $verdict['class'], $header );
+		}
+	}
+
+	public function test_a_private_address_in_front_is_unknown_not_fake() {
+		foreach ( array( '10.1.2.3', '172.18.0.5', '192.168.1.9', '127.0.0.1' ) as $ip ) {
+			$verdict = $this->as_bot( self::GOOGLEBOT, $ip );
+			$this->assertSame( 'info_bot', $verdict['class'], $ip );
+			$this->assertContains( 'unverified_bot', $verdict['signals'], $ip );
+		}
+	}
+
+	public function test_a_fake_is_only_a_public_address_with_nothing_in_front_and_outside_the_ranges() {
+		$this->assertSame( 'bad_bot', $this->as_bot( self::GOOGLEBOT, self::OTHER_IP )['class'] );
+		$this->assertSame( self::OTHER_IP, Bot_Guard::client_ip() );
+	}
+
+	public function test_the_shop_can_name_the_client_address_itself() {
+		Functions\when( 'apply_filters' )->alias( fn( $tag, $value ) => 'socialscore_client_ip' === $tag ? self::GOOGLE_IP : $value );
+		$this->assertSame( 'info_bot', $this->as_bot( self::GOOGLEBOT, '10.0.0.7', array( 'HTTP_X_FORWARDED_FOR' => '1.2.3.4' ) )['class'] );
+		$this->assertSame( self::GOOGLE_IP, Bot_Guard::client_ip() );
+	}
+
+	public function test_without_a_cloudflare_list_a_forwarding_header_still_makes_the_answer_unknown() {
+		unset( $this->options[ Bot_Verifier::OPTION ]['cloudflare'] );
+		$verdict = $this->as_bot( self::GOOGLEBOT, '104.16.20.30', array( 'HTTP_CF_CONNECTING_IP' => self::OTHER_IP ) );
+		$this->assertSame( 'info_bot', $verdict['class'], 'never a 403 for a possible Googlebot' );
 	}
 }

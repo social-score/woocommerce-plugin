@@ -159,7 +159,8 @@ ss_assert( false === strpos( $body, '"price":"990"' ), 'substitute mode: the Sto
 // The published address ranges of Google and Bing, downloaded by the daily job (real files).
 \SocialScore\Bot_Verifier::refresh();
 $ranges = get_option( \SocialScore\Bot_Verifier::OPTION );
-ss_assert( is_array( $ranges ) && count( $ranges['google'] ?? array() ) > 50 && count( $ranges['bing'] ?? array() ) >= 3, 'the job stored the published ranges (' . count( $ranges['google'] ?? array() ) . ' Google, ' . count( $ranges['bing'] ?? array() ) . ' Bing)' );
+ss_assert( is_array( $ranges ) && count( $ranges['google_common'] ?? array() ) > 50 && count( $ranges['google_special'] ?? array() ) > 5 && count( $ranges['bing'] ?? array() ) >= 3 && count( $ranges['cloudflare'] ?? array() ) >= 10, 'the job stored the published ranges (' . count( $ranges['google_common'] ?? array() ) . ' Google common, ' . count( $ranges['google_special'] ?? array() ) . ' special, ' . count( $ranges['bing'] ?? array() ) . ' Bing, ' . count( $ranges['cloudflare'] ?? array() ) . ' Cloudflare)' );
+ss_assert( ! isset( $ranges['google'] ) && ! isset( $ranges['google_user'] ), 'the user-triggered fetcher files are not kept' );
 ss_assert( \SocialScore\Bot_Verifier::VERIFIED === \SocialScore\Bot_Verifier::verify( '157.55.39.1', 'bing' ) && \SocialScore\Bot_Verifier::FAILED === \SocialScore\Bot_Verifier::verify( '203.0.113.50', 'bing' ), 'an address is checked against the stored list without any DNS' );
 ss_assert( false !== wp_next_scheduled( \SocialScore\Bot_Verifier::HOOK ), 'the daily job is scheduled' );
 
@@ -271,6 +272,16 @@ ss_assert( 200 === ss_as( $GOOGLE, $url ), 'block mode: Googlebot is never block
 ss_assert( 403 !== ss_as( $BOT, 'http://wordpress/wp-json/socialscore/v1/nothing' ), 'block mode: a REST callback by an HTTP library is not blocked' );
 ss_assert( 403 !== ss_as( $BOT, 'http://wordpress/?wc-api=socialscore_test' ), 'block mode: any wc-api request is left alone' );
 ss_assert( 403 !== ss_as( $BOT, 'http://wordpress/wp-cron.php?doing_wp_cron' ), 'block mode: wp-cron is not blocked' );
+
+// 6b. Behind Cloudflare. The test stack's own address is made a "Cloudflare" address, so the module sees what a shop behind
+//     Cloudflare sees: the real Googlebot has to get through, a scraper that says Googlebot must not.
+$saved = get_option( \SocialScore\Bot_Verifier::OPTION );
+update_option( \SocialScore\Bot_Verifier::OPTION, array( 'google_common' => array( '66.249.64.0/19' ), 'cloudflare' => array( '172.16.0.0/12', '10.0.0.0/8', '192.168.0.0/16' ), 'fetched' => time() ), false );
+ss_assert( 403 !== ss_as( $GOOGLE, $url, array( 'CF-Connecting-IP' => '66.249.66.1' ) ), 'block mode: Googlebot behind Cloudflare, with the real address in CF-Connecting-IP, is verified and gets the page' );
+ss_assert( 403 !== ss_as( $GOOGLE, $url ), 'block mode: Googlebot from a Cloudflare address with no CF-Connecting-IP is unverified, and never gets 403' );
+ss_assert( 403 !== ss_as( $GOOGLE, $url, array( 'X-Forwarded-For' => '66.249.66.1' ) ), 'block mode: Googlebot with only X-Forwarded-For (some other proxy) is unverified, and never gets 403' );
+ss_assert( 403 === ss_as( $GOOGLE, $url, array( 'CF-Connecting-IP' => '203.0.113.50' ) ), 'block mode: a scraper behind Cloudflare that says Googlebot, from an address in no Google range, gets 403' );
+update_option( \SocialScore\Bot_Verifier::OPTION, $saved, false );
 
 // 7. With the Pixel off, nothing is blocked.
 touch( '/shared/pixel-off' );
