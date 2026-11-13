@@ -29,6 +29,8 @@ class Bot_Guard {
 	// The substitute price is the real one times a factor between 0.85 and 1.15, fixed for a product and a day.
 	// What the Store API shows as the most one can add when stock is not managed.
 	const NO_LIMIT = 9999;
+	// How many substitutes one request remembers; past it every number is replaced and none is remembered.
+	const REGISTRY_LIMIT = 20000;
 	// The headers a proxy writes the client into.
 	const PROXY_HEADERS = array( 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'HTTP_FORWARDED', 'HTTP_TRUE_CLIENT_IP' );
 	// The ONE list of what carries a quantity or a price in the Store API. The API filter and the page cleaner both use it.
@@ -41,38 +43,25 @@ class Bot_Guard {
 	const FACTOR_SPREAD = 30;
 
 	/**
-	 * The REAL prices of the products this request shows, kept on the server only (nothing of it reaches the visitor): number
-	 * (as minor units, and as decimal text) => product ids. Filled while the page is built, from the products themselves.
-	 * A number in the page that is a real price here is replaced; a number that is not (a substitute already, or no price at
-	 * all) is left alone, so running twice changes nothing and the text of the page decides nothing.
+	 * What THIS request has put in place of a price, kept on the server only (nothing of it reaches the visitor): the numbers
+	 * that came out of substitute_price, in minor units and as decimal text, each with the product it was made for (so a real price
+	 * of another product that happens to equal a substitute is still replaced). A number after a price key that is in here is a
+	 * substitute already and stays; every other number is replaced. So running twice changes nothing, and anything unknown
+	 * (a product no code has seen, any number of variations, text from a review) is replaced rather than skipped.
 	 *
-	 * @var array{minor:array<string,array<int|string,bool>>,dec:array<string,array<int|string,bool>>}
+	 * @var array{minor:array<string,bool>,dec:array<string,bool>} Keys are product|number.
 	 */
-	private static $real = array(
+	private static $out = array(
 		'minor' => array(),
 		'dec'   => array(),
 	);
 
 	/**
-	 * Products whose prices were read into the registry: id => whether the product was found.
+	 * Set when the registry grew past its limit: from then on every number is replaced and nothing is recorded.
 	 *
-	 * @var array<int|string,bool>
+	 * @var bool
 	 */
-	private static $learned = array();
-
-	/**
-	 * Products that were not found and whose first answer was taken as real.
-	 *
-	 * @var array<int|string,bool>
-	 */
-	private static $fallback = array();
-
-	/**
-	 * Whether prices are being recorded in this request (a bad bot, substitute mode); decided once.
-	 *
-	 * @var bool|null
-	 */
-	private static $recording = null;
+	private static $overflow = false;
 
 	/**
 	 * Classification of this request, made once.
@@ -270,14 +259,12 @@ class Bot_Guard {
 	 * @return void
 	 */
 	public static function reset() {
-		self::$current   = null;
-		self::$real      = array(
+		self::$current  = null;
+		self::$out      = array(
 			'minor' => array(),
 			'dec'   => array(),
 		);
-		self::$learned   = array();
-		self::$fallback  = array();
-		self::$recording = null;
+		self::$overflow = false;
 	}
 
 	/**
@@ -308,12 +295,6 @@ class Bot_Guard {
 		add_filter( 'woocommerce_available_variation', array( $this, 'variation' ), 10, 3 );
 		add_filter( 'woocommerce_structured_data_product_offer', array( $this, 'structured_offer' ), 10, 2 );
 		add_action( 'template_redirect', array( $this, 'start_buffer' ), 0 );
-		// Record the real prices as the page reads them (they are only recorded for a bad bot in substitute mode).
-		foreach ( array( 'woocommerce_product_get_price', 'woocommerce_product_get_regular_price', 'woocommerce_product_get_sale_price', 'woocommerce_product_variation_get_price', 'woocommerce_product_variation_get_regular_price', 'woocommerce_product_variation_get_sale_price' ) as $hook ) {
-			add_filter( $hook, array( $this, 'record_price' ), PHP_INT_MAX, 2 );
-		}
-		add_filter( 'woocommerce_get_price_including_tax', array( $this, 'record_taxed_price' ), PHP_INT_MAX, 3 );
-		add_filter( 'woocommerce_get_price_excluding_tax', array( $this, 'record_taxed_price' ), PHP_INT_MAX, 3 );
 		add_filter( 'rest_pre_dispatch', array( $this, 'guard_rest' ), 10, 3 );
 		// After the route's callbacks, inside dispatch(): the server's own answers, and also WooCommerce Blocks' hydration of
 		// the page (it calls rest_do_request, which never reaches rest_post_dispatch), both pass here.
@@ -766,7 +747,6 @@ class Bot_Guard {
 	private function substitute_prices( $prices, $product_id ) {
 		$is_object = is_object( $prices );
 		$p         = $is_object ? get_object_vars( $prices ) : $prices;
-		self::prime( $product_id, self::price_fields( $p ) );
 		foreach ( self::PRICE_KEYS as $key ) {
 			if ( isset( $p[ $key ] ) && ctype_digit( (string) $p[ $key ] ) ) {
 				$p[ $key ] = $this->shown_minor( $p[ $key ], $product_id );
@@ -779,8 +759,7 @@ class Bot_Guard {
 	}
 
 	/**
-	 * A price in the Store API answer, as text: replaced when it is a real price of the product (read from the product itself,
-	 * not from the text), left alone when it is not (a substitute from an earlier pass).
+	 * A price in the Store API answer, as text: replaced, unless it is a number this request already produced (a second pass).
 	 *
 	 * @param  string     $value      Price.
 	 * @param  int|string $product_id Product id of the answer.
@@ -789,46 +768,6 @@ class Bot_Guard {
 	private function shown_minor( $value, $product_id ) {
 		$shown = self::shown_value( (string) $value, $product_id );
 		return null === $shown ? (string) $value : $shown;
-	}
-
-	/**
-	 * The price fields in an answer, with those of a range inside it.
-	 *
-	 * @param  array $node Prices or range.
-	 * @return array
-	 */
-	private static function price_fields( array $node ) {
-		$out = array();
-		foreach ( self::PRICE_KEYS as $key ) {
-			if ( isset( $node[ $key ] ) ) {
-				$out[] = $node[ $key ];
-			}
-		}
-		if ( isset( $node['price_range'] ) && ( is_array( $node['price_range'] ) || is_object( $node['price_range'] ) ) ) {
-			$out = array_merge( $out, self::price_fields( (array) $node['price_range'] ) );
-		}
-		return $out;
-	}
-
-	/**
-	 * Makes sure the registry knows the real prices of the product an answer is about: from the product itself; when there is
-	 * no such product (it is gone, or this is not WordPress), the first answer's own numbers are taken as the real ones, once;
-	 * what a later pass finds is the substitute.
-	 *
-	 * @param  int|string $product_id Product id.
-	 * @param  array      $values     The price fields of the answer.
-	 * @return void
-	 */
-	private static function prime( $product_id, array $values ) {
-		if ( self::learn_product( $product_id ) || ! empty( self::$fallback[ $product_id ] ) ) {
-			return;
-		}
-		self::$fallback[ $product_id ] = true;
-		foreach ( $values as $value ) {
-			if ( is_string( $value ) && ctype_digit( $value ) ) {
-				self::note_real( $product_id, (float) $value / 100 );
-			}
-		}
 	}
 
 	/**
@@ -842,33 +781,12 @@ class Bot_Guard {
 	private function substitute_range( $range, $product_id ) {
 		$is_object = is_object( $range );
 		$r         = $is_object ? get_object_vars( $range ) : $range;
-		self::prime( $product_id, self::price_fields( $r ) );
 		foreach ( self::PRICE_KEYS as $key ) {
 			if ( isset( $r[ $key ] ) && ctype_digit( (string) $r[ $key ] ) ) {
 				$r[ $key ] = $this->shown_minor( $r[ $key ], $product_id );
 			}
 		}
 		return $is_object ? (object) $r : $r;
-	}
-
-	/**
-	 * Notes a real price of a product, in the forms it leaves the shop in: minor units (at the shop's decimals and at two) and
-	 * decimal text.
-	 *
-	 * @param  int|string       $product_id Product id.
-	 * @param  float|int|string $price      Real price.
-	 * @return void
-	 */
-	public static function note_real( $product_id, $price ) {
-		$price = is_numeric( $price ) ? (float) $price : 0.0;
-		if ( $price <= 0 || count( self::$real['minor'] ) > 5000 ) {
-			return;
-		}
-		$decimals = function_exists( 'wc_get_price_decimals' ) ? (int) wc_get_price_decimals() : 2;
-		foreach ( array_unique( array( $decimals, 2, 0 ) ) as $d ) {
-			self::$real['minor'][ (string) (int) round( $price * pow( 10, $d ) ) ][ $product_id ] = true;
-		}
-		self::$real['dec'][ self::dec_key( $price ) ][ $product_id ] = true;
 	}
 
 	/**
@@ -882,112 +800,49 @@ class Bot_Guard {
 	}
 
 	/**
-	 * Reads the real prices of a product into the registry, once: price, regular and sale price, the prices of a variable
-	 * product's variations, and each as shown with or without tax.
+	 * What to show instead of a number that stands where a price does, or null to leave it as it is. A number this request
+	 * already produced is left; any other number, whoever it belongs to, is replaced with the substitute of the product named
+	 * by `$hint` (an id the answer or the page names; 0 when there is none: then the value alone, and the day, decide), and the
+	 * result is remembered. The id is only a way to give the same product the same factor in the API and in the page: it can
+	 * never keep a real price from being replaced.
 	 *
-	 * @param  int|string $product_id Product id.
-	 * @return bool Whether the product was found.
-	 */
-	private static function learn_product( $product_id ) {
-		if ( isset( self::$learned[ $product_id ] ) ) {
-			return self::$learned[ $product_id ];
-		}
-		$product                      = function_exists( 'wc_get_product' ) && is_numeric( $product_id ) ? wc_get_product( (int) $product_id ) : false;
-		self::$learned[ $product_id ] = is_object( $product );
-		if ( ! is_object( $product ) ) {
-			return false;
-		}
-		$prices = array( $product->get_price(), $product->get_regular_price(), $product->get_sale_price() );
-		if ( method_exists( $product, 'get_variation_prices' ) ) {
-			foreach ( (array) $product->get_variation_prices( true ) as $group ) {
-				foreach ( array_slice( (array) $group, 0, 200 ) as $price ) {
-					$prices[] = $price;
-				}
-			}
-		}
-		foreach ( $prices as $price ) {
-			self::note_real( $product_id, $price );
-			if ( function_exists( 'wc_get_price_to_display' ) && is_numeric( $price ) && (float) $price > 0 ) {
-				self::note_real( $product_id, wc_get_price_to_display( $product, array( 'price' => (float) $price ) ) );
-			}
-		}
-		return true;
-	}
-
-	/**
-	 * Whether prices are being recorded in this request.
-	 *
-	 * @return bool
-	 */
-	private function recording() {
-		if ( null === self::$recording ) {
-			self::$recording = Bot_Detector::BAD_BOT === self::current()['class'] && $this->should_inspect() && $this->acts() && self::MODE_SUBSTITUTE === $this->mode();
-		}
-		return self::$recording;
-	}
-
-	/**
-	 * Filter on a product's price getters: only looks, returns the value as it is.
-	 *
-	 * @param  mixed       $price   Price.
-	 * @param  \WC_Product $product Product.
-	 * @return mixed
-	 */
-	public function record_price( $price, $product = null ) {
-		if ( is_object( $product ) && method_exists( $product, 'get_id' ) && $this->recording() ) {
-			self::note_real( $product->get_id(), $price );
-		}
-		return $price;
-	}
-
-	/**
-	 * Filter on the prices with and without tax (`wc_get_price_to_display` goes through them): only looks.
-	 *
-	 * @param  mixed       $price   Price (for the quantity).
-	 * @param  int|float   $qty     Quantity.
-	 * @param  \WC_Product $product Product.
-	 * @return mixed
-	 */
-	public function record_taxed_price( $price, $qty = 1, $product = null ) {
-		if ( is_object( $product ) && method_exists( $product, 'get_id' ) && is_numeric( $price ) && $this->recording() ) {
-			self::note_real( $product->get_id(), $price );
-			if ( is_numeric( $qty ) && (float) $qty > 0 ) {
-				self::note_real( $product->get_id(), (float) $price / (float) $qty );
-			}
-		}
-		return $price;
-	}
-
-	/**
-	 * What to show instead of a number that stands where a price does, or null when it is not a real price of a product this
-	 * request has shown. The product is the one that owns the number in the registry; the id written near it in the page is only
-	 * a hint to choose between products that share a price, so text in the page cannot change the result.
-	 *
-	 * @param  string           $text Number as written (digits, maybe a decimal point).
-	 * @param  int|string|null  $hint Product id the page or the answer names.
+	 * @param  string          $text Number as written (digits, maybe a decimal point).
+	 * @param  int|string|null $hint Product id, or null.
 	 * @return string|null
 	 */
 	public static function shown_value( $text, $hint = null ) {
-		if ( 1 !== preg_match( '/^\d+(?:\.\d+)?$/', (string) $text ) ) {
+		if ( 1 !== preg_match( '/^\d+(?:\.\d+)?$/', (string) $text ) || (float) $text <= 0 ) {
 			return null;
 		}
 		$is_dec = false !== strpos( $text, '.' );
-		$ids    = null;
-		if ( ! $is_dec && isset( self::$real['minor'][ (string) (int) $text ] ) ) {
-			$ids = self::$real['minor'][ (string) (int) $text ];
-		} elseif ( isset( self::$real['dec'][ self::dec_key( $text ) ] ) ) {
-			$ids    = self::$real['dec'][ self::dec_key( $text ) ];
-			$is_dec = true;
-		}
-		if ( null === $ids ) {
+		$id     = null === $hint || '' === $hint ? 0 : $hint;
+		if ( ! self::$overflow && ( $is_dec ? isset( self::$out['dec'][ $id . '|' . self::dec_key( $text ) ] ) : isset( self::$out['minor'][ $id . '|' . (int) $text ] ) ) ) {
 			return null;
 		}
-		$id = null !== $hint && isset( $ids[ $hint ] ) ? $hint : array_key_first( $ids );
 		if ( $is_dec ) {
-			$places = false !== strpos( $text, '.' ) ? strlen( substr( $text, strpos( $text, '.' ) + 1 ) ) : 0;
-			return number_format( self::substitute_price( (float) $text, $id ), $places, '.', '' );
+			$places = strlen( substr( $text, strpos( $text, '.' ) + 1 ) );
+			$shown  = number_format( self::substitute_price( (float) $text, $id ), $places, '.', '' );
+			self::remember( 'dec', $id . '|' . self::dec_key( $shown ) );
+			return $shown;
 		}
-		return (string) (int) round( self::substitute_price( (int) $text, $id ) );
+		$shown = (string) (int) round( self::substitute_price( (int) $text, $id ) );
+		self::remember( 'minor', $id . '|' . $shown );
+		return $shown;
+	}
+
+	/**
+	 * Remembers a number this request produced; past the limit, stops remembering and replaces everything from then on.
+	 *
+	 * @param  string $kind minor or dec.
+	 * @param  string $key  The number.
+	 * @return void
+	 */
+	private static function remember( $kind, $key ) {
+		if ( count( self::$out['minor'] ) + count( self::$out['dec'] ) >= self::REGISTRY_LIMIT ) {
+			self::$overflow = true;
+			return;
+		}
+		self::$out[ $kind ][ $key ] = true;
 	}
 
 	/**

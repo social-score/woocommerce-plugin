@@ -21,11 +21,11 @@ defined( 'ABSPATH' ) || exit;
  * - every `low_stock_remaining`, `stock_quantity` and `quantity_in_stock` with a number gets `null`;
  * - every `maximum` with a number below the no-limit value gets the no-limit value (any other `maximum` in the page too: the
  *   price of that is a slider that stops at 9999);
- * - in substitute mode, every number after a price key that is a REAL price of a product this request showed (the registry in
- *   Bot_Guard, filled on the server from the products themselves) is replaced with the substitute of that product. A number
- *   that is not a real price is left alone: a substitute already put there is not one, so a second pass changes nothing, and
- *   what the text of the page says (an `id` in a review, a figure in a description) decides nothing about which product a
- *   price belongs to or whether it is replaced.
+ * - in substitute mode, every number after a price key is replaced with its substitute, unless it is a number this request
+ *   already produced (the registry in Bot_Guard, server side, holds only what the server made). So whatever is unknown is
+ *   replaced, a second pass changes nothing, and what the text of the page says (an `id` in a review, a figure in a
+ *   description) cannot keep a real price in place: the id only picks the factor, so the same product gets the same value in
+ *   the API and in the page.
  */
 class Page_Cleaner {
 
@@ -77,8 +77,8 @@ class Page_Cleaner {
 	}
 
 	/**
-	 * Replaces the real prices after a price key. The id written last before a price is only a hint for choosing between
-	 * products that share a price.
+	 * Replaces every number after a price key that this request did not produce itself. The id written last before it only
+	 * picks the factor (the same product gets the same value in the API and in the page).
 	 *
 	 * @param  string $html Page.
 	 * @return string
