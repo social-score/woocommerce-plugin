@@ -177,6 +177,12 @@ plugin sends it; reading it back into reports is later.
 11. **admin-ajax is guarded for `woocommerce_*` actions only**: they are the storefront's own (variation lookup), open
     to visitors who are not logged in. Other plugins' admin-ajax actions are not ours to block.
 
+12. **The page cleaner is a second line, not the first.** The first line is the REST-level filter, which covers what WooCommerce
+    Blocks asks the API for. What is built without a REST request (the Blocks product schema, the Interactivity API's state and
+    context) has no WordPress or WooCommerce filter this module can rely on, so it is cleaned in the finished page. The cleaner
+    is generic on purpose; it does not parse HTML, so a number written in a way that no key precedes (a price in plain text) is
+    the job of the price filters (`woocommerce_get_price_html` and the others).
+
 ## Not done here, and what depends on whom
 
 - The route `POST /api/v2/stores/{id}/pixel/identity`, the `level2` field of the Pixel state, the Level 2 switch and
@@ -227,6 +233,9 @@ plugin sends it; reading it back into reports is later.
 - [x] T39 {added} No quantity leaves the Store API in any mode: `low_stock_remaining` and the stock-sized `add_to_cart.maximum`
 - [x] T40 {added} `Bot_Verifier`: each token is checked only against the file of the crawler it names (Googlebot, GoogleOther, Google-InspectionTool, Storebot against `common-crawlers.json`; AdsBot and Mediapartners against `special-crawlers.json`; Bingbot against `bingbot.json`); the user-triggered fetcher files are not downloaded and verify nobody
 - [x] T41 {added} `Bot_Guard::client_ip()`: the address checked is the client's. A shop's `socialscore_client_ip` wins; Cloudflare (its published ranges, kept by the same daily job) with a valid `CF-Connecting-IP` gives that header; a private address, a Cloudflare address without the header, or forwarding headers from any other address mean a proxy is in front and the answer is unknown. A fake is only a public address with nothing in front of it and outside the ranges. Smoke: Googlebot from a "Cloudflare" address with the real address in the header is verified; without it, or with only `X-Forwarded-For`, never 403; a scraper's address in the header gets 403
+- [x] T42 {added} Both `rest_request_after_callbacks` (covers WooCommerce Blocks' own requests) and `rest_post_dispatch` (the served answer) run the Store API filter; it is idempotent: quantities already null or at the no-limit value stay, a `prices` or price range object carrying `socialscore_shown` is not substituted again, and a batch (whose sub-requests were already through) only loses quantities
+- [x] T43 {added} One list of the keys that carry a quantity or a price (`Bot_Guard::NULL_KEYS`, `LIMIT_PARENTS`, `LIMIT_KEY`, `PRICE_KEYS`), used by the API filter and the page cleaner; now also `quantity_limits.maximum`, `stock_quantity`, `quantity_in_stock`
+- [x] T44 {added} `Page_Cleaner` (the second line, for a bad bot's page): keys are found as words and values as the first number after them across any run of entities, escapes and punctuation, so plain, `\"`, `\\"`, `&quot;`, `&#34;`, `&#x22;`, `%22` and `\u0022` all work; objects are delimited by counting braces; a number after a key is always replaced (fail closed). Unit tests for all eight dresses, odd shapes and look-alike words; smoke on a real page that carries the data in all eight
 - [ ] T16 {added} Level 2 route and `level2` state (stage 6)
 - [ ] T17 {added} Mode screen in the dashboard `client`
 - [ ] T18 {added} Server-side hits into the traffic report

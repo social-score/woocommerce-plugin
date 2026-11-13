@@ -118,6 +118,28 @@ foreach ( array( 'the product page' => $low_url, 'the shop page' => $shop_url ) 
 $body = wp_remote_retrieve_body( wp_remote_get( $low_url, array( 'timeout' => 60, 'user-agent' => $PERSON, 'headers' => $person_headers ) ) );
 ss_assert( 1 === preg_match( '/low_stock_remaining["\']?\s*:\s*2/', $body ) || false !== strpos( $body, '4747' ), 'a person still gets the real hydrated data (' . strlen( $body ) . ' bytes)' );
 
+// 4c. The same data in the other dresses JSON is found in inside HTML: a page that carries it in all of them.
+$dresses = array( '"', '\\"', '\\\\"', '&quot;', '&#34;', '&#x22;', '%22', '\\u0022' );
+$blob    = '';
+foreach ( $dresses as $i => $q ) {
+	$blob .= '<div data-case="' . $i . '" data-x=\'{' . $q . 'id' . $q . ':88,' . $q . 'prices' . $q . ':{' . $q . 'price' . $q . ':' . $q . '4747' . $q . ',' . $q . 'price_range' . $q . ':{' . $q . 'min_amount' . $q . ':' . $q . '4747' . $q . '}},' . $q . 'low_stock_remaining' . $q . ':2,' . $q . 'add_to_cart' . $q . ':{' . $q . 'maximum' . $q . ':2}}\'>case ' . $i . '</div>';
+}
+kses_remove_filters();
+$dressed_id = wp_insert_post( wp_slash( array( 'post_title' => 'Dressed JSON', 'post_name' => 'dressed-json', 'post_status' => 'publish', 'post_type' => 'page', 'post_content' => '<!-- wp:html -->' . $blob . '<!-- /wp:html -->' ) ) );
+$dressed    = get_permalink( $dressed_id );
+$body       = wp_remote_retrieve_body( wp_remote_get( $dressed, array( 'timeout' => 60, 'user-agent' => $PERSON, 'headers' => $person_headers ) ) );
+ss_assert( false !== strpos( $body, 'case 7' ) && 8 === substr_count( $body, '4747' ) / 2, 'the test page carries the data in all eight dresses for a person (' . substr_count( $body, '4747' ) . ' prices)' );
+$body = wp_remote_retrieve_body( wp_remote_get( $dressed, array( 'timeout' => 60, 'user-agent' => $BOT ) ) );
+$left = array();
+foreach ( $dresses as $q ) {
+	foreach ( array( 'low_stock_remaining' . $q . ':2', 'maximum' . $q . ':2}' ) as $real_quantity ) {
+		if ( false !== strpos( $body, $real_quantity ) ) {
+			$left[] = $real_quantity;
+		}
+	}
+}
+ss_assert( false !== strpos( $body, 'case 7' ) && array() === $left, 'flag mode: no quantity is left in any dress of the JSON in a page (' . implode( ' ', $left ) . ')' );
+
 // 5. Substitute mode: another price is shown to the bot, never charged.
 ss_mode( 'substitute' );
 $html = wp_remote_retrieve_body( wp_remote_get( $url, array( 'timeout' => 60, 'user-agent' => $BOT ) ) );
@@ -139,6 +161,11 @@ foreach ( array( 'the product page' => $low_url, 'the shop page' => $shop_url ) 
 	$body = wp_remote_retrieve_body( wp_remote_get( $page_url, array( 'timeout' => 60, 'user-agent' => $BOT ) ) );
 	ss_assert( false === strpos( $body, '4747' ) && false === strpos( $body, '47.47' ) && 0 === preg_match( '/low_stock_remaining["\']?\s*:\s*[1-9]/', $body ), 'substitute mode: ' . $what . ' (hydrated JSON included) has no real price in minor units or in text, and no remaining stock' );
 }
+$body = wp_remote_retrieve_body( wp_remote_get( $dressed, array( 'timeout' => 60, 'user-agent' => $BOT ) ) );
+if ( preg_match_all( '/.{0,70}4747.{0,30}/s', $body, $leaks ) ) {
+	echo 'left: ' . wp_json_encode( array_slice( $leaks[0], 0, 4 ) ) . "\n";
+}
+ss_assert( false !== strpos( $body, 'case 7' ) && false === strpos( $body, '4747' ), 'substitute mode: no real price is left in any dress of the JSON in a page' );
 // wc-api as WooCommerce does not read it is a page request: a bot in substitute mode gets the substitute price, never the real one.
 $real = '/(?<![\d.])9\.9(?:0)?(?!\d)/';
 foreach ( array( 'an empty name' => $url . '?wc-api=', 'a list' => $url . '?wc-api[]=x' ) as $what => $probe ) {

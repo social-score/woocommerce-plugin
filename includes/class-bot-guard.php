@@ -28,7 +28,14 @@ class Bot_Guard {
 	const MODE_BLOCK      = 'block';
 	// The substitute price is the real one times a factor between 0.85 and 1.15, fixed for a product and a day.
 	// What the Store API shows as the most one can add when stock is not managed.
-	const NO_LIMIT    = 9999;
+	const NO_LIMIT = 9999;
+	// The ONE list of what carries a quantity or a price in the Store API. The API filter and the page cleaner both use it.
+	const NULL_KEYS     = array( 'low_stock_remaining', 'stock_quantity', 'quantity_in_stock' );
+	const LIMIT_PARENTS = array( 'add_to_cart', 'quantity_limits' );
+	const LIMIT_KEY     = 'maximum';
+	const PRICE_KEYS    = array( 'price', 'regular_price', 'sale_price', 'min_amount', 'max_amount', 'min_price', 'max_price' );
+	// Written into a prices object once it holds substitute values.
+	const SHOWN_FLAG  = 'socialscore_shown';
 	const FACTOR_BASE = 85;
 	// 30 steps: 0.85 to 0.99 and 1.01 to 1.15. Never exactly 1.00, which would show the real price.
 	const FACTOR_SPREAD = 30;
@@ -164,6 +171,8 @@ class Bot_Guard {
 		// After the route's callbacks, inside dispatch(): the server's own answers, and also WooCommerce Blocks' hydration of
 		// the page (it calls rest_do_request, which never reaches rest_post_dispatch), both pass here.
 		add_filter( 'rest_request_after_callbacks', array( $this, 'store_api' ), 10, 3 );
+		// And the served answer as a second line; the scrub is safe to run twice.
+		add_filter( 'rest_post_dispatch', array( $this, 'store_api' ), 10, 3 );
 	}
 
 	/**
@@ -478,59 +487,14 @@ class Bot_Guard {
 	}
 
 	/**
-	 * The page of a bad bot with the product data in its JSON made safe: no remaining stock and no stock-sized maximum in any
-	 * mode, and in substitute mode the prices (minor units, as in the Store API) replaced as they are in the API answers.
+	 * The page of a bad bot with the product data in its JSON made safe (see Page_Cleaner): no remaining stock and no
+	 * stock-sized maximum in any mode, and in substitute mode the prices replaced as they are in the API answers.
 	 *
 	 * @param  string $html Page.
 	 * @return string
 	 */
 	public function clean_page( $html ) {
-		if ( ! is_string( $html ) || '' === $html || ( false === strpos( $html, 'low_stock_remaining' ) && false === strpos( $html, 'maximum' ) && false === strpos( $html, 'prices' ) ) ) {
-			return $html;
-		}
-		$q    = '(?:"|&quot;|\\\\u0022)';
-		$html = (string) preg_replace( '/(' . $q . 'low_stock_remaining' . $q . '\s*:\s*)\d+/', '${1}null', $html );
-		$html = (string) preg_replace_callback(
-			'/(' . $q . 'add_to_cart' . $q . '\s*:\s*\{[^{}]*?' . $q . 'maximum' . $q . '\s*:\s*)(\d+)/',
-			static function ( $m ) {
-				return (int) $m[2] < self::NO_LIMIT ? $m[1] . self::NO_LIMIT : $m[0];
-			},
-			$html
-		);
-		if ( self::MODE_SUBSTITUTE === $this->mode() ) {
-			$html = $this->substitute_page_prices( $html, $q );
-		}
-		return $html;
-	}
-
-	/**
-	 * Replaces the minor-unit prices of every `prices` object in a page, with the id of the product written just before it.
-	 *
-	 * @param  string $html Page.
-	 * @param  string $q    Pattern of a JSON quote.
-	 * @return string
-	 */
-	private function substitute_page_prices( $html, $q ) {
-		$last = 'page';
-		$key  = '/(' . $q . '(?:price|regular_price|sale_price|min_amount|max_amount|min_price|max_price)' . $q . '\\s*:\\s*' . $q . ')(\\d+)(' . $q . ')/';
-		return (string) preg_replace_callback(
-			'/' . $q . 'id' . $q . '\\s*:\\s*(\\d+)|' . $q . 'prices' . $q . '\\s*:\\s*\\{(?:[^{}]|\\{[^{}]*\\})*\\}/',
-			function ( $m ) use ( &$last, $key ) {
-				if ( isset( $m[1] ) && '' !== $m[1] ) {
-					$last = $m[1];
-					return $m[0];
-				}
-				$id = $last;
-				return (string) preg_replace_callback(
-					$key,
-					static function ( $n ) use ( $id ) {
-						return $n[1] . (int) round( self::substitute_price( (int) $n[2], $id ) ) . $n[3];
-					},
-					$m[0]
-				);
-			},
-			$html
-		);
+		return Page_Cleaner::clean( $html, self::MODE_SUBSTITUTE === $this->mode() );
 	}
 
 	/**
@@ -579,37 +543,39 @@ class Bot_Guard {
 		if ( is_array( $data ) || is_object( $data ) ) {
 			// Substitute on every Store API route and version that can carry a price (products, collection data, batch, any
 			// later version), except what is the visitor's own cart and checkout: those show what is charged.
-			$route      = '/' . trim( (string) preg_replace( '#/+#', '/', strtolower( rawurldecode( (string) $request->get_route() ) ) ), '/' );
-			$substitute = self::MODE_SUBSTITUTE === $this->mode() && 1 !== preg_match( '#^/wc/store(/v\d+)?/(cart|checkout|order)(/|$)#', $route );
+			$route = '/' . trim( (string) preg_replace( '#/+#', '/', strtolower( rawurldecode( (string) $request->get_route() ) ) ), '/' );
+			// A batch holds the answers of its own sub-requests, each already through this filter: only its quantities are done.
+			$substitute = self::MODE_SUBSTITUTE === $this->mode() && 1 !== preg_match( '#^/wc/store(/v\d+)?/(cart|checkout|order|batch)(/|$)#', $route );
 			$response->set_data( $this->scrub( $data, $substitute ) );
 		}
 		return $response;
 	}
 
 	/**
-	 * Walks a Store API answer and changes the stock and, when asked, the price fields of every product in it.
+	 * Walks a Store API answer and changes the stock and, when asked, the price fields of every product in it. Safe to run
+	 * twice on the same data: a quantity that is already null or at the no-limit value stays, and a `prices` object that
+	 * carries the shown mark is not substituted again.
 	 *
-	 * @param  array $data       Decoded answer.
-	 * @param  bool  $substitute Whether to change prices.
-	 * @return array
+	 * @param  array|object $data       Decoded answer.
+	 * @param  bool         $substitute Whether to change prices.
+	 * @param  mixed        $product_id Id of the product whose data this is.
+	 * @return array|object
 	 */
 	private function scrub( $data, $substitute, $product_id = null ) {
 		$is_object = is_object( $data );
 		$node      = $is_object ? get_object_vars( $data ) : $data;
-		// No quantities for a bad bot, in every mode: the remaining stock, and the most that can be added to the cart, which is
-		// the stock when it is managed.
-		if ( array_key_exists( 'low_stock_remaining', $node ) ) {
-			$node['low_stock_remaining'] = null;
-		}
-		if ( isset( $node['add_to_cart'] ) && ( is_array( $node['add_to_cart'] ) || is_object( $node['add_to_cart'] ) ) ) {
-			$cart_is_object = is_object( $node['add_to_cart'] );
-			$cart           = $cart_is_object ? get_object_vars( $node['add_to_cart'] ) : $node['add_to_cart'];
-			if ( isset( $cart['maximum'] ) && is_numeric( $cart['maximum'] ) && (int) $cart['maximum'] < self::NO_LIMIT ) {
-				$cart['maximum'] = self::NO_LIMIT;
+		// No quantities for a bad bot, in every mode.
+		foreach ( self::NULL_KEYS as $key ) {
+			if ( array_key_exists( $key, $node ) ) {
+				$node[ $key ] = null;
 			}
-			$node['add_to_cart'] = $cart_is_object ? (object) $cart : $cart;
 		}
-		if ( isset( $node['id'] ) && is_scalar( $node['id'] ) && ( isset( $node['prices'] ) ) ) {
+		foreach ( self::LIMIT_PARENTS as $parent ) {
+			if ( isset( $node[ $parent ] ) && ( is_array( $node[ $parent ] ) || is_object( $node[ $parent ] ) ) ) {
+				$node[ $parent ] = $this->lift_limit( $node[ $parent ] );
+			}
+		}
+		if ( isset( $node['id'] ) && is_scalar( $node['id'] ) && isset( $node['prices'] ) ) {
 			$product_id = $node['id'];
 		}
 		if ( $substitute && isset( $node['prices'] ) && ( is_array( $node['prices'] ) || is_object( $node['prices'] ) ) && null !== $product_id ) {
@@ -628,8 +594,23 @@ class Bot_Guard {
 	}
 
 	/**
-	 * The `prices` of a Store API product (an object in the real answer, an array in some): price, regular and sale price,
-	 * and the minimum and maximum of a price range, all integers in the smallest currency unit as text.
+	 * The most that can be added, below the no-limit value, becomes the no-limit value.
+	 *
+	 * @param  array|object $limits The `add_to_cart` or `quantity_limits` data.
+	 * @return array|object
+	 */
+	private function lift_limit( $limits ) {
+		$is_object = is_object( $limits );
+		$l         = $is_object ? get_object_vars( $limits ) : $limits;
+		if ( isset( $l[ self::LIMIT_KEY ] ) && is_numeric( $l[ self::LIMIT_KEY ] ) && (int) $l[ self::LIMIT_KEY ] < self::NO_LIMIT ) {
+			$l[ self::LIMIT_KEY ] = self::NO_LIMIT;
+		}
+		return $is_object ? (object) $l : $l;
+	}
+
+	/**
+	 * The `prices` of a Store API product (an object in the real answer, an array in some): every price key, and the price
+	 * range inside. Marked as shown, so a second pass leaves it alone.
 	 *
 	 * @param  array|object $prices     Prices.
 	 * @param  int|string   $product_id Product id.
@@ -638,7 +619,10 @@ class Bot_Guard {
 	private function substitute_prices( $prices, $product_id ) {
 		$is_object = is_object( $prices );
 		$p         = $is_object ? get_object_vars( $prices ) : $prices;
-		foreach ( array( 'price', 'regular_price', 'sale_price' ) as $key ) {
+		if ( ! empty( $p[ self::SHOWN_FLAG ] ) ) {
+			return $prices;
+		}
+		foreach ( self::PRICE_KEYS as $key ) {
 			if ( isset( $p[ $key ] ) && ctype_digit( (string) $p[ $key ] ) ) {
 				$p[ $key ] = (string) (int) round( self::substitute_price( (int) $p[ $key ], $product_id ) );
 			}
@@ -646,6 +630,7 @@ class Bot_Guard {
 		if ( isset( $p['price_range'] ) && ( is_array( $p['price_range'] ) || is_object( $p['price_range'] ) ) ) {
 			$p['price_range'] = $this->substitute_range( $p['price_range'], $product_id );
 		}
+		$p[ self::SHOWN_FLAG ] = true;
 		return $is_object ? (object) $p : $p;
 	}
 
@@ -660,11 +645,15 @@ class Bot_Guard {
 	private function substitute_range( $range, $product_id ) {
 		$is_object = is_object( $range );
 		$r         = $is_object ? get_object_vars( $range ) : $range;
-		foreach ( array( 'min_amount', 'max_amount', 'min_price', 'max_price' ) as $key ) {
+		if ( ! empty( $r[ self::SHOWN_FLAG ] ) ) {
+			return $range;
+		}
+		foreach ( self::PRICE_KEYS as $key ) {
 			if ( isset( $r[ $key ] ) && ctype_digit( (string) $r[ $key ] ) ) {
 				$r[ $key ] = (string) (int) round( self::substitute_price( (int) $r[ $key ], $product_id ) );
 			}
 		}
+		$r[ self::SHOWN_FLAG ] = true;
 		return $is_object ? (object) $r : $r;
 	}
 
