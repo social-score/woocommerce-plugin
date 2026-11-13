@@ -173,25 +173,25 @@ plugin sends it; reading it back into reports is later.
 
 ## Tasks
 
-- [x] T1 social-score: `stores.pixel_bot_mode` (migration `c3e8a5d1f7b4`), `bot_mode` in `GET`/`PATCH .../pixel`, snapshot and docs
-- [x] T2 social-score: `pixel/bots.py`, bots out of audiences (`AudienceMembers`) and segments (`execution_member_ids`, `without_bots`)
-- [x] T3 woocommerce: `Bot_Detector` (headers to class and signals) and its tests
-- [x] T4 woocommerce: `Bot_Guard` modes: flag, substitute, block; stock without quantities; skips for integrations
-- [x] T5 woocommerce: `Bot_Stats` counts per day and class
-- [x] T6 woocommerce: `Not_Human` flag on orders from the request, and from the session route through a delayed job; note, list cell, order screen
-- [x] T7 woocommerce: `Pixel::state()` carries `bot_mode` and `level2`
-- [x] T8 woocommerce: `Identity` (C4), off by default, three conditions, hashes only
-- [x] T9 woocommerce: `Reports_Page`, mode form, warnings list
-- [x] T10 shopify: "Not from a human" banner on the order card
-- [x] T11 shopify: Reports route, proxy allow-list for the report
-- [x] T12 shopify: `socialscore-identity` embed and script, off, tested
-- [x] T13 pixel: tests that a hash event is dropped and a hash on `login` is refused on Level 1
-- [x] T14 smoke: WordPress and WooCommerce run the bot scenario over HTTP (flag, substitute, block, reports, order flag)
-- [x] T15 readme and listing texts
-- [x] T19 {added} Orders from the MCP store: `placed_by_agent` in the plugin row and in social-score
-- [x] T20 {added} Bot_Guard: a callback is skipped only when really routed (a `wc-api` name some hook handles; a REST path under the home URL or `rest_route`, which WordPress routes to REST on any address and so never renders a page); a marker added to a page address no longer lets a bot through
-- [x] T21 {added} Bot_Guard: every response it changes, and the 403, is sent with `nocache_headers`, `Cache-Control: private, no-store` and `DONOTCACHEPAGE`
-- [x] T22 {added} Shopify: checked, no analog (the app changes no storefront response; the embed only observes)
+- [x] T1 social-score: `stores.pixel_bot_mode` (migration `c3e8a5d1f7b4`), `bot_mode` in `GET`/`PATCH .../pixel`, snapshot and docs {verified}
+- [x] T2 social-score: `pixel/bots.py`, bots out of audiences (`AudienceMembers`) and segments (`execution_member_ids`, `without_bots`) {verified}
+- [x] T3 woocommerce: `Bot_Detector` (headers to class and signals) and its tests {verified}
+- [x] T4 woocommerce: `Bot_Guard` modes: flag, substitute, block; stock without quantities; skips for integrations {rejected: substitute leaves Store API prices real (prices is an object, scrub only walks arrays), price_range not scrubbed, /WC/STORE route case skips scrub, admin-ajax woocommerce_get_variation unguarded, gateway webhooks hooked in the gateway constructor get 403 in block mode}
+- [x] T5 woocommerce: `Bot_Stats` counts per day and class {verified}
+- [x] T6 woocommerce: `Not_Human` flag on orders from the request, and from the session route through a delayed job; note, list cell, order screen {verified}
+- [x] T7 woocommerce: `Pixel::state()` carries `bot_mode` and `level2` {verified}
+- [x] T8 woocommerce: `Identity` (C4), off by default, three conditions, hashes only {verified}
+- [x] T9 woocommerce: `Reports_Page`, mode form, warnings list {verified}
+- [x] T10 shopify: "Not from a human" banner on the order card {verified}
+- [x] T11 shopify: Reports route, proxy allow-list for the report {verified}
+- [x] T12 shopify: `socialscore-identity` embed and script, off, tested {verified}
+- [x] T13 pixel: tests that a hash event is dropped and a hash on `login` is refused on Level 1 {verified}
+- [x] T14 smoke: WordPress and WooCommerce run the bot scenario over HTTP (flag, substitute, block, reports, order flag) {rejected: SMOKE OK, but no substitute-mode Store API case and no real gateway webhook case, so it passes with the T4 defects present}
+- [x] T15 readme and listing texts {verified}
+- [x] T19 {added} Orders from the MCP store: `placed_by_agent` in the plugin row and in social-score {verified}
+- [x] T20 {added} Bot_Guard: a callback is skipped only when really routed (a `wc-api` name some hook handles; a REST path under the home URL or `rest_route`, which WordPress routes to REST on any address and so never renders a page); a marker added to a page address no longer lets a bot through {rejected: has_action at init priority 1 is false for gateways that hook in their constructor (payment gateways not loaded yet) and /wc-api/<name>/ path form is ignored; real webhook got 403}
+- [x] T21 {added} Bot_Guard: every response it changes, and the 403, is sent with `nocache_headers`, `Cache-Control: private, no-store` and `DONOTCACHEPAGE` {verified}
+- [x] T22 {added} Shopify: checked, no analog (the app changes no storefront response; the embed only observes) {verified}
 - [ ] T16 {added} Level 2 route and `level2` state (stage 6)
 - [ ] T17 {added} Mode screen in the dashboard `client`
 - [ ] T18 {added} Server-side hits into the traffic report
