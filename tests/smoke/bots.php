@@ -106,6 +106,10 @@ ss_assert( 1 === preg_match( '#<span class="price"><span class="woocommerce-Pric
 ss_assert( false === strpos( $html, '9.90' ), 'substitute mode: the real price is nowhere in the page, structured data included' );
 $html = wp_remote_retrieve_body( wp_remote_get( $url, array( 'timeout' => 60, 'user-agent' => $PERSON, 'headers' => $person_headers ) ) );
 ss_assert( false !== strpos( $html, '9.90' ), 'substitute mode: a person still sees the real price' );
+$res = wp_remote_get( $url, array( 'timeout' => 60, 'user-agent' => $BOT ) );
+ss_assert( false !== stripos( (string) wp_remote_retrieve_header( $res, 'cache-control' ), 'no-store' ), 'substitute mode: the changed page cannot be cached (' . wp_remote_retrieve_header( $res, 'cache-control' ) . ')' );
+$res = wp_remote_get( $url . '?wc-api=x', array( 'timeout' => 60, 'user-agent' => $BOT ) );
+ss_assert( false === strpos( wp_remote_retrieve_body( $res ), '9.90' ), 'substitute mode: a made-up wc-api marker does not give the real price' );
 $sub_order = ss_cart_order( $product, $BOT );
 ss_assert( 9.9 === (float) $sub_order->get_total() || 9.9 === (float) $sub_order->get_subtotal(), 'substitute mode never changes what is charged (order subtotal ' . $sub_order->get_subtotal() . ')' );
 
@@ -114,11 +118,14 @@ ss_mode( 'block' );
 ss_assert( 403 === ss_as( $BOT, $url ), 'block mode: the bad bot gets 403 on a product page' );
 ss_assert( 403 === ss_as( $BOT, $home ), 'block mode: and on the home page' );
 ss_assert( 403 === ss_as( $BOT, 'http://wordpress/wp-json/wc/store/v1/products' ), 'block mode: and on the Store API' );
+ss_assert( 403 === ss_as( $BOT, $url . '?wc-api=x' ), 'block mode: a made-up wc-api marker on a page does not get a bot through' );
+$res = wp_remote_get( $url, array( 'timeout' => 60, 'user-agent' => $BOT ) );
+ss_assert( false !== stripos( (string) wp_remote_retrieve_header( $res, 'cache-control' ), 'no-store' ), 'block mode: the 403 cannot be cached (' . wp_remote_retrieve_header( $res, 'cache-control' ) . ')' );
 ss_assert( 403 === ss_as( '', $url ), 'block mode: a request with no user agent is a bad bot too' );
 ss_assert( 200 === ss_as( $PERSON, $url, $person_headers ), 'block mode: a person still gets the page' );
 ss_assert( 200 === ss_as( $GOOGLE, $url ), 'block mode: Googlebot is never blocked' );
 ss_assert( 403 !== ss_as( $BOT, 'http://wordpress/wp-json/socialscore/v1/nothing' ), 'block mode: a REST callback by an HTTP library is not blocked' );
-ss_assert( 403 !== ss_as( $BOT, 'http://wordpress/?wc-api=socialscore_test' ), 'block mode: a wc-api callback by an HTTP library is not blocked' );
+ss_assert( 403 === ss_as( $BOT, 'http://wordpress/?wc-api=socialscore_test' ), 'block mode: a wc-api name that no hook handles is no callback (a hooked one is skipped; unit tested)' );
 ss_assert( 403 !== ss_as( $BOT, 'http://wordpress/wp-cron.php?doing_wp_cron' ), 'block mode: wp-cron is not blocked' );
 
 // 7. With the Pixel off, nothing is blocked.

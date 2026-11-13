@@ -1,6 +1,6 @@
 # Test plan: Pixel stage 5 (store modules)
 
-Result: PASS 13.11.2026 (details in "Run" below; the two things not run are listed there)
+Result: PASS 13.11.2026
 
 Architecture: `architecture-pixel-s5.md`. The done criterion of the stage: **in a test WooCommerce shop a bot without
 JavaScript is caught, its order gets a flag, and the mode "block" stops the request.** It is proven twice: as a unit test
@@ -35,7 +35,13 @@ WordPress and WooCommerce over HTTP (`tests/smoke/bots.php`, part of the CI smok
 
 ## Run
 
-See the result block the builder reported with the branches; the exact counts are recorded in the pull request when it is made.
+- woocommerce-plugin: `phpcs` clean (includes, uninstall); `phpunit` 267 tests, 754 assertions, PHP 8.4; JS typecheck and 44 tests;
+  the smoke on WordPress and WooCommerce: `SMOKE OK` (bot scenario, Plugin Check without errors, empty PHP log, uninstall cleanup).
+- shopify-app: typecheck clean, 326 tests pass (1 skipped).
+- pixel: `make test` ok (`go test ./... -race`).
+- social-score: black and pylint clean; `scripts/run_tests_parallel.py -j 6`: 9448 tests discovered and run, OK (3 skipped, as recorded).
+- Added later in this stage: a bot with a made-up `?wc-api=x` is blocked or served substitute data (unit and smoke); a changed
+  response and the 403 carry `no-store` and `DONOTCACHEPAGE` (unit and smoke); `placed_by_agent` (MapperTest, `test_order_placed_by_agent.py`).
 
 ## Not tested, on purpose
 

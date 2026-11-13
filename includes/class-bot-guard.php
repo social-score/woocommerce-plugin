@@ -103,15 +103,38 @@ class Bot_Guard {
 		}
 		$uri  = isset( $_SERVER['REQUEST_URI'] ) && is_string( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 		$path = (string) wp_parse_url( $uri, PHP_URL_PATH );
-     // phpcs:disable WordPress.Security.NonceVerification.Recommended -- Only the presence of a callback marker is read.
-		$route    = isset( $_GET['rest_route'] ) && is_string( $_GET['rest_route'] ) ? sanitize_text_field( wp_unslash( $_GET['rest_route'] ) ) : '';
-		$callback = isset( $_GET['wc-api'] ) || ( '' !== $route && 0 !== strpos( $route, '/wc/store' ) );
-     // phpcs:enable WordPress.Security.NonceVerification.Recommended
-		$skip = $callback
-		|| ( false !== strpos( $path, '/wp-json/' ) && false === strpos( $path, '/wp-json/wc/store' ) )
-		|| false !== strpos( $path, 'xmlrpc.php' )
-		|| false !== strpos( $path, 'wp-cron.php' );
+		$base = rtrim( (string) wp_parse_url( home_url(), PHP_URL_PATH ), '/' );
+		// A callback is skipped only when WordPress or WooCommerce really route the request to one. A marker a bot adds to a
+		// page address (`?wc-api=x`, `?rest_route=/foo`) does not make a page request a callback.
+		$skip = $this->is_rest_callback( $base, $path ) || $this->is_wc_api_callback() || $base . '/xmlrpc.php' === $path || $base . '/wp-cron.php' === $path;
 		return ! (bool) apply_filters( 'socialscore_bot_guard_skip', $skip, $path );
+	}
+
+	/**
+	 * Whether the request is for a REST route that is not the Store API: by the REST path, or by `rest_route` (which WordPress
+	 * routes to REST on any address, so such a request never renders a page).
+	 *
+	 * @param string $base Path of the home URL, no trailing slash.
+	 * @param string $path Path of the request.
+	 * @return bool
+	 */
+	private function is_rest_callback( $base, $path ) {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Only the route name is read.
+		$param = isset( $_GET['rest_route'] ) && is_string( $_GET['rest_route'] ) ? sanitize_text_field( wp_unslash( $_GET['rest_route'] ) ) : '';
+		$route = '' !== $param ? '/' . ltrim( $param, '/' ) : ( 0 === strpos( $path, $base . '/wp-json/' ) ? '/' . ltrim( substr( $path, strlen( $base . '/wp-json' ) ), '/' ) : '' );
+		return '' !== $route && 0 !== stripos( $route, '/wc/store' );
+	}
+
+	/**
+	 * Whether WooCommerce will really handle this `wc-api` request: a gateway or an extension has hooked
+	 * `woocommerce_api_<name>`. An unknown name only renders the page.
+	 *
+	 * @return bool
+	 */
+	private function is_wc_api_callback() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Only the callback name is read.
+		$name = isset( $_GET['wc-api'] ) && is_string( $_GET['wc-api'] ) ? strtolower( sanitize_text_field( wp_unslash( $_GET['wc-api'] ) ) ) : '';
+		return '' !== $name && (bool) has_action( 'woocommerce_api_' . $name );
 	}
 
 	/**
@@ -159,14 +182,31 @@ class Bot_Guard {
 	}
 
 	/**
+	 * The response was changed for a bot: a page cache or a CDN must not keep it and show it to a person. Called by every
+	 * place that changes what is shown, and before the 403.
+	 *
+	 * @return void
+	 */
+	private static function no_cache() {
+		if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- The constant page-cache plugins read.
+			define( 'DONOTCACHEPAGE', true );
+		}
+		if ( function_exists( 'nocache_headers' ) ) {
+			nocache_headers();
+		}
+		if ( ! headers_sent() ) {
+			header( 'Cache-Control: private, no-store', true );
+		}
+	}
+
+	/**
 	 * Ends the request with 403.
 	 *
 	 * @return void
 	 */
 	private function block() {
-		if ( function_exists( 'nocache_headers' ) ) {
-			nocache_headers();
-		}
+		self::no_cache();
 		wp_die(
 			esc_html__( 'Access denied.', 'socialscore' ),
 			esc_html__( 'Access denied', 'socialscore' ),
@@ -185,6 +225,7 @@ class Bot_Guard {
 		if ( ! $this->should_inspect() || ! $this->acts() || ! is_object( $product ) ) {
 			return $text;
 		}
+		self::no_cache();
 		return $product->is_in_stock() ? __( 'In stock', 'socialscore' ) : __( 'Out of stock', 'socialscore' );
 	}
 
@@ -200,6 +241,9 @@ class Bot_Guard {
 			return $html;
 		}
 		$price = $product->get_price();
+		if ( '' !== (string) $price ) {
+			self::no_cache();
+		}
 		return '' === (string) $price ? $html : '<span class="price">' . wc_price( self::substitute_price( $price, $product->get_id() ) ) . '</span>';
 	}
 
@@ -214,6 +258,7 @@ class Bot_Guard {
 		if ( ! is_array( $markup ) || ! is_object( $product ) || ! $this->should_inspect() || ! $this->acts() || self::MODE_SUBSTITUTE !== $this->mode() ) {
 			return $markup;
 		}
+		self::no_cache();
 		$id = $product->get_id();
 		foreach ( array( 'price', 'lowPrice', 'highPrice' ) as $key ) {
 			if ( isset( $markup[ $key ] ) && is_numeric( $markup[ $key ] ) ) {
@@ -251,6 +296,7 @@ class Bot_Guard {
 		if ( ! is_array( $data ) || ! is_object( $variation ) || ! $this->should_inspect() || ! $this->acts() ) {
 			return $data;
 		}
+		self::no_cache();
 		$data['max_qty'] = '';
 		$in_stock        = $variation->is_in_stock();
 		/* translators: Stock text shown to a bot, no quantity. */
@@ -285,6 +331,7 @@ class Bot_Guard {
 			return $response;
 		}
 		$data = $response->get_data();
+		self::no_cache();
 		if ( is_array( $data ) ) {
 			$response->set_data( $this->scrub( $data, self::MODE_SUBSTITUTE === $this->mode() ) );
 		}

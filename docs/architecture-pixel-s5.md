@@ -189,6 +189,9 @@ plugin sends it; reading it back into reports is later.
 - [x] T14 smoke: WordPress and WooCommerce run the bot scenario over HTTP (flag, substitute, block, reports, order flag)
 - [x] T15 readme and listing texts
 - [x] T19 {added} Orders from the MCP store: `placed_by_agent` in the plugin row and in social-score
+- [x] T20 {added} Bot_Guard: a callback is skipped only when really routed (a `wc-api` name some hook handles; a REST path under the home URL or `rest_route`, which WordPress routes to REST on any address and so never renders a page); a marker added to a page address no longer lets a bot through
+- [x] T21 {added} Bot_Guard: every response it changes, and the 403, is sent with `nocache_headers`, `Cache-Control: private, no-store` and `DONOTCACHEPAGE`
+- [x] T22 {added} Shopify: checked, no analog (the app changes no storefront response; the embed only observes)
 - [ ] T16 {added} Level 2 route and `level2` state (stage 6)
 - [ ] T17 {added} Mode screen in the dashboard `client`
 - [ ] T18 {added} Server-side hits into the traffic report

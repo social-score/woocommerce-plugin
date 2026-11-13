@@ -16,6 +16,10 @@ class BotGuardTest extends TestCase {
 	private $orders = array();
 	/** @var array */
 	private $server_before = array();
+	/** @var int Times nocache_headers was called. */
+	private $nocache = 0;
+	/** @var string[] Hooks WooCommerce has (woocommerce_api_<name>). */
+	private $hooked = array();
 	/** @var array Statuses of the blocked requests. */
 	private $blocked = array();
 
@@ -24,11 +28,16 @@ class BotGuardTest extends TestCase {
 		$this->server_before = $_SERVER;
 		Bot_Guard::reset();
 		$this->blocked = array();
+		$this->hooked  = array();
+		$this->nocache = 0;
 		$this->orders  = array();
 		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'has_action' )->alias( fn( $tag ) => in_array( $tag, $this->hooked, true ) );
 		Functions\when( 'wp_doing_cron' )->justReturn( false );
 		Functions\when( 'is_user_logged_in' )->justReturn( false );
-		Functions\when( 'nocache_headers' )->justReturn( null );
+		Functions\when( 'nocache_headers' )->alias( function () {
+			++$this->nocache;
+		} );
 		Functions\when( 'wc_get_order' )->alias( fn( $id ) => $this->orders[ (int) $id ] ?? false );
 		Functions\when( 'wc_price' )->alias( fn( $p ) => '<span class="amount">' . number_format( (float) $p, 2, '.', '' ) . '</span>' );
 		Functions\when( 'wp_die' )->alias(
@@ -165,6 +174,7 @@ class BotGuardTest extends TestCase {
 			$this->request( 'curl/8.4.0', $uri );
 			if ( false !== strpos( $uri, 'wc-api' ) ) {
 				$_GET['wc-api'] = 'wc_gateway_paypal';
+				$this->hooked   = array( 'woocommerce_api_wc_gateway_paypal' );
 			}
 			$this->assertSame( 'served', $this->inspect(), $uri );
 			unset( $_GET['wc-api'] );
@@ -172,6 +182,59 @@ class BotGuardTest extends TestCase {
 		// The Store API is the shop's own front door: a bot is stopped there.
 		$this->request( 'curl/8.4.0', '/wp-json/wc/store/v1/cart/add-item' );
 		$this->assertSame( 'blocked', $this->inspect() );
+	}
+
+	public function test_a_marker_added_to_a_page_address_does_not_make_it_a_callback() {
+		foreach ( array( 'wc-api' => 'x', 'rest_route' => '/wc/store/v1/products' ) as $key => $value ) {
+			$this->server_says( 'block' );
+			$this->request( 'curl/8.4.0', '/product/shirt/?' . $key . '=' . $value );
+			$_GET[ $key ] = $value; // A name nothing hooked, or the Store API itself.
+			$this->assertSame( 'blocked', $this->inspect(), $key );
+			unset( $_GET[ $key ] );
+		}
+		// The same name once a gateway really hooked it is a callback.
+		$this->hooked   = array( 'woocommerce_api_x' );
+		$_GET['wc-api'] = 'x';
+		$this->request( 'curl/8.4.0', '/product/shirt/?wc-api=x' );
+		$this->assertSame( 'served', $this->inspect() );
+		unset( $_GET['wc-api'] );
+		// A path that only contains wp-json is a page, not REST.
+		$this->request( 'curl/8.4.0', '/product/wp-json/shirt/' );
+		$this->assertSame( 'blocked', $this->inspect() );
+	}
+
+	public function test_a_bot_with_a_fake_callback_marker_still_gets_substitute_data() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0', '/product/shirt/?wc-api=x' );
+		$_GET['wc-api'] = 'x';
+		$html = ( new Bot_Guard() )->price_html( '<span>20.00</span>', $this->product() );
+		unset( $_GET['wc-api'] );
+		$this->assertStringContainsString( 'amount', $html );
+		$this->assertNotSame( '<span>20.00</span>', $html );
+	}
+
+	public function test_a_response_changed_for_a_bot_must_not_be_cached() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		( new Bot_Guard() )->price_html( 'x', $this->product() );
+		$this->assertGreaterThanOrEqual( 1, $this->nocache );
+		$this->assertTrue( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE );
+	}
+
+	public function test_the_403_of_block_mode_is_not_cacheable() {
+		$this->server_says( 'block' );
+		$this->request( 'curl/8.4.0' );
+		$this->assertSame( 'blocked', $this->inspect() );
+		$this->assertSame( 1, $this->nocache );
+		$this->assertTrue( defined( 'DONOTCACHEPAGE' ) );
+	}
+
+	public function test_a_person_response_is_not_marked_uncacheable() {
+		$this->server_says( 'substitute' );
+		$this->request( 'Mozilla/5.0 Chrome/126.0', '/', array( 'HTTP_ACCEPT' => 'text/html', 'HTTP_ACCEPT_LANGUAGE' => 'en' ) );
+		( new Bot_Guard() )->price_html( 'x', $this->product() );
+		( new Bot_Guard() )->availability_text( 'x', $this->product() );
+		$this->assertSame( 0, $this->nocache );
 	}
 
 	public function test_a_filter_can_exempt_a_request() {
