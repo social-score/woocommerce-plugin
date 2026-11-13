@@ -826,7 +826,7 @@ class BotGuardTest extends TestCase {
 		$twice = $guard->store_api( $this->store_api_response( $this->real_product() ), null, $route );
 		$twice = $guard->store_api( $twice, null, $route )->data;
 		$this->assertEquals( $once, $twice );
-		$this->assertTrue( $twice['prices']->socialscore_shown );
+		$this->assertStringNotContainsString( 'socialscore', wp_json_encode( $twice ), 'nothing in the answer says it was changed' );
 		$this->assertSame( 9999, ( $guard->store_api( $this->store_api_response( array( 'add_to_cart' => (object) array( 'maximum' => 9999 ) ) ), null, $route )->data )['add_to_cart']->maximum );
 	}
 
@@ -901,7 +901,7 @@ class BotGuardTest extends TestCase {
 			$this->assertStringNotContainsString( $real, $out, $quote );
 		}
 		$this->assertStringContainsString( 'price' . $quote . ':' . $quote . (int) round( Bot_Guard::substitute_price( 4747, 24 ) ) . $quote, $out );
-		$this->assertStringContainsString( 'socialscore_shown', $out, 'marked' );
+		$this->assertStringNotContainsString( 'socialscore', $out, 'nothing in the page says it was changed' );
 		// A second pass changes nothing.
 		$this->assertSame( $out, ( new Bot_Guard() )->clean_page( $out ) );
 	}
@@ -911,7 +911,7 @@ class BotGuardTest extends TestCase {
 		$this->request( 'curl/8.4.0' );
 		$out = ( new Bot_Guard() )->clean_page( $this->dressed( '"' ) );
 		$this->assertStringContainsString( '"price":"4747"', $out );
-		$this->assertStringNotContainsString( 'socialscore_shown', $out );
+		$this->assertStringNotContainsString( 'socialscore', $out );
 	}
 
 	public function test_it_fails_closed_for_shapes_it_does_not_know() {
@@ -931,5 +931,84 @@ class BotGuardTest extends TestCase {
 		$this->request( 'curl/8.4.0' );
 		$page = '<p>The surprice 12 and valid 5 and pid 77, stock_quantity_text 4 is fine</p><script>var id=3;</script>';
 		$this->assertSame( $page, ( new Bot_Guard() )->clean_page( $page ) );
+	}
+
+	// Nothing tells the bot, and nothing is skipped on the page's word ------------------------------------------------------
+
+	public function test_neither_the_api_answer_nor_the_page_says_it_was_changed() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		$guard = new Bot_Guard();
+		$api   = $guard->store_api( $this->store_api_response( $this->real_product() ), null, $this->store_route( '/wc/store/v1/products/24' ) )->data;
+		$this->assertStringNotContainsString( 'socialscore', strtolower( wp_json_encode( $api ) ) );
+		$this->assertStringNotContainsString( 'shown', strtolower( wp_json_encode( $api ) ) );
+		$page = $guard->clean_page( $this->hydrated_page() );
+		$this->assertStringNotContainsString( 'socialscore', strtolower( $page ) );
+	}
+
+	public function test_a_page_price_equals_the_api_price_whichever_ran_first_and_however_many_times() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		$guard = new Bot_Guard();
+		$want  = (string) (int) round( Bot_Guard::substitute_price( 4747, 24 ) );
+		// The API answer first (what Blocks hydrates), then the page that holds it: the page does not replace it again.
+		$api  = $guard->store_api( $this->store_api_response( $this->real_product() ), null, $this->store_route( '/wc/store/v1/products/24' ) )->data;
+		$this->assertSame( (string) (int) round( Bot_Guard::substitute_price( 990, 24 ) ), $api['prices']->price );
+		$page = '<script>{"id":24,"prices":{"price":"' . $api['prices']->price . '","regular_price":"' . $api['prices']->regular_price . '"}}</script>';
+		$this->assertSame( $page, $guard->clean_page( $page ), 'a price that is already the substitute stays' );
+		// A page that is cleaned alone, or twice, gives the one value the API would.
+		Bot_Guard::reset();
+		$page = '<script>{"id":24,"prices":{"price":"4747"}}</script>';
+		$once = $guard->clean_page( $page );
+		$this->assertStringContainsString( '"price":"' . $want . '"', $once );
+		$this->assertSame( $once, $guard->clean_page( $once ) );
+		Bot_Guard::reset();
+		$this->assertSame( $once, $guard->clean_page( $page ) );
+	}
+
+	public function test_a_review_that_contains_the_old_marker_word_does_not_stop_the_replacement() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		$page = '<p>Great! socialscore_shown socialscore_shown</p><script>{"id":9,"prices":{"price":"4747"}}</script>'
+			. '<p>"socialscore_shown":true</p><script>{"id":9,"prices":{"regular_price":"5555"}}</script>';
+		$out  = ( new Bot_Guard() )->clean_page( $page );
+		$this->assertStringNotContainsString( '4747', $out );
+		$this->assertStringNotContainsString( '5555', $out );
+	}
+
+	public function test_unbalanced_braces_never_leave_a_real_price() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		$out = ( new Bot_Guard() )->clean_page( '<script>{"id":9,"prices":{"price":"4747","note":{"x":1},"more":{"price":"1234"' . str_repeat( ' ', 10 ) . '</script><script>{"id":10,"prices":{"price":"3210"}}</script>' );
+		foreach ( array( '4747', '1234', '3210' ) as $real ) {
+			$this->assertStringNotContainsString( $real, $out, $real );
+		}
+	}
+
+	public function test_a_very_long_object_before_prices_and_before_maximum_is_followed_to_its_end() {
+		$this->server_says( 'flag' );
+		$this->request( 'curl/8.4.0' );
+		$long = str_repeat( '"note":"' . str_repeat( 'x', 90 ) . '",', 12 ); // Over a thousand characters.
+		$page = '<script>{"add_to_cart":{' . $long . '"maximum":2},"quantity_limits":{' . $long . '"minimum":1,"maximum":5}}</script>';
+		$out  = ( new Bot_Guard() )->clean_page( $page );
+		$this->assertSame( 2, substr_count( $out, '"maximum":9999' ), 'both limits, however far down' );
+		$this->assertStringContainsString( '"minimum":1', $out );
+	}
+
+	public function test_unbalanced_limit_objects_lift_every_maximum_in_the_rest_of_the_page() {
+		$this->server_says( 'flag' );
+		$this->request( 'curl/8.4.0' );
+		$out = ( new Bot_Guard() )->clean_page( '<p>{"add_to_cart":{"text":"x","maximum":3 </p><p>{"quantity":{"maximum":4}}</p><script>"maximum":7</script>' );
+		$this->assertSame( 3, substr_count( $out, '9999' ) );
+		$this->assertStringNotContainsString( '"maximum":3', $out );
+	}
+
+	public function test_the_maximum_of_something_that_is_not_a_cart_limit_is_left_before_the_limit_object() {
+		$this->server_says( 'flag' );
+		$this->request( 'curl/8.4.0' );
+		$page = '<script>{"slider":{"maximum":100},"add_to_cart":{"maximum":2}}</script>';
+		$out  = ( new Bot_Guard() )->clean_page( $page );
+		$this->assertStringContainsString( '"slider":{"maximum":100}', $out );
+		$this->assertStringContainsString( '"add_to_cart":{"maximum":9999}', $out );
 	}
 }

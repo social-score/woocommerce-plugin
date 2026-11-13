@@ -34,11 +34,21 @@ class Bot_Guard {
 	const LIMIT_PARENTS = array( 'add_to_cart', 'quantity_limits' );
 	const LIMIT_KEY     = 'maximum';
 	const PRICE_KEYS    = array( 'price', 'regular_price', 'sale_price', 'min_amount', 'max_amount', 'min_price', 'max_price' );
-	// Written into a prices object once it holds substitute values.
-	const SHOWN_FLAG  = 'socialscore_shown';
-	const FACTOR_BASE = 85;
+	const FACTOR_BASE   = 85;
 	// 30 steps: 0.85 to 0.99 and 1.01 to 1.15. Never exactly 1.00, which would show the real price.
 	const FACTOR_SPREAD = 30;
+
+	/**
+	 * What this request has already replaced, kept on the server only (nothing of it reaches the visitor): product and price
+	 * going in, and product and price coming out. The API filter and the page cleaner ask it before replacing a price, so a
+	 * price is never replaced twice, and what it says is an output is not touched again.
+	 *
+	 * @var array{in:array<string,bool>,out:array<string,bool>}
+	 */
+	private static $shown = array(
+		'in'  => array(),
+		'out' => array(),
+	);
 
 	/**
 	 * Classification of this request, made once.
@@ -227,6 +237,10 @@ class Bot_Guard {
 	 */
 	public static function reset() {
 		self::$current = null;
+		self::$shown   = array(
+			'in'  => array(),
+			'out' => array(),
+		);
 	}
 
 	/**
@@ -643,8 +657,8 @@ class Bot_Guard {
 
 	/**
 	 * Walks a Store API answer and changes the stock and, when asked, the price fields of every product in it. Safe to run
-	 * twice on the same data: a quantity that is already null or at the no-limit value stays, and a `prices` object that
-	 * carries the shown mark is not substituted again.
+	 * twice on the same data: a quantity that is already null or at the no-limit value stays, and a price this request already
+	 * replaced (a registry on the server, never in the answer) is not replaced again.
 	 *
 	 * @param  array|object $data       Decoded answer.
 	 * @param  bool         $substitute Whether to change prices.
@@ -709,19 +723,31 @@ class Bot_Guard {
 	private function substitute_prices( $prices, $product_id ) {
 		$is_object = is_object( $prices );
 		$p         = $is_object ? get_object_vars( $prices ) : $prices;
-		if ( ! empty( $p[ self::SHOWN_FLAG ] ) ) {
-			return $prices;
-		}
 		foreach ( self::PRICE_KEYS as $key ) {
 			if ( isset( $p[ $key ] ) && ctype_digit( (string) $p[ $key ] ) ) {
-				$p[ $key ] = (string) (int) round( self::substitute_price( (int) $p[ $key ], $product_id ) );
+				$p[ $key ] = $this->shown_minor( $p[ $key ], $product_id );
 			}
 		}
 		if ( isset( $p['price_range'] ) && ( is_array( $p['price_range'] ) || is_object( $p['price_range'] ) ) ) {
 			$p['price_range'] = $this->substitute_range( $p['price_range'], $product_id );
 		}
-		$p[ self::SHOWN_FLAG ] = true;
 		return $is_object ? (object) $p : $p;
+	}
+
+	/**
+	 * A price in the smallest unit as text, replaced unless this request already replaced it.
+	 *
+	 * @param  string     $value      Price.
+	 * @param  int|string $product_id Product id.
+	 * @return string
+	 */
+	private function shown_minor( $value, $product_id ) {
+		if ( self::is_shown( $product_id, $value ) ) {
+			return (string) $value;
+		}
+		$shown = (int) round( self::substitute_price( (int) $value, $product_id ) );
+		self::note_shown( $product_id, (int) $value, $shown );
+		return (string) $shown;
 	}
 
 	/**
@@ -735,16 +761,38 @@ class Bot_Guard {
 	private function substitute_range( $range, $product_id ) {
 		$is_object = is_object( $range );
 		$r         = $is_object ? get_object_vars( $range ) : $range;
-		if ( ! empty( $r[ self::SHOWN_FLAG ] ) ) {
-			return $range;
-		}
 		foreach ( self::PRICE_KEYS as $key ) {
 			if ( isset( $r[ $key ] ) && ctype_digit( (string) $r[ $key ] ) ) {
-				$r[ $key ] = (string) (int) round( self::substitute_price( (int) $r[ $key ], $product_id ) );
+				$r[ $key ] = $this->shown_minor( $r[ $key ], $product_id );
 			}
 		}
-		$r[ self::SHOWN_FLAG ] = true;
 		return $is_object ? (object) $r : $r;
+	}
+
+	/**
+	 * Notes that a price was replaced.
+	 *
+	 * @param  int|string $product_id Product id (or a word for a collection).
+	 * @param  int        $from       The real price, in the smallest unit.
+	 * @param  int        $to         What is shown instead.
+	 * @return void
+	 */
+	public static function note_shown( $product_id, $from, $to ) {
+		self::$shown['in'][ $product_id . '|' . $from ] = true;
+		self::$shown['out'][ $product_id . '|' . $to ]  = true;
+	}
+
+	/**
+	 * Whether a price is one this request already put in place of a real one. A value that is also a real price of the
+	 * same product is taken as real: replacing it again is safe, leaving it is not.
+	 *
+	 * @param  int|string $product_id Product id.
+	 * @param  int|string $value      Price in the smallest unit.
+	 * @return bool
+	 */
+	public static function is_shown( $product_id, $value ) {
+		$key = $product_id . '|' . $value;
+		return isset( self::$shown['out'][ $key ] ) && ! isset( self::$shown['in'][ $key ] );
 	}
 
 	/**

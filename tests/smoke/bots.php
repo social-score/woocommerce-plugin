@@ -166,6 +166,13 @@ if ( preg_match_all( '/.{0,70}4747.{0,30}/s', $body, $leaks ) ) {
 	echo 'left: ' . wp_json_encode( array_slice( $leaks[0], 0, 4 ) ) . "\n";
 }
 ss_assert( false !== strpos( $body, 'case 7' ) && false === strpos( $body, '4747' ), 'substitute mode: no real price is left in any dress of the JSON in a page' );
+// The page and the API show the bot the same substitute, and nothing in either says it was changed.
+$low_page = wp_remote_retrieve_body( wp_remote_get( $low_url, array( 'timeout' => 60, 'user-agent' => $BOT ) ) );
+$low_api  = wp_remote_retrieve_body( wp_remote_get( 'http://wordpress/wp-json/wc/store/v1/products/' . $low->get_id(), array( 'timeout' => 60, 'user-agent' => $BOT ) ) );
+$api_json = json_decode( $low_api, true );
+ss_assert( isset( $api_json['prices']['price'] ) && '4747' !== $api_json['prices']['price'], 'substitute mode: the API price of the low-stock product is a substitute (' . ( $api_json['prices']['price'] ?? '?' ) . ')' );
+ss_assert( false !== strpos( $low_page, '"price":"' . ( $api_json['prices']['price'] ?? '-' ) . '"' ), 'substitute mode: the page carries the very same substitute as the API, not a second one' );
+ss_assert( false === stripos( $low_page . $low_api, 'socialscore_shown' ) && false === stripos( $low_api, 'shown' ), 'substitute mode: nothing in the page or the API answer says it was changed' );
 // wc-api as WooCommerce does not read it is a page request: a bot in substitute mode gets the substitute price, never the real one.
 $real = '/(?<![\d.])9\.9(?:0)?(?!\d)/';
 foreach ( array( 'an empty name' => $url . '?wc-api=', 'a list' => $url . '?wc-api[]=x' ) as $what => $probe ) {

@@ -17,13 +17,20 @@ defined( 'ABSPATH' ) || exit;
  * JSON in HTML comes in many dresses: plain quotes, `\"`, `\\"`, `&quot;`, `&#34;`, `&#x22;`, `%22`, `"`. So no pattern
  * here looks for a quote: a key is found as a word, and the value as the first number after it across any run of
  * punctuation or entities. The keys come from the one list in Bot_Guard (NULL_KEYS, LIMIT_PARENTS, PRICE_KEYS), the same
- * list the API filter uses. It fails closed: a number that follows a key is always replaced, whatever the shape around it.
+ * list the API filter uses.
+ *
+ * It fails closed. An object is delimited by counting braces; when the braces do not balance within a generous limit, the
+ * rule is applied to the whole rest of the page instead. And nothing is written into the page to say it was cleaned: whether
+ * a price is already a substitute is known from the registry in Bot_Guard (server side), never from the text, which may come
+ * from a review or a product description.
  */
 class Page_Cleaner {
 
 	// Between a key and its value: entities, escapes and punctuation, no letters, digits or braces (a brace is a new object).
-	// Each token is atomic, so `%22`, `\\u0022` and `&#34;` are never split into punctuation and a number.
+	// Each token is atomic, so `%22`, `"` and `&#34;` are never split into punctuation and a number.
 	const GAP = '(?:(?>&[a-z#0-9x]+;|%[0-9a-f]{2}|\\\\u[0-9a-f]{4}|[^a-z0-9{}])){1,40}?';
+	// How far an object is followed to its closing brace.
+	const OBJECT_LIMIT = 200000;
 
 	/**
 	 * Cleans a page.
@@ -53,33 +60,63 @@ class Page_Cleaner {
 	}
 
 	/**
-	 * The most that can be added: below the no-limit value it becomes the no-limit value.
+	 * The most that can be added: in every `add_to_cart` and `quantity_limits` object, however long, a maximum below the
+	 * no-limit value becomes the no-limit value. If an object's braces do not balance, every maximum in the rest of the
+	 * page is lifted.
 	 *
 	 * @param  string $html Page.
 	 * @return string
 	 */
 	private static function lift_limits( $html ) {
 		$parents = implode( '|', array_map( 'preg_quote', Bot_Guard::LIMIT_PARENTS ) );
+		$found   = preg_match_all( '/(?<![a-z_])(?:' . $parents . ')' . self::GAP . '\{/i', $html, $matches, PREG_OFFSET_CAPTURE );
+		if ( ! $found ) {
+			return $html;
+		}
+		$out = '';
+		$at  = 0;
+		foreach ( $matches[0] as $m ) {
+			$open = $m[1] + strlen( $m[0] ) - 1;
+			if ( $open < $at ) {
+				continue;
+			}
+			$end = self::object_end( $html, $open );
+			if ( null === $end ) {
+				return $out . substr( $html, $at, $open - $at ) . self::lift( substr( $html, $open ) );
+			}
+			$out .= substr( $html, $at, $open - $at ) . self::lift( substr( $html, $open, $end - $open ) );
+			$at   = $end;
+		}
+		return $out . substr( $html, $at );
+	}
+
+	/**
+	 * Lifts every maximum in a piece of text.
+	 *
+	 * @param  string $piece Text.
+	 * @return string
+	 */
+	private static function lift( $piece ) {
 		return (string) preg_replace_callback(
-			'/((?<![a-z_])(?:' . $parents . ')(?:(?!\}).){0,400}?(?<![a-z_])' . preg_quote( Bot_Guard::LIMIT_KEY, '/' ) . self::GAP . ')(\d+)/is',
+			'/((?<![a-z_])' . preg_quote( Bot_Guard::LIMIT_KEY, '/' ) . self::GAP . ')(\d+)/i',
 			static function ( $m ) {
 				return (int) $m[2] < Bot_Guard::NO_LIMIT ? $m[1] . Bot_Guard::NO_LIMIT : $m[0];
 			},
-			$html
+			$piece
 		);
 	}
 
 	/**
 	 * Every `prices` object: each price in it is replaced with the substitute of the product whose `id` was written last
-	 * before it, and the object is marked as shown, so a second pass leaves it alone. The end of an object is found by
-	 * counting braces, so a nested range or an odd shape does not hide a price.
+	 * before it, unless the registry says the page already holds that substitute. The end of an object is found by counting
+	 * braces; when they do not balance, everything from the object to the end of the page is treated as the object.
 	 *
 	 * @param  string $html Page.
 	 * @return string
 	 */
 	private static function substitute_prices( $html ) {
 		$found = preg_match_all(
-			'/(?<![a-z_])id' . self::GAP . '(\d+)|(?<![a-z_])prices(' . self::GAP . ')\{/i',
+			'/(?<![a-z_])id' . self::GAP . '(\d+)|(?<![a-z_])prices' . self::GAP . '\{/i',
 			$html,
 			$matches,
 			PREG_OFFSET_CAPTURE | PREG_SET_ORDER
@@ -99,31 +136,28 @@ class Page_Cleaner {
 				$last = $m[1][0];
 				continue;
 			}
-			$open  = $start + strlen( $m[0][0] ) - 1; // The brace.
-			$end   = self::object_end( $html, $open );
-			$piece = substr( $html, $open, $end - $open );
-			$out  .= substr( $html, $at, $open - $at );
-			$at    = $end;
-			if ( false !== strpos( $piece, Bot_Guard::SHOWN_FLAG ) ) {
-				$out .= $piece;
-				continue;
+			$open = $start + strlen( $m[0][0] ) - 1; // The brace.
+			$end  = self::object_end( $html, $open );
+			if ( null === $end ) {
+				return $out . substr( $html, $at, $open - $at ) . self::replace_prices( substr( $html, $open ), $last );
 			}
-			$out .= self::flag( self::replace_prices( $piece, $last ), isset( $m[2] ) ? $m[2][0] : '' );
+			$out .= substr( $html, $at, $open - $at ) . self::replace_prices( substr( $html, $open, $end - $open ), $last );
+			$at   = $end;
 		}
 		return $out . substr( $html, $at );
 	}
 
 	/**
-	 * Where the object that opens at `$open` ends (the position after its closing brace); a long or unbalanced one ends at a
-	 * limit, so what follows is still cleaned.
+	 * Where the object that opens at `$open` ends (the position after its closing brace), or null when its braces do not
+	 * balance within the limit.
 	 *
 	 * @param  string $html Page.
 	 * @param  int    $open Position of the opening brace.
-	 * @return int
+	 * @return int|null
 	 */
 	private static function object_end( $html, $open ) {
 		$depth = 0;
-		$limit = min( strlen( $html ), $open + 6000 );
+		$limit = min( strlen( $html ), $open + self::OBJECT_LIMIT );
 		for ( $i = $open; $i < $limit; $i++ ) {
 			$char = $html[ $i ];
 			if ( '{' === $char ) {
@@ -132,11 +166,11 @@ class Page_Cleaner {
 				return $i + 1;
 			}
 		}
-		return $limit;
+		return null;
 	}
 
 	/**
-	 * Replaces the number after every price key in a piece of text.
+	 * Replaces the number after every price key in a piece of text, unless it is already a substitute of this request.
 	 *
 	 * @param  string $piece Text.
 	 * @param  string $id    Product id.
@@ -147,24 +181,14 @@ class Page_Cleaner {
 		return (string) preg_replace_callback(
 			'/((?<![a-z_])(?:' . $keys . ')' . self::GAP . ')(\d+)/i',
 			static function ( $m ) use ( $id ) {
-				return $m[1] . (int) round( Bot_Guard::substitute_price( (int) $m[2], $id ) );
+				if ( Bot_Guard::is_shown( $id, $m[2] ) ) {
+					return $m[0];
+				}
+				$shown = (int) round( Bot_Guard::substitute_price( (int) $m[2], $id ) );
+				Bot_Guard::note_shown( $id, (int) $m[2], $shown );
+				return $m[1] . $shown;
 			},
 			$piece
 		);
-	}
-
-	/**
-	 * Writes the shown mark into the object, in the quoting the object itself uses.
-	 *
-	 * @param  string $piece Object text, starting with its brace.
-	 * @param  string $gap   The text between the key `prices` and the brace.
-	 * @return string
-	 */
-	private static function flag( $piece, $gap ) {
-		if ( 1 !== preg_match( '/^(.*?)(?::|&#0*58;|&colon;|%3A)/is', $gap, $m ) ) {
-			return $piece;
-		}
-		$quote = ltrim( $m[1] ) === $m[1] ? $m[1] : ltrim( $m[1] );
-		return '{' . $quote . Bot_Guard::SHOWN_FLAG . $quote . ':true,' . substr( $piece, 1 );
 	}
 }
