@@ -149,11 +149,28 @@ class IdentityTest extends TestCase {
 	}
 
 	public function test_a_queued_event_goes_to_the_identity_route_with_the_hashes_in_the_body() {
-		$event = array( 'type' => 'login', 'at' => '2026-11-13T10:00:00+00:00', 'email_sha256' => str_repeat( 'a', 64 ) );
+		$this->plugin_switch = true;
+		$this->server_level2 = true;
+		$event               = array( 'type' => 'login', 'at' => '2026-11-13T10:00:00+00:00', 'email_sha256' => str_repeat( 'a', 64 ) );
 		( new Identity() )->send( $event );
-		$this->assertSame( 'POST', $this->http[0]['args']['method'] );
-		$this->assertStringEndsWith( '/api/v2/stores/42/pixel/identity', $this->http[0]['url'] );
-		$this->assertSame( array( 'events' => array( $event ) ), json_decode( $this->http[0]['args']['body'], true ) );
+		$this->assertSame( 'POST', $this->http[ count( $this->http ) - 1 ]['args']['method'] );
+		$this->assertStringEndsWith( '/api/v2/stores/42/pixel/identity', $this->http[ count( $this->http ) - 1 ]['url'] );
+		$this->assertSame( array( 'events' => array( $event ) ), json_decode( $this->http[ count( $this->http ) - 1 ]['args']['body'], true ) );
+	}
+
+	public function test_a_queued_event_is_dropped_when_level_two_was_switched_off_while_it_waited() {
+		$event = array( 'type' => 'login', 'at' => '2026-11-13T10:00:00+00:00', 'email_sha256' => str_repeat( 'a', 64 ) );
+		foreach ( array( array( false, true ), array( true, false ) ) as $case ) {
+			$this->plugin_switch = $case[0];
+			$this->server_level2 = $case[1];
+			$this->transients    = array();
+			( new Identity() )->send( $event );
+		}
+		unset( $this->options['socialscore_connection'] );
+		$this->plugin_switch = true;
+		$this->server_level2 = true;
+		( new Identity() )->send( $event );
+		$this->assertSame( array(), array_filter( $this->http, fn( $r ) => 'POST' === $r['args']['method'] ), 'nothing was posted' );
 	}
 
 	public function test_an_event_of_another_type_is_not_sent() {

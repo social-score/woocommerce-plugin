@@ -443,7 +443,7 @@ class Pixel {
 					'view_item',
 					array(
 						'item_id'  => (string) $product->get_id(),
-						'price'    => (float) $product->get_price(),
+						'price'    => self::price( $product ),
 						'currency' => (string) get_woocommerce_currency(),
 					)
 				);
@@ -559,7 +559,7 @@ class Pixel {
 	 * @return float
 	 */
 	private static function price( $product ) {
-		return $product ? (float) $product->get_price() : 0.0;
+		return $product ? ( new Bot_Guard() )->shown_price( $product->get_price(), $product->get_id() ) : 0.0;
 	}
 
 	/**

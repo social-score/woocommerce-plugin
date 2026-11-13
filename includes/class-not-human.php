@@ -105,6 +105,8 @@ class Not_Human {
 			'signature_agent'       => __( 'Signed by an AI agent', 'socialscore' ),
 			'declared_bot'          => __( 'Says it is a bot', 'socialscore' ),
 			'declared_agent'        => __( 'Says it is an AI agent', 'socialscore' ),
+			'fake_bot'              => __( 'Says it is a search engine, but its address is not the engine\'s', 'socialscore' ),
+			'unverified_bot'        => __( 'Says it is a search engine; the address could not be checked', 'socialscore' ),
 			'empty_ua'              => __( 'No user agent', 'socialscore' ),
 			'http_client_ua'        => __( 'Script or HTTP library, not a browser', 'socialscore' ),
 			'scanner_ua'            => __( 'Security scanner', 'socialscore' ),

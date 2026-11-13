@@ -89,6 +89,24 @@ class Identity {
 	}
 
 	/**
+	 * Whether a queued event may still leave the shop: connected, the plugin switch on and Level 2 on at SocialScore. The
+	 * visitor's consent was checked when the event was made; a visitor's browser is not there when the job runs.
+	 *
+	 * @return bool
+	 */
+	private static function allowed_to_send() {
+		if ( ! Connection::is_connected() ) {
+			return false;
+		}
+		$own = ( defined( 'SOCIALSCORE_LEVEL2' ) && SOCIALSCORE_LEVEL2 ) || (bool) apply_filters( 'socialscore_level2_enabled', false );
+		if ( ! $own ) {
+			return false;
+		}
+		$state = Pixel::state();
+		return ! empty( $state['level2'] );
+	}
+
+	/**
 	 * A successful login.
 	 *
 	 * @param  string   $user_login Login name.
@@ -169,7 +187,9 @@ class Identity {
 	 * @return void
 	 */
 	public function send( $event ) {
-		if ( ! is_array( $event ) || ! in_array( $event['type'] ?? '', self::TYPES, true ) || ! Connection::is_connected() ) {
+		// Checked again now: the event may have waited in the queue while Level 2 or the visitor's consent changed. The
+		// consent of the request that made the event cannot be read here, so the switches of the shop decide.
+		if ( ! is_array( $event ) || ! in_array( $event['type'] ?? '', self::TYPES, true ) || ! self::allowed_to_send() ) {
 			return;
 		}
 		$body = array( 'events' => array( $event ) );

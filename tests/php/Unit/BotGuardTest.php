@@ -184,33 +184,91 @@ class BotGuardTest extends TestCase {
 		$this->assertSame( 'blocked', $this->inspect() );
 	}
 
-	public function test_a_marker_added_to_a_page_address_does_not_make_it_a_callback() {
-		foreach ( array( 'wc-api' => 'x', 'rest_route' => '/wc/store/v1/products' ) as $key => $value ) {
-			$this->server_says( 'block' );
-			$this->request( 'curl/8.4.0', '/product/shirt/?' . $key . '=' . $value );
-			$_GET[ $key ] = $value; // A name nothing hooked, or the Store API itself.
-			$this->assertSame( 'blocked', $this->inspect(), $key );
-			unset( $_GET[ $key ] );
+	public function test_a_request_to_wc_api_is_never_blocked_in_any_form_even_before_its_gateway_has_loaded() {
+		$this->server_says( 'block' );
+		foreach ( array( 'Java/11.0.2', 'Go-http-client/1.1', 'curl/8.4.0' ) as $ua ) {
+			// Query form, hook not there yet (gateways load after init priority 1).
+			$this->request( $ua, '/?wc-api=wc_gateway_stripe' );
+			$_GET['wc-api'] = 'wc_gateway_stripe';
+			$this->assertSame( 'served', $this->inspect(), $ua . ' query' );
+			unset( $_GET['wc-api'] );
+			// The endpoint path form of WooCommerce.
+			$this->request( $ua, '/wc-api/WC_Gateway_Stripe/' );
+			$this->assertSame( 'served', $this->inspect(), $ua . ' path' );
+			// POST body form (webhooks).
+			$this->request( $ua, '/' );
+			$_POST['wc-api'] = 'wc_gateway_stripe';
+			$this->assertSame( 'served', $this->inspect(), $ua . ' post' );
+			unset( $_POST['wc-api'] );
 		}
-		// The same name once a gateway really hooked it is a callback.
-		$this->hooked   = array( 'woocommerce_api_x' );
-		$_GET['wc-api'] = 'x';
-		$this->request( 'curl/8.4.0', '/product/shirt/?wc-api=x' );
-		$this->assertSame( 'served', $this->inspect() );
-		unset( $_GET['wc-api'] );
-		// A path that only contains wp-json is a page, not REST.
-		$this->request( 'curl/8.4.0', '/product/wp-json/shirt/' );
-		$this->assertSame( 'blocked', $this->inspect() );
+		$this->assertSame( array(), $this->blocked );
 	}
 
-	public function test_a_bot_with_a_fake_callback_marker_still_gets_substitute_data() {
+	public function test_the_rest_route_is_judged_case_insensitively_and_from_the_post_body_first() {
+		$this->server_says( 'block' );
+		foreach ( array( '/WC/STORE/v1/products', '//wc//store/v1/products', '/Wc/Store' ) as $route ) {
+			$this->request( 'curl/8.4.0', '/?rest_route=' . $route );
+			$_GET['rest_route'] = $route;
+			$this->assertSame( 'blocked', $this->inspect(), $route );
+			unset( $_GET['rest_route'] );
+		}
+		// WordPress reads the POST value first: a harmless GET route cannot hide a Store API one in the body.
+		$this->request( 'curl/8.4.0', '/?rest_route=/foo' );
+		$_GET['rest_route']  = '/foo';
+		$_POST['rest_route'] = '/wc/store/v1/products';
+		$this->assertSame( 'blocked', $this->inspect() );
+		// And the other way round: the POST value wins, so a Store API GET route does not decide.
+		$_GET['rest_route']  = '/wc/store/v1/products';
+		$_POST['rest_route'] = '/stripe/v1/webhook';
+		$this->assertSame( 'served', $this->inspect() );
+		unset( $_GET['rest_route'], $_POST['rest_route'] );
+		// A route that is not text is ambiguous and is checked, not skipped.
+		$_GET['rest_route'] = array( '/foo' );
+		$this->assertSame( 'blocked', $this->inspect() );
+		unset( $_GET['rest_route'] );
+		// An upper-case REST prefix with the Store API is still the Store API.
+		$this->request( 'curl/8.4.0', '/WP-JSON/WC/STORE/v1/products' );
+		$this->assertSame( 'blocked', $this->inspect() );
+		$this->request( 'curl/8.4.0', '/WP-JSON/stripe/v1/webhook' );
+		$this->assertSame( 'served', $this->inspect() );
+	}
+
+	public function test_admin_ajax_storefront_actions_are_guarded_other_admin_screens_are_not() {
+		$this->server_says( 'block' );
+		Functions\when( 'is_admin' )->justReturn( true );
+		Functions\when( 'wp_doing_ajax' )->justReturn( true );
+		$this->request( 'python-requests/2.31.0', '/wp-admin/admin-ajax.php' );
+		$_REQUEST['action'] = 'woocommerce_get_variation';
+		$this->assertSame( 'blocked', $this->inspect() );
+		$_REQUEST['action'] = 'some_plugin_nopriv_action';
+		$this->assertSame( 'served', $this->inspect() );
+		unset( $_REQUEST['action'] );
+		Functions\when( 'wp_doing_ajax' )->justReturn( false );
+		$this->request( 'python-requests/2.31.0', '/wp-admin/index.php' );
+		$this->assertSame( 'served', $this->inspect() );
+	}
+
+	public function test_a_variation_answer_of_admin_ajax_gets_the_substitute_price_for_a_bot() {
+		$this->server_says( 'substitute' );
+		Functions\when( 'is_admin' )->justReturn( true );
+		Functions\when( 'wp_doing_ajax' )->justReturn( true );
+		$_REQUEST['action'] = 'woocommerce_get_variation';
+		$this->request( 'curl/8.4.0', '/wp-admin/admin-ajax.php' );
+		$data = ( new Bot_Guard() )->variation( array( 'display_price' => 20, 'max_qty' => 5, 'availability_html' => '5 in stock' ), null, $this->product( true, '20.00', 7 ) );
+		unset( $_REQUEST['action'] );
+		$this->assertSame( Bot_Guard::substitute_price( 20, 7 ), $data['display_price'] );
+		$this->assertSame( '', $data['max_qty'] );
+	}
+
+	public function test_a_made_up_marker_on_a_page_is_a_wc_api_request_and_woocommerce_ends_it_empty() {
+		// WC_API::handle_api_requests answers any wc-api request with an empty 200 before a page is built, so there is
+		// nothing to substitute; the guard leaves it alone.
 		$this->server_says( 'substitute' );
 		$this->request( 'curl/8.4.0', '/product/shirt/?wc-api=x' );
 		$_GET['wc-api'] = 'x';
 		$html = ( new Bot_Guard() )->price_html( '<span>20.00</span>', $this->product() );
 		unset( $_GET['wc-api'] );
-		$this->assertStringContainsString( 'amount', $html );
-		$this->assertNotSame( '<span>20.00</span>', $html );
+		$this->assertSame( '<span>20.00</span>', $html );
 	}
 
 	public function test_a_response_changed_for_a_bot_must_not_be_cached() {
@@ -244,10 +302,10 @@ class BotGuardTest extends TestCase {
 		$this->assertSame( 'served', $this->inspect() );
 	}
 
-	public function test_the_hooks_are_not_registered_in_the_admin() {
+	public function test_the_hooks_are_registered_also_in_the_admin_because_admin_ajax_answers_the_storefront() {
 		Functions\when( 'is_admin' )->justReturn( true );
-		Functions\expect( 'add_action' )->never();
-		Functions\expect( 'add_filter' )->never();
+		\Brain\Monkey\Actions\expectAdded( 'init' )->once();
+		\Brain\Monkey\Filters\expectAdded( 'woocommerce_available_variation' )->once();
 		( new Bot_Guard() )->register();
 		$this->addToAssertionCount( 1 );
 	}
@@ -453,5 +511,118 @@ class BotGuardTest extends TestCase {
 		$this->request( 'python-requests/2.31.0', '/checkout/', array( 'REQUEST_METHOD' => 'POST' ) );
 		$this->assertSame( 'blocked', $this->inspect() );
 		$this->assertSame( array( 403 ), $this->blocked );
+	}
+
+	// What WooCommerce really returns ---------------------------------------------------------------------------------
+
+	private function store_api_response( $data ) {
+		return new class( $data ) {
+			public $data;
+			public function __construct( $data ) {
+				$this->data = $data;
+			}
+			public function get_data() {
+				return $this->data;
+			}
+			public function set_data( $data ) {
+				$this->data = $data;
+			}
+		};
+	}
+
+	private function store_route( $route ) {
+		return new class( $route ) extends \WP_REST_Request {
+			private $r;
+			public function __construct( $r ) {
+				$this->r = $r;
+			}
+			public function get_route() {
+				return $this->r;
+			}
+		};
+	}
+
+	/** The Store API ProductSchema returns `prices` and `price_range` as objects, and `low_stock_remaining` as a number. */
+	private function real_product() {
+		return array(
+			'id'                  => 24,
+			'low_stock_remaining' => 3,
+			'prices'              => (object) array(
+				'price'         => '990',
+				'regular_price' => '1290',
+				'sale_price'    => '990',
+				'price_range'   => (object) array( 'min_amount' => '990', 'max_amount' => '1990' ),
+				'currency_code' => 'USD',
+			),
+			'variations'          => array( array( 'id' => 25, 'attributes' => array() ) ),
+		);
+	}
+
+	public function test_the_store_api_prices_object_and_price_range_get_the_substitute_in_substitute_mode() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		$out = ( new Bot_Guard() )->store_api( $this->store_api_response( $this->real_product() ), null, $this->store_route( '/wc/store/v1/products/24' ) )->data;
+		$this->assertIsObject( $out['prices'], 'the answer keeps its shape' );
+		$this->assertSame( (string) (int) round( Bot_Guard::substitute_price( 990, 24 ) ), $out['prices']->price );
+		$this->assertSame( (string) (int) round( Bot_Guard::substitute_price( 1290, 24 ) ), $out['prices']->regular_price );
+		$this->assertSame( (string) (int) round( Bot_Guard::substitute_price( 1990, 24 ) ), $out['prices']->price_range->max_amount );
+		$this->assertSame( (string) (int) round( Bot_Guard::substitute_price( 990, 24 ) ), $out['prices']->price_range->min_amount );
+		$this->assertSame( 'USD', $out['prices']->currency_code );
+		$this->assertNull( $out['low_stock_remaining'] );
+		$this->assertNotSame( '990', $out['prices']->price );
+	}
+
+	public function test_a_collection_of_products_is_scrubbed_each_with_its_own_id() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		$second       = $this->real_product();
+		$second['id'] = 30;
+		$out          = ( new Bot_Guard() )->store_api( $this->store_api_response( array( $this->real_product(), $second ) ), null, $this->store_route( '/wc/store/v1/products' ) )->data;
+		$this->assertSame( (string) (int) round( Bot_Guard::substitute_price( 990, 24 ) ), $out[0]['prices']->price );
+		$this->assertSame( (string) (int) round( Bot_Guard::substitute_price( 990, 30 ) ), $out[1]['prices']->price );
+	}
+
+	public function test_the_store_api_route_in_any_case_is_still_the_store_api() {
+		$this->server_says( 'flag' );
+		$this->request( 'curl/8.4.0' );
+		foreach ( array( '/WC/STORE/v1/products/34', '//wc/store//v1/products', '/Wc/Store/V1/Products/34/' ) as $route ) {
+			$out = ( new Bot_Guard() )->store_api( $this->store_api_response( $this->real_product() ), null, $this->store_route( $route ) )->data;
+			$this->assertNull( $out['low_stock_remaining'], $route );
+		}
+	}
+
+	public function test_cart_routes_of_the_store_api_keep_the_real_prices_but_hide_stock() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		$out = ( new Bot_Guard() )->store_api( $this->store_api_response( $this->real_product() ), null, $this->store_route( '/wc/store/v1/cart' ) )->data;
+		$this->assertSame( '990', $out['prices']->price, 'what the cart charges is not changed' );
+		$this->assertNull( $out['low_stock_remaining'] );
+	}
+
+	public function test_the_substitute_factor_is_never_exactly_one() {
+		$same = 0;
+		for ( $id = 1; $id <= 3000; $id++ ) {
+			if ( 100.0 === Bot_Guard::substitute_price( 100, $id ) ) {
+				++$same;
+			}
+		}
+		$this->assertSame( 0, $same );
+		$seen = array();
+		for ( $id = 1; $id <= 3000; $id++ ) {
+			$seen[ (string) Bot_Guard::substitute_price( 100, $id ) ] = true;
+		}
+		$this->assertGreaterThanOrEqual( 28, count( $seen ), 'about thirty different factors' );
+		$this->assertGreaterThanOrEqual( 85.0, min( array_keys( $seen ) ) );
+		$this->assertLessThanOrEqual( 116.0, max( array_keys( $seen ) ) );
+	}
+
+	public function test_the_price_in_the_pixel_events_and_the_button_attribute_is_the_substitute_for_a_bot() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		$this->assertSame( Bot_Guard::substitute_price( '9.90', 24 ), ( new Bot_Guard() )->shown_price( '9.90', 24 ) );
+		$this->assertNotSame( 9.9, ( new Bot_Guard() )->shown_price( '9.90', 24 ) );
+		$this->server_says( 'flag' );
+		Bot_Guard::reset();
+		$this->assertSame( 9.9, ( new Bot_Guard() )->shown_price( '9.90', 24 ) );
 	}
 }

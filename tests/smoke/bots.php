@@ -103,13 +103,60 @@ if ( false !== strpos( $html, '9.90' ) ) {
 	echo 'real price still in the page: ' . wp_json_encode( array_slice( $ctx[0], 0, 5 ) ) . "\n";
 }
 ss_assert( 1 === preg_match( '#<span class="price"><span class="woocommerce-Price-amount#', $html ), 'substitute mode: the bot sees the substitute price markup' );
-ss_assert( false === strpos( $html, '9.90' ), 'substitute mode: the real price is nowhere in the page, structured data included' );
+ss_assert( 0 === preg_match( '/(?<![\d.])9\.9(?:0)?(?!\d)/', $html ), 'substitute mode: the real price is nowhere in the page in any form (text, JSON-LD, Pixel events, button attribute)' );
 $html = wp_remote_retrieve_body( wp_remote_get( $url, array( 'timeout' => 60, 'user-agent' => $PERSON, 'headers' => $person_headers ) ) );
 ss_assert( false !== strpos( $html, '9.90' ), 'substitute mode: a person still sees the real price' );
 $res = wp_remote_get( $url, array( 'timeout' => 60, 'user-agent' => $BOT ) );
 ss_assert( false !== stripos( (string) wp_remote_retrieve_header( $res, 'cache-control' ), 'no-store' ), 'substitute mode: the changed page cannot be cached (' . wp_remote_retrieve_header( $res, 'cache-control' ) . ')' );
 $res = wp_remote_get( $url . '?wc-api=x', array( 'timeout' => 60, 'user-agent' => $BOT ) );
-ss_assert( false === strpos( wp_remote_retrieve_body( $res ), '9.90' ), 'substitute mode: a made-up wc-api marker does not give the real price' );
+ss_assert( 0 === preg_match( '/(?<![\d.])9\.9(?:0)?(?!\d)/', wp_remote_retrieve_body( $res ) ), 'substitute mode: a made-up wc-api marker gives no real price (WooCommerce ends a wc-api request empty)' );
+
+// The Store API: prices is an object, price_range too; the route is case-insensitive.
+$pid = $product->get_id();
+foreach ( array( 'http://wordpress/wp-json/wc/store/v1/products/' . $pid, 'http://wordpress/?rest_route=/WC/STORE/v1/products/' . $pid, 'http://wordpress/wp-json/WC/STORE/v1/products/' . $pid ) as $api ) {
+	$res  = wp_remote_get( $api, array( 'timeout' => 60, 'user-agent' => $BOT ) );
+	$body = wp_remote_retrieve_body( $res );
+	$json = json_decode( $body, true );
+	if ( 200 !== wp_remote_retrieve_response_code( $res ) ) {
+		ss_assert( false === strpos( $body, '"990"' ), 'substitute mode: ' . $api . ' answers ' . wp_remote_retrieve_response_code( $res ) . ' with no real price' );
+		continue;
+	}
+	ss_assert( is_array( $json ) && isset( $json['prices']['price'] ) && '990' !== $json['prices']['price'] && '990' !== $json['prices']['regular_price'], 'substitute mode: the Store API gives the bot a substitute price (' . $api . ' ' . ( $json['prices']['price'] ?? '?' ) . ')' );
+	ss_assert( array_key_exists( 'low_stock_remaining', $json ) && null === $json['low_stock_remaining'], 'substitute mode: and no remaining stock' );
+}
+$res  = wp_remote_get( 'http://wordpress/wp-json/wc/store/v1/products/' . $pid, array( 'timeout' => 60, 'user-agent' => $PERSON, 'headers' => $person_headers ) );
+$json = json_decode( wp_remote_retrieve_body( $res ), true );
+ss_assert( isset( $json['prices']['price'] ) && '990' === $json['prices']['price'], 'substitute mode: a person gets the real Store API price' );
+
+// admin-ajax answers the storefront's variation lookup to anyone.
+$attr = new WC_Product_Attribute();
+$attr->set_name( 'size' );
+$attr->set_options( array( 'S' ) );
+$attr->set_visible( true );
+$attr->set_variation( true );
+$variable = new WC_Product_Variable();
+$variable->set_name( 'Bot shirt' );
+$variable->set_attributes( array( $attr ) );
+$variable->set_status( 'publish' );
+$variable->save();
+$variation = new WC_Product_Variation();
+$variation->set_parent_id( $variable->get_id() );
+$variation->set_attributes( array( 'size' => 'S' ) );
+$variation->set_regular_price( '12.50' );
+$variation->set_manage_stock( true );
+$variation->set_stock_quantity( 41 );
+$variation->set_status( 'publish' );
+$variation->save();
+WC_Product_Variable::sync( $variable->get_id() );
+$ajax = function ( $ua, array $headers = array() ) use ( $variable ) {
+	return wp_remote_post( 'http://wordpress/wp-admin/admin-ajax.php', array( 'timeout' => 60, 'user-agent' => $ua, 'headers' => $headers, 'body' => array( 'action' => 'woocommerce_get_variation', 'product_id' => $variable->get_id(), 'attribute_size' => 'S' ) ) );
+};
+$res  = $ajax( $BOT );
+$data = json_decode( wp_remote_retrieve_body( $res ), true );
+ss_assert( is_array( $data ) && isset( $data['display_price'] ) && 12.5 !== (float) $data['display_price'] && '' === (string) $data['max_qty'], 'substitute mode: admin-ajax woocommerce_get_variation gives the bot a substitute price and no quantity limit' );
+$res  = $ajax( $PERSON, $person_headers );
+$data = json_decode( wp_remote_retrieve_body( $res ), true );
+ss_assert( is_array( $data ) && 12.5 === (float) $data['display_price'], 'substitute mode: a person gets the real variation price from admin-ajax' );
 $sub_order = ss_cart_order( $product, $BOT );
 ss_assert( 9.9 === (float) $sub_order->get_total() || 9.9 === (float) $sub_order->get_subtotal(), 'substitute mode never changes what is charged (order subtotal ' . $sub_order->get_subtotal() . ')' );
 
@@ -118,14 +165,23 @@ ss_mode( 'block' );
 ss_assert( 403 === ss_as( $BOT, $url ), 'block mode: the bad bot gets 403 on a product page' );
 ss_assert( 403 === ss_as( $BOT, $home ), 'block mode: and on the home page' );
 ss_assert( 403 === ss_as( $BOT, 'http://wordpress/wp-json/wc/store/v1/products' ), 'block mode: and on the Store API' );
-ss_assert( 403 === ss_as( $BOT, $url . '?wc-api=x' ), 'block mode: a made-up wc-api marker on a page does not get a bot through' );
+$wcapi = wp_remote_get( $url . '?wc-api=x', array( 'timeout' => 60, 'user-agent' => $BOT ) );
+echo 'wc-api probe: HTTP ' . wp_remote_retrieve_response_code( $wcapi ) . ', ' . strlen( wp_remote_retrieve_body( $wcapi ) ) . " bytes\n";
+ss_assert( 403 !== wp_remote_retrieve_response_code( $wcapi ) && strlen( wp_remote_retrieve_body( $wcapi ) ) < 100 && 0 === preg_match( '/(?<![\d.])9\.9(?:0)?(?!\d)/', wp_remote_retrieve_body( $wcapi ) ), 'block mode: a wc-api request is left alone, and WooCommerce answers it with a stub, not a page' );
+foreach ( array( 'Java/11.0.2', 'Go-http-client/1.1' ) as $hook_ua ) {
+	ss_assert( 403 !== ss_as( $hook_ua, 'http://wordpress/?wc-api=wc_gateway_paypal' ), 'block mode: a gateway webhook (query form, ' . $hook_ua . ') is not blocked' );
+	ss_assert( 403 !== ss_as( $hook_ua, 'http://wordpress/wc-api/wc_gateway_paypal/' ), 'block mode: a gateway webhook (path form, ' . $hook_ua . ') is not blocked' );
+}
+$res = $ajax( $BOT );
+ss_assert( 403 === wp_remote_retrieve_response_code( $res ), 'block mode: admin-ajax woocommerce_get_variation is blocked for a bot' );
+ss_assert( 403 === ss_as( $BOT, 'http://wordpress/wp-json/WC/STORE/v1/products/' . $pid ) || 404 === ss_as( $BOT, 'http://wordpress/wp-json/WC/STORE/v1/products/' . $pid ), 'block mode: the Store API in capitals is no way round' );
 $res = wp_remote_get( $url, array( 'timeout' => 60, 'user-agent' => $BOT ) );
 ss_assert( false !== stripos( (string) wp_remote_retrieve_header( $res, 'cache-control' ), 'no-store' ), 'block mode: the 403 cannot be cached (' . wp_remote_retrieve_header( $res, 'cache-control' ) . ')' );
 ss_assert( 403 === ss_as( '', $url ), 'block mode: a request with no user agent is a bad bot too' );
 ss_assert( 200 === ss_as( $PERSON, $url, $person_headers ), 'block mode: a person still gets the page' );
 ss_assert( 200 === ss_as( $GOOGLE, $url ), 'block mode: Googlebot is never blocked' );
 ss_assert( 403 !== ss_as( $BOT, 'http://wordpress/wp-json/socialscore/v1/nothing' ), 'block mode: a REST callback by an HTTP library is not blocked' );
-ss_assert( 403 === ss_as( $BOT, 'http://wordpress/?wc-api=socialscore_test' ), 'block mode: a wc-api name that no hook handles is no callback (a hooked one is skipped; unit tested)' );
+ss_assert( 403 !== ss_as( $BOT, 'http://wordpress/?wc-api=socialscore_test' ), 'block mode: any wc-api request is left alone' );
 ss_assert( 403 !== ss_as( $BOT, 'http://wordpress/wp-cron.php?doing_wp_cron' ), 'block mode: wp-cron is not blocked' );
 
 // 7. With the Pixel off, nothing is blocked.

@@ -40,6 +40,11 @@ WordPress and WooCommerce over HTTP (`tests/smoke/bots.php`, part of the CI smok
 - shopify-app: typecheck clean, 326 tests pass (1 skipped).
 - pixel: `make test` ok (`go test ./... -race`).
 - social-score: black and pylint clean; `scripts/run_tests_parallel.py -j 6`: 9448 tests discovered and run, OK (3 skipped, as recorded).
+- Second round (independent check): substitute mode on the real Store API (object `prices`, `price_range`, mixed-case route, `rest_route`),
+  admin-ajax `woocommerce_get_variation` (substitute and block), gateway webhooks with a Java and a Go user agent in both `wc-api` forms
+  (not blocked), the real price absent in every form from a bot's product page; unit tests for the same with the shapes WooCommerce returns,
+  `BotVerifierTest` (verified, fake, fail open, cache, domain suffix), the factor never 1.00, the queued identity event re-checked,
+  Klaviyo list adds and removals (`BotsTest`).
 - Added later in this stage: a bot with a made-up `?wc-api=x` is blocked or served substitute data (unit and smoke); a changed
   response and the 403 carry `no-store` and `DONOTCACHEPAGE` (unit and smoke); `placed_by_agent` (MapperTest, `test_order_placed_by_agent.py`).
 

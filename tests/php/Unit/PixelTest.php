@@ -19,6 +19,11 @@ class PixelTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		$this->inline = array();
+		// A person's request: the bot guard (which shows a bad bot another price) leaves the prices alone.
+		$_SERVER['HTTP_USER_AGENT']      = 'Mozilla/5.0 Chrome/126.0';
+		$_SERVER['HTTP_ACCEPT']          = 'text/html';
+		$_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'en';
+		\SocialScore\Bot_Guard::reset();
 		Functions\when( 'is_admin' )->justReturn( false );
 		Functions\when( 'is_product' )->justReturn( false );
 		Functions\when( 'is_checkout' )->justReturn( false );
@@ -488,6 +493,9 @@ class PixelTest extends TestCase {
 		$session = $this->session();
 		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => null, 'session' => $session ) );
 		Functions\when( 'wc_get_product' )->justReturn( new class() {
+			public function get_id() {
+				return 7;
+			}
 			public function get_price() {
 				return '5.00';
 			}
@@ -532,6 +540,9 @@ class PixelTest extends TestCase {
 		$args = ( new Pixel() )->loop_button_args(
 			array( 'attributes' => array( 'data-product_id' => 3 ) ),
 			new class() {
+				public function get_id() {
+					return 7;
+				}
 				public function get_price() {
 					return '7.5';
 				}
@@ -619,6 +630,9 @@ class PixelTest extends TestCase {
 					private $id;
 					public function __construct( $id ) {
 						$this->id = $id;
+					}
+					public function get_id() {
+						return $this->id;
 					}
 					public function get_price() {
 						return 40 === $this->id ? '9.00' : '5.00';
