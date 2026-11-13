@@ -2,6 +2,7 @@
 namespace SocialScore\Tests\Unit;
 
 use Brain\Monkey\Functions;
+use SocialScore\Bot_Settings;
 use SocialScore\Bot_Stats;
 use SocialScore\Not_Human;
 use SocialScore\Pixel;
@@ -17,6 +18,7 @@ class ReportsPageTest extends TestCase {
 		Functions\when( 'current_user_can' )->justReturn( true );
 		Functions\when( 'wp_kses_post' )->returnArg();
 		Functions\when( 'wp_kses' )->returnArg();
+		Functions\when( 'esc_textarea' )->alias( fn( $t ) => htmlspecialchars( (string) $t, ENT_QUOTES ) );
 		Functions\when( 'number_format_i18n' )->alias( fn( $n ) => number_format( (float) $n, 0, '.', ',' ) );
 		Functions\when( 'wc_get_orders' )->justReturn( array() );
 		$this->connect_store();
@@ -234,5 +236,79 @@ class ReportsPageTest extends TestCase {
 		$this->assertStringContainsString( 'admin-post.php', $html );
 		$this->assertStringContainsString( 'name="_wpnonce" value="nonce123"', $html );
 		$this->assertStringContainsString( 'name="action" value="socialscore_bot_mode"', $html );
+	}
+
+	// The proxy settings -----------------------------------------------------------------------------------------------
+
+	public function test_the_page_shows_the_proxy_form_with_the_stored_values_and_a_nonce() {
+		Bot_Settings::save( true, "198.51.100.0/24\n203.0.113.9", 'X-Real-IP' );
+		$html = Reports_Page::proxy_form_html();
+		$this->assertStringContainsString( 'name="behind_cloudflare" value="1" checked="checked"', $html );
+		$this->assertStringContainsString( "198.51.100.0/24\n203.0.113.9/32", $html );
+		$this->assertStringContainsString( 'value="X-Real-IP"', $html );
+		$this->assertStringContainsString( 'name="_wpnonce" value="nonce123"', $html );
+		$this->assertStringContainsString( 'name="action" value="socialscore_bot_proxy"', $html );
+		$this->assertStringContainsString( 'Authenticated Origin Pulls', $html, 'the condition for Cloudflare is said on the form' );
+	}
+
+	public function test_the_default_is_not_behind_cloudflare_and_no_trusted_proxy() {
+		$html = Reports_Page::proxy_form_html();
+		$this->assertStringNotContainsString( 'checked="checked"', $html );
+		$this->assertStringContainsString( 'value="X-Forwarded-For"', $html );
+	}
+
+	private function save_proxy( array $post ) {
+		foreach ( $post as $k => $v ) {
+			$_POST[ $k ] = $v;
+		}
+		Functions\when( 'check_admin_referer' )->justReturn( 1 );
+		Functions\when( 'sanitize_textarea_field' )->alias( fn( $t ) => trim( strip_tags( (string) $t ) ) );
+		$to = null;
+		Functions\when( 'wp_safe_redirect' )->alias(
+			function ( $url ) use ( &$to ) {
+				$to = $url;
+				throw new \RuntimeException( 'exit' );
+			}
+		);
+		try {
+			( new Reports_Page() )->save_proxy();
+		} catch ( \RuntimeException $e ) {
+			$_POST = array();
+			return $to;
+		}
+		return null;
+	}
+
+	public function test_saving_the_proxy_settings_keeps_valid_ranges_only() {
+		$to = $this->save_proxy( array( 'behind_cloudflare' => '1', 'trusted_proxies' => "198.51.100.0/24\n<b>x</b>\n999.9.9.9", 'proxy_header' => 'X-Forwarded-For' ) );
+		$this->assertStringContainsString( 'socialscore_mode=proxy_saved', $to );
+		$s = Bot_Settings::get();
+		$this->assertTrue( $s['behind_cloudflare'] );
+		$this->assertSame( array( '198.51.100.0/24' ), $s['trusted_proxies'] );
+		$this->save_proxy( array( 'trusted_proxies' => '', 'proxy_header' => '' ) );
+		$this->assertFalse( Bot_Settings::get()['behind_cloudflare'], 'an unchecked box is off' );
+	}
+
+	public function test_only_someone_who_may_manage_the_shop_can_save_the_proxy_settings() {
+		Functions\when( 'current_user_can' )->justReturn( false );
+		Functions\when( 'wp_die' )->alias(
+			function () {
+				throw new \RuntimeException( 'denied' );
+			}
+		);
+		$this->expectException( \RuntimeException::class );
+		( new Reports_Page() )->save_proxy();
+	}
+
+	public function test_the_warnings_name_the_setting_to_switch_on() {
+		$this->assertSame( '', Reports_Page::hints_html() );
+		Bot_Settings::hint( 'cloudflare' );
+		Bot_Settings::hint( 'proxy' );
+		Bot_Settings::hint( 'proxy' );
+		$html = Reports_Page::hints_html();
+		$this->assertStringContainsString( 'behind Cloudflare: 1 requests', $html );
+		$this->assertStringContainsString( 'Behind Cloudflare', $html );
+		$this->assertStringContainsString( '2 requests that said they were Googlebot', $html );
+		$this->assertStringContainsString( 'Trusted proxies', $html );
 	}
 }

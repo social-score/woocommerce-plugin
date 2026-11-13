@@ -24,8 +24,8 @@ defined( 'ABSPATH' ) || exit;
  * `special-crawlers.json`; Bingbot against `bingbot.json`. The user-triggered fetchers files (Apps Script, Site Verifier and
  * others fetch from there for any user, with any user agent) are NOT downloaded and make nobody a verified bot.
  *
- * The address checked is the client's, not a proxy's: see Bot_Guard::client_ip() (Cloudflare is recognised from its published
- * ranges, which this job also keeps; any other proxy makes the answer `unknown`).
+ * The address checked is the client's, not a proxy's: see Bot_Guard::client_ip() and Bot_Settings. Cloudflare's published ranges,
+ * which this job also keeps, are only used to recognise its addresses; they are trusted only when the shop says it is behind it.
  */
 class Bot_Verifier {
 
@@ -166,7 +166,7 @@ class Bot_Verifier {
 		$out = array();
 		if ( is_string( $json ) ) { // A plain list, one range a line (Cloudflare).
 			foreach ( preg_split( '/\s+/', trim( $json ) ) as $line ) {
-				if ( self::valid_cidr( $line ) ) {
+				if ( self::is_cidr( $line ) ) {
 					$out[] = $line;
 				}
 			}
@@ -177,7 +177,7 @@ class Bot_Verifier {
 		}
 		foreach ( $json['prefixes'] as $row ) {
 			foreach ( array( 'ipv4Prefix', 'ipv6Prefix' ) as $key ) {
-				if ( is_array( $row ) && isset( $row[ $key ] ) && is_string( $row[ $key ] ) && self::valid_cidr( $row[ $key ] ) ) {
+				if ( is_array( $row ) && isset( $row[ $key ] ) && is_string( $row[ $key ] ) && self::is_cidr( $row[ $key ] ) ) {
 					$out[] = $row[ $key ];
 				}
 			}
@@ -194,7 +194,7 @@ class Bot_Verifier {
 	 * @param  string $cidr Text.
 	 * @return bool
 	 */
-	private static function valid_cidr( $cidr ) {
+	public static function is_cidr( $cidr ) {
 		$parts = explode( '/', $cidr, 2 );
 		if ( 2 !== count( $parts ) || ! ctype_digit( $parts[1] ) || false === filter_var( $parts[0], FILTER_VALIDATE_IP ) ) {
 			return false;

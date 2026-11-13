@@ -166,11 +166,17 @@ plugin sends it; reading it back into reports is later.
    `bing.com/toolbox/bingbot.json`; checked 13.11.2026). A daily wp-cron job downloads them into one option (`autoload=no`); an engine
    whose download fails or comes back empty keeps its old list. The check on a request is a comparison with that list: **no DNS, no
    network, no write**. A public address in none of the engine's ranges is a bad bot (`fake_bot`). No list yet (the first day), or a
-   private address, or a proxy in front (Cloudflare without its header, or any forwarding header from an address that is not
-   Cloudflare's), **fails open**: a known bot with the signal `unverified_bot`, never a 403. Behind Cloudflare the real client is
-   `CF-Connecting-IP`, believed only because the connection came from Cloudflare's published ranges. A shop behind another proxy gives
-   the client address in the filter `socialscore_client_ip`; `socialscore_verify_declared_bots` returns false to switch the check off.
-   A forwarding header from any other address is the visitor's own claim and is never believed. Only these engines are checked; the other declared bots are taken at their word.
+   private address, or a proxy the shop has not described, **fails open**: a known bot with the signal `unverified_bot`, never a
+   403. **A header is the sender's word**, so it is read only from a proxy the SHOP trusts: the setting "Behind Cloudflare" (off by
+   default; Cloudflare's addresses are public, anyone can send requests to a shop through a Cloudflare zone of their own and
+   write `CF-Connecting-IP`, so the setting is safe only when the server accepts requests from Cloudflare alone, by a firewall or
+   Authenticated Origin Pulls) and the list "Trusted proxies" (the client is the right-most address of the chosen header that is
+   not itself a trusted proxy). A public address that is not trusted is checked as it is and every forwarding header is ignored: a
+   scraper that adds `X-Forwarded-For: <a Google address>` is a fake. `socialscore_client_ip` overrides everything;
+   `socialscore_verify_declared_bots` returns false to switch the check off.
+   For a shop that has not set its proxy up (Fastly, Sucuri, Akamai, Cloudflare without the setting) a real Googlebot from a public
+   proxy address with proxy headers would look like a fake: it is counted, and the reports page tells the merchant to enter the
+   proxy before search engines are turned away in block mode. Only these engines are checked; the other declared bots are taken at their word.
 10. **A real `wc-api` request is never touched**, judged the way WooCommerce judges it (a non-empty text name in the query, or the
     `/wc-api/<name>/` path). A webhook that is blocked is a lost payment, and the request builds no page. An empty name, a list or
     a name in the POST body is not an API request to WooCommerce: it builds the page, so the guard treats it as a page.
@@ -191,7 +197,7 @@ plugin sends it; reading it back into reports is later.
 - Server-side hits in the traffic report: later (decision 6).
 - Publishing to WordPress.org and the Shopify App Store (5.7): the owner. `readme.txt` now describes the reports page and the
   bot handling, because the external-services text must be true before review.
-- A shop behind a CDN other than Cloudflare gets `unverified_bot` for Googlebot and Bingbot (nothing is blocked) unless it sets `socialscore_client_ip`.
+- A shop behind a CDN must say so in the proxy settings, or a real Googlebot arriving from the CDN's public address with proxy headers is taken for a fake in block mode (counted and warned about, not prevented).
 
 ## Tasks
 
@@ -236,6 +242,9 @@ plugin sends it; reading it back into reports is later.
 - [x] T42 {added} Both `rest_request_after_callbacks` (covers WooCommerce Blocks' own requests) and `rest_post_dispatch` (the served answer) run the Store API filter; it is idempotent: quantities already null or at the no-limit value stay, a `prices` or price range object carrying `socialscore_shown` is not substituted again, and a batch (whose sub-requests were already through) only loses quantities
 - [x] T43 {added} One list of the keys that carry a quantity or a price (`Bot_Guard::NULL_KEYS`, `LIMIT_PARENTS`, `LIMIT_KEY`, `PRICE_KEYS`), used by the API filter and the page cleaner; now also `quantity_limits.maximum`, `stock_quantity`, `quantity_in_stock`
 - [x] T44 {added} `Page_Cleaner` (the second line, for a bad bot's page): keys are found as words and values as the first number after them across any run of entities, escapes and punctuation, so plain, `\"`, `\\"`, `&quot;`, `&#34;`, `&#x22;`, `%22` and `\u0022` all work; objects are delimited by counting braces; a number after a key is always replaced (fail closed). Unit tests for all eight dresses, odd shapes and look-alike words; smoke on a real page that carries the data in all eight
+- [x] T45 {added} Whose address the Googlebot/Bingbot check looks at (`Bot_Guard::resolve_client`, `Bot_Settings`): the shop's filter `socialscore_client_ip`; else, when `REMOTE_ADDR` is a trusted proxy, that proxy's header; else, for a private or reserved address or a Cloudflare address the shop has not declared, unknown (never a 403); else the public `REMOTE_ADDR` itself with every header ignored. A scraper cannot be verified, or excused, by a header it writes
+- [x] T46 {added} Settings on the reports page: "Behind Cloudflare" (off; safe only when the server accepts requests from Cloudflare alone) and "Trusted proxies" with the header to read (default `X-Forwarded-For`, right-most address that is not a trusted proxy); filters `socialscore_behind_cloudflare`, `socialscore_trusted_proxies`
+- [x] T47 {added} A declared search engine turned away from an address with proxy headers, or from a Cloudflare address while the shop has not said it is behind Cloudflare, is counted, and the reports page warns the merchant with the setting to switch on
 - [ ] T16 {added} Level 2 route and `level2` state (stage 6)
 - [ ] T17 {added} Mode screen in the dashboard `client`
 - [ ] T18 {added} Server-side hits into the traffic report

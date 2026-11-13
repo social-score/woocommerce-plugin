@@ -17,11 +17,12 @@ defined( 'ABSPATH' ) || exit;
 class Reports_Page {
 
 
-	const SLUG      = 'socialscore-reports';
-	const ACTION    = 'socialscore_bot_mode';
-	const CACHE_TTL = 300;
-	const PERIODS   = array( 'today', 'yesterday', 'last_7_days', 'last_30_days', 'this_month', 'last_month', 'last_3_months' );
-	const WARNINGS  = 20;
+	const SLUG         = 'socialscore-reports';
+	const ACTION       = 'socialscore_bot_mode';
+	const PROXY_ACTION = 'socialscore_bot_proxy';
+	const CACHE_TTL    = 300;
+	const PERIODS      = array( 'today', 'yesterday', 'last_7_days', 'last_30_days', 'this_month', 'last_month', 'last_3_months' );
+	const WARNINGS     = 20;
 
 	/**
 	 * Registers hooks.
@@ -31,6 +32,7 @@ class Reports_Page {
 	public function register() {
 		add_action( 'admin_menu', array( $this, 'add_menu' ), 20 );
 		add_action( 'admin_post_' . self::ACTION, array( $this, 'save_mode' ) );
+		add_action( 'admin_post_' . self::PROXY_ACTION, array( $this, 'save_proxy' ) );
 	}
 
 	/**
@@ -291,6 +293,68 @@ class Reports_Page {
 	}
 
 	/**
+	 * The warning for a shop that is behind a proxy it has not described: a search engine was turned away, or could not be
+	 * checked, from an address that looks like a proxy's.
+	 *
+	 * @return string
+	 */
+	public static function hints_html() {
+		$hints = Bot_Settings::hints();
+		$html  = '';
+		if ( ! empty( $hints['cloudflare']['count'] ) ) {
+			/* translators: %d: number of requests. */
+			$html .= '<div class="notice notice-warning inline"><p>' . esc_html( sprintf( __( 'It looks like this shop is behind Cloudflare: %d requests from Googlebot or Bingbot came from a Cloudflare address, so they could not be checked. If the server only accepts requests from Cloudflare, switch on "Behind Cloudflare" below.', 'socialscore' ), (int) $hints['cloudflare']['count'] ) ) . '</p></div>';
+		}
+		if ( ! empty( $hints['proxy']['count'] ) ) {
+			/* translators: %d: number of requests. */
+			$html .= '<div class="notice notice-warning inline"><p>' . esc_html( sprintf( __( 'It looks like this shop is behind a proxy: %d requests that said they were Googlebot or Bingbot came with proxy headers and were taken for fakes. Enter the proxy under "Trusted proxies" below, or search engines may be turned away in block mode.', 'socialscore' ), (int) $hints['proxy']['count'] ) ) . '</p></div>';
+		}
+		return $html;
+	}
+
+	/**
+	 * The proxy settings form.
+	 *
+	 * @return string
+	 */
+	public static function proxy_form_html() {
+		$s     = Bot_Settings::get();
+		$html  = '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="' . esc_attr( self::PROXY_ACTION ) . '" /><input type="hidden" name="_wpnonce" value="' . esc_attr( wp_create_nonce( self::PROXY_ACTION ) ) . '" />';
+		$html .= '<p><label><input type="checkbox" name="behind_cloudflare" value="1"' . ( $s['behind_cloudflare'] ? ' checked="checked"' : '' ) . ' /> ' . esc_html__( 'Behind Cloudflare: take the visitor from CF-Connecting-IP. Safe only when the server accepts requests from Cloudflare alone (a firewall, or Authenticated Origin Pulls).', 'socialscore' ) . '</label></p>';
+		$html .= '<p><label>' . esc_html__( 'Trusted proxies (addresses or ranges, one per line)', 'socialscore' ) . '<br /><textarea name="trusted_proxies" rows="4" cols="40">' . esc_textarea( implode( "\n", $s['trusted_proxies'] ) ) . '</textarea></label></p>';
+		$html .= '<p><label>' . esc_html__( 'Header with the visitor, for the trusted proxies', 'socialscore' ) . ' <input type="text" name="proxy_header" value="' . esc_attr( $s['header'] ) . '" /></label></p>';
+		return $html . '<p><button type="submit" class="button button-primary">' . esc_html__( 'Save', 'socialscore' ) . '</button></p></form>';
+	}
+
+	/**
+	 * Saves the proxy settings.
+	 *
+	 * @return void
+	 */
+	public function save_proxy() {
+		if ( ! current_user_can( Config::CAPABILITY ) ) {
+			wp_die( esc_html__( 'You are not allowed to do this.', 'socialscore' ), '', array( 'response' => 403 ) );
+		}
+		check_admin_referer( self::PROXY_ACTION );
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Verified by check_admin_referer above.
+		$cloudflare = ! empty( $_POST['behind_cloudflare'] );
+		$proxies    = isset( $_POST['trusted_proxies'] ) && is_string( $_POST['trusted_proxies'] ) ? sanitize_textarea_field( wp_unslash( $_POST['trusted_proxies'] ) ) : '';
+		$header     = isset( $_POST['proxy_header'] ) && is_string( $_POST['proxy_header'] ) ? sanitize_text_field( wp_unslash( $_POST['proxy_header'] ) ) : '';
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+		Bot_Settings::save( $cloudflare, $proxies, $header );
+		wp_safe_redirect(
+			add_query_arg(
+				array(
+					'page'             => self::SLUG,
+					'socialscore_mode' => 'proxy_saved',
+				),
+				admin_url( 'admin.php' )
+			)
+		);
+		exit;
+	}
+
+	/**
 	 * Saves the mode in SocialScore, where the decision is kept: the module only sends it and reads it back.
 	 *
 	 * @return void
@@ -346,6 +410,8 @@ class Reports_Page {
 		switch ( $result ) {
 			case 'saved':
 				return array( 'notice-success', __( 'The bad-bot mode is saved.', 'socialscore' ) );
+			case 'proxy_saved':
+				return array( 'notice-success', __( 'The proxy settings are saved.', 'socialscore' ) );
 			case 'denied':
 				return array( 'notice-error', __( 'Only the SocialScore member who connected this store with the Main role can change the mode.', 'socialscore' ) );
 			case 'off':
@@ -409,6 +475,11 @@ class Reports_Page {
 			echo '<p>' . esc_html__( 'Switch the Pixel on in the SocialScore settings to choose what happens to a bad bot.', 'socialscore' ) . '</p>';
 		}
 
+		echo '<h2>' . esc_html__( 'Proxy or CDN in front of the shop', 'socialscore' ) . '</h2>';
+		echo wp_kses_post( self::hints_html() );
+		echo '<p class="description">' . esc_html__( 'Googlebot and Bingbot are checked by the address they come from. Behind a proxy that address is the proxy\'s, so the shop has to say which proxies it trusts. Until it does, a search engine that cannot be checked is never blocked.', 'socialscore' ) . '</p>';
+		echo wp_kses( self::proxy_form_html(), self::form_tags() );
+
 		echo '<h2>' . esc_html__( 'Warnings', 'socialscore' ) . '</h2>' . wp_kses_post( self::warnings_html() ) . '</div>';
 	}
 
@@ -419,19 +490,25 @@ class Reports_Page {
 	 */
 	private static function form_tags() {
 		return array(
-			'form'   => array(
+			'form'     => array(
 				'method' => true,
 				'action' => true,
 			),
-			'input'  => array(
+			'input'    => array(
 				'type'    => true,
 				'name'    => true,
 				'value'   => true,
 				'checked' => true,
 			),
-			'label'  => array(),
-			'p'      => array(),
-			'button' => array(
+			'label'    => array(),
+			'br'       => array(),
+			'textarea' => array(
+				'name' => true,
+				'rows' => true,
+				'cols' => true,
+			),
+			'p'        => array(),
+			'button'   => array(
 				'type'  => true,
 				'class' => true,
 			),

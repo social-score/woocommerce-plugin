@@ -13,6 +13,8 @@ delete_option( 'socialscore_sync_state' );
 delete_option( 'socialscore_connection_lost' );
 delete_option( 'socialscore_bot_hits' );
 delete_option( 'socialscore_bot_ranges' );
+delete_option( 'socialscore_bot_settings' );
+delete_option( 'socialscore_proxy_hints' );
 wp_clear_scheduled_hook( 'socialscore_refresh_bot_ranges' );
 delete_transient( 'socialscore_trigger_settings' );
 

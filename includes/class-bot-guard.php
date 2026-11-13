@@ -74,8 +74,15 @@ class Bot_Guard {
 		if ( '' === $engine ) {
 			return $verdict;
 		}
-		$ip     = self::client_ip();
-		$result = Bot_Verifier::verify( $ip, $engine );
+		$client = self::resolve_client();
+		$result = Bot_Verifier::verify( $client['ip'], $engine );
+		// A declared search engine that is turned away, or cannot be checked, from an address that has the marks of a proxy the
+		// shop has not described: the merchant is told on the reports page (before the engines lose the shop).
+		if ( 'cloudflare' === $client['why'] ) {
+			Bot_Settings::hint( 'cloudflare' );
+		} elseif ( Bot_Verifier::FAILED === $result && self::has_proxy_headers() ) {
+			Bot_Settings::hint( 'proxy' );
+		}
 		if ( Bot_Verifier::FAILED === $result ) {
 			return array_merge(
 				$verdict,
@@ -93,41 +100,124 @@ class Bot_Guard {
 
 	/**
 	 * The address of the visitor, for the check of a declared Googlebot or Bingbot, or an empty string when it cannot be told.
-	 *
-	 * - The shop's own answer wins: the filter `socialscore_client_ip` (a shop behind a proxy it controls sets it).
-	 * - `REMOTE_ADDR` that is Cloudflare's (its published ranges) with a valid `CF-Connecting-IP`: that header is Cloudflare's
-	 *   own statement of the client, and it can be believed because the connection came from Cloudflare.
-	 * - A private address, a Cloudflare address without that header, or any request that carries forwarding headers
-	 *   (`CF-Connecting-IP`, `X-Forwarded-For`, `X-Real-IP`, `Forwarded`) from an address that is not Cloudflare's: a proxy
-	 *   stands in front and the real client is unknown, so the answer is empty and the check fails open (`unverified_bot`).
-	 * - Otherwise `REMOTE_ADDR`, a public address with nothing in front of it.
-	 *
-	 * A forwarding header from a public address that is not a proxy is never believed: it is the visitor's own claim.
+	 * See resolve_client().
 	 *
 	 * @return string
 	 */
 	public static function client_ip() {
+		return self::resolve_client()['ip'];
+	}
+
+	/**
+	 * Whose address the check looks at. A header is the sender's word, so it is read only from a proxy the shop trusts:
+	 *
+	 * 1. The shop's own answer, the filter `socialscore_client_ip`.
+	 * 2. `REMOTE_ADDR` is a trusted proxy (the shop is behind Cloudflare and says so, or the address is in its trusted proxy
+	 *    list): the client is that proxy's header (`CF-Connecting-IP`; or the right-most address of the configured header that
+	 *    is not a trusted proxy itself). No valid header: unknown.
+	 * 3. `REMOTE_ADDR` is Cloudflare's but the shop did not say it is behind Cloudflare, or it is private or reserved: a proxy
+	 *    is in front that the shop has not described. Unknown, so the check fails open.
+	 * 4. Otherwise the address is public and nothing trusted stands in front of it: `REMOTE_ADDR` itself is the client, and
+	 *    every forwarding header is ignored. A scraper cannot be verified by what it writes.
+	 *
+	 * @return array{ip:string,why:string} The address ('' when unknown) and why it is unknown: private, cloudflare, header or ''.
+	 */
+	private static function resolve_client() {
 		$remote = isset( $_SERVER['REMOTE_ADDR'] ) && is_string( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
 		$set    = (string) apply_filters( 'socialscore_client_ip', '' );
 		if ( '' !== $set ) {
-			return $set;
+			return array(
+				'ip'  => $set,
+				'why' => '',
+			);
 		}
 		if ( false === filter_var( $remote, FILTER_VALIDATE_IP ) ) {
-			return '';
+			return array(
+				'ip'  => '',
+				'why' => 'private',
+			);
 		}
-		$cf = isset( $_SERVER['HTTP_CF_CONNECTING_IP'] ) && is_string( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) : '';
-		if ( Bot_Verifier::is_cloudflare( $remote ) ) {
-			return false !== filter_var( $cf, FILTER_VALIDATE_IP ) ? $cf : '';
+		$settings   = Bot_Settings::get();
+		$cloudflare = Bot_Verifier::is_cloudflare( $remote );
+		if ( $settings['behind_cloudflare'] && $cloudflare ) {
+			$cf = isset( $_SERVER['HTTP_CF_CONNECTING_IP'] ) && is_string( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) : '';
+			return array(
+				'ip'  => false !== filter_var( $cf, FILTER_VALIDATE_IP ) ? $cf : '',
+				'why' => 'header',
+			);
+		}
+		if ( self::in_ranges( $remote, $settings['trusted_proxies'] ) ) {
+			return array(
+				'ip'  => self::forwarded_client( $settings ),
+				'why' => 'header',
+			);
+		}
+		if ( $cloudflare ) {
+			return array(
+				'ip'  => '',
+				'why' => 'cloudflare',
+			);
 		}
 		if ( false === filter_var( $remote, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) ) {
-			return '';
+			return array(
+				'ip'  => '',
+				'why' => 'private',
+			);
 		}
-		foreach ( array( 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'HTTP_FORWARDED', 'HTTP_TRUE_CLIENT_IP' ) as $header ) {
-			if ( ! empty( $_SERVER[ $header ] ) ) {
+		return array(
+			'ip'  => $remote,
+			'why' => '',
+		);
+	}
+
+	/**
+	 * The client out of the header of a trusted proxy: the right-most address that is not a trusted proxy itself.
+	 *
+	 * @param  array $settings Bot_Settings::get().
+	 * @return string Empty when the header is missing or holds nothing usable.
+	 */
+	private static function forwarded_client( array $settings ) {
+		$key   = 'HTTP_' . strtoupper( str_replace( '-', '_', $settings['header'] ) );
+		$value = isset( $_SERVER[ $key ] ) && is_string( $_SERVER[ $key ] ) ? sanitize_text_field( wp_unslash( $_SERVER[ $key ] ) ) : '';
+		foreach ( array_reverse( array_map( 'trim', explode( ',', $value ) ) ) as $address ) {
+			if ( false === filter_var( $address, FILTER_VALIDATE_IP ) ) {
 				return '';
 			}
+			if ( ! self::in_ranges( $address, $settings['trusted_proxies'] ) && ! ( $settings['behind_cloudflare'] && Bot_Verifier::is_cloudflare( $address ) ) ) {
+				return $address;
+			}
 		}
-		return $remote;
+		return '';
+	}
+
+	/**
+	 * Whether an address is in any of the ranges.
+	 *
+	 * @param  string   $ip     Address.
+	 * @param  string[] $ranges Ranges.
+	 * @return bool
+	 */
+	private static function in_ranges( $ip, array $ranges ) {
+		foreach ( $ranges as $cidr ) {
+			if ( Bot_Verifier::in_range( $ip, $cidr ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether the request carries a header a proxy writes.
+	 *
+	 * @return bool
+	 */
+	private static function has_proxy_headers() {
+		foreach ( array( 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'HTTP_FORWARDED', 'HTTP_TRUE_CLIENT_IP' ) as $header ) {
+			if ( ! empty( $_SERVER[ $header ] ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

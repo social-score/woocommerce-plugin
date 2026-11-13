@@ -300,15 +300,38 @@ ss_assert( 403 !== ss_as( $BOT, 'http://wordpress/wp-json/socialscore/v1/nothing
 ss_assert( 403 !== ss_as( $BOT, 'http://wordpress/?wc-api=socialscore_test' ), 'block mode: any wc-api request is left alone' );
 ss_assert( 403 !== ss_as( $BOT, 'http://wordpress/wp-cron.php?doing_wp_cron' ), 'block mode: wp-cron is not blocked' );
 
-// 6b. Behind Cloudflare. The test stack's own address is made a "Cloudflare" address, so the module sees what a shop behind
-//     Cloudflare sees: the real Googlebot has to get through, a scraper that says Googlebot must not.
-$saved = get_option( \SocialScore\Bot_Verifier::OPTION );
-update_option( \SocialScore\Bot_Verifier::OPTION, array( 'google_common' => array( '66.249.64.0/19' ), 'cloudflare' => array( '172.16.0.0/12', '10.0.0.0/8', '192.168.0.0/16' ), 'fetched' => time() ), false );
-ss_assert( 403 !== ss_as( $GOOGLE, $url, array( 'CF-Connecting-IP' => '66.249.66.1' ) ), 'block mode: Googlebot behind Cloudflare, with the real address in CF-Connecting-IP, is verified and gets the page' );
-ss_assert( 403 !== ss_as( $GOOGLE, $url ), 'block mode: Googlebot from a Cloudflare address with no CF-Connecting-IP is unverified, and never gets 403' );
-ss_assert( 403 !== ss_as( $GOOGLE, $url, array( 'X-Forwarded-For' => '66.249.66.1' ) ), 'block mode: Googlebot with only X-Forwarded-For (some other proxy) is unverified, and never gets 403' );
-ss_assert( 403 === ss_as( $GOOGLE, $url, array( 'CF-Connecting-IP' => '203.0.113.50' ) ), 'block mode: a scraper behind Cloudflare that says Googlebot, from an address in no Google range, gets 403' );
-update_option( \SocialScore\Bot_Verifier::OPTION, $saved, false );
+// 6b. Behind a proxy. The test stack's own address is made a "Cloudflare" address (and, below, a trusted proxy), so the module
+//     sees what a shop behind one sees. The visitor is whatever a proxy the SHOP trusts says; nobody else's header counts.
+$saved_ranges   = get_option( \SocialScore\Bot_Verifier::OPTION );
+$saved_settings = get_option( \SocialScore\Bot_Settings::OPTION );
+$private_nets   = array( '172.16.0.0/12', '10.0.0.0/8', '192.168.0.0/16' );
+update_option( \SocialScore\Bot_Verifier::OPTION, array( 'google_common' => array( '66.249.64.0/19' ), 'cloudflare' => $private_nets, 'fetched' => time() ), false );
+delete_option( \SocialScore\Bot_Settings::OPTION );
+delete_option( \SocialScore\Bot_Settings::HINTS );
+// "Behind Cloudflare" is off (the default): Cloudflare is not trusted. Never verified, never 403, whatever the header says.
+ss_assert( 403 !== ss_as( $GOOGLE, $url, array( 'CF-Connecting-IP' => '66.249.66.1' ) ), 'block mode, Behind Cloudflare off: Googlebot from a Cloudflare address is unverified and never gets 403' );
+ss_assert( 403 !== ss_as( $GOOGLE, $url, array( 'CF-Connecting-IP' => '203.0.113.50' ) ), 'block mode, Behind Cloudflare off: and a scraper writing the header is not turned into a 403 either (nothing is trusted)' );
+// A private address with only a forwarding header: a proxy nobody described, unknown.
+update_option( \SocialScore\Bot_Verifier::OPTION, array( 'google_common' => array( '66.249.64.0/19' ), 'cloudflare' => array( '203.0.113.0/24' ), 'fetched' => time() ), false );
+ss_assert( 403 !== ss_as( $GOOGLE, $url, array( 'X-Forwarded-For' => '66.249.66.1' ) ), 'block mode: Googlebot from a private address with only X-Forwarded-For is unverified and never gets 403' );
+update_option( \SocialScore\Bot_Verifier::OPTION, array( 'google_common' => array( '66.249.64.0/19' ), 'cloudflare' => $private_nets, 'fetched' => time() ), false );
+// "Behind Cloudflare" is on: CF-Connecting-IP is the visitor.
+update_option( \SocialScore\Bot_Settings::OPTION, array( 'behind_cloudflare' => true ), false );
+ss_assert( 403 !== ss_as( $GOOGLE, $url, array( 'CF-Connecting-IP' => '66.249.66.1' ) ), 'block mode, Behind Cloudflare on: Googlebot with its real address in CF-Connecting-IP is verified and gets the page' );
+ss_assert( 403 !== ss_as( $GOOGLE, $url ), 'block mode, Behind Cloudflare on: no header is unverified and never gets 403' );
+ss_assert( 403 === ss_as( $GOOGLE, $url, array( 'CF-Connecting-IP' => '203.0.113.50' ) ), 'block mode, Behind Cloudflare on: a scraper that says Googlebot gets 403' );
+// A trusted proxy from the settings, with the client in X-Forwarded-For.
+update_option( \SocialScore\Bot_Settings::OPTION, array( 'trusted_proxies' => array( '172.16.0.0/12', '10.0.0.0/8', '192.168.0.0/16' ) ), false );
+ss_assert( 403 !== ss_as( $GOOGLE, $url, array( 'X-Forwarded-For' => '66.249.66.1' ) ), 'block mode, trusted proxy: Googlebot named in X-Forwarded-For is verified' );
+ss_assert( 403 === ss_as( $GOOGLE, $url, array( 'X-Forwarded-For' => '66.249.66.1, 203.0.113.50' ) ), 'block mode, trusted proxy: the right-most untrusted address is the visitor, so a scraper that wrote a Google address on the left gets 403' );
+ss_assert( 403 !== ss_as( $GOOGLE, $url ), 'block mode, trusted proxy without the header: unverified, never 403' );
+update_option( \SocialScore\Bot_Verifier::OPTION, $saved_ranges, false );
+if ( false === $saved_settings ) {
+	delete_option( \SocialScore\Bot_Settings::OPTION );
+} else {
+	update_option( \SocialScore\Bot_Settings::OPTION, $saved_settings, false );
+}
+ss_assert( array() !== \SocialScore\Bot_Settings::hints() && false !== get_option( \SocialScore\Bot_Settings::HINTS ), 'the module counted the engines it could not check behind a proxy, for the warning on the reports page' );
 
 // 7. With the Pixel off, nothing is blocked.
 touch( '/shared/pixel-off' );
@@ -333,6 +356,7 @@ ss_assert( 200 === wp_remote_retrieve_response_code( $res ) && false !== strpos(
 ss_assert( false !== strpos( $page, 'By kind of visitor' ) && false !== strpos( $page, 'Bad bots' ) && false !== strpos( $page, '120' ), 'the reports page shows the traffic of the report API' );
 ss_assert( false !== strpos( $page, 'name="bot_mode" value="flag" checked="checked"' ), 'the reports page offers the three modes with the one SocialScore holds selected' );
 ss_assert( false !== strpos( $page, '#' . $bot_order->get_id() ), 'the warnings list has the bot order' );
+ss_assert( false !== strpos( $page, 'Trusted proxies' ) && false !== strpos( $page, 'name="behind_cloudflare"' ) && false !== strpos( $page, 'looks like this shop is behind Cloudflare' ), 'the reports page has the proxy settings and the warning for the shop that is behind a proxy' );
 ss_assert( false === strpos( $page, 'sk_mock' ), 'the store key is not on the page' );
 $list = wp_remote_retrieve_body( wp_remote_get( 'http://wordpress/wp-admin/admin.php?page=wc-orders', array( 'cookies' => $cookies, 'timeout' => 60 ) ) );
 ss_assert( false !== strpos( $list, 'Not human: Bad bot' ), 'the orders list shows the flag' );
