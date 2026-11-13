@@ -195,13 +195,59 @@ class BotGuardTest extends TestCase {
 			// The endpoint path form of WooCommerce.
 			$this->request( $ua, '/wc-api/WC_Gateway_Stripe/' );
 			$this->assertSame( 'served', $this->inspect(), $ua . ' path' );
-			// POST body form (webhooks).
-			$this->request( $ua, '/' );
-			$_POST['wc-api'] = 'wc_gateway_stripe';
-			$this->assertSame( 'served', $this->inspect(), $ua . ' post' );
-			unset( $_POST['wc-api'] );
 		}
 		$this->assertSame( array(), $this->blocked );
+	}
+
+	public function test_what_woocommerce_does_not_treat_as_wc_api_is_a_page_request_and_is_blocked() {
+		$this->server_says( 'block' );
+		// Empty name, a list, and a name in the POST body: WooCommerce serves the normal page for all of them.
+		$this->request( 'curl/8.4.0', '/product/x/?wc-api=' );
+		$_GET['wc-api'] = '';
+		$this->assertSame( 'blocked', $this->inspect(), 'empty name' );
+		$_GET['wc-api'] = array( 'x' );
+		$this->assertSame( 'blocked', $this->inspect(), 'a list' );
+		$_GET['wc-api'] = '!!!'; // Nothing left after sanitising.
+		$this->assertSame( 'blocked', $this->inspect(), 'a name with nothing left' );
+		unset( $_GET['wc-api'] );
+		$this->request( 'curl/8.4.0', '/product/x/' );
+		$_POST['wc-api'] = 'x';
+		$this->assertSame( 'blocked', $this->inspect(), 'POST body' );
+		unset( $_POST['wc-api'] );
+		// And a real name, in either form, passes (before any gateway has loaded).
+		foreach ( array( 'Go-http-client/1.1', 'Java/11.0.2' ) as $ua ) {
+			$this->request( $ua, '/?wc-api=probe_gw' );
+			$_GET['wc-api'] = 'probe_gw';
+			$this->assertSame( 'served', $this->inspect(), $ua );
+			unset( $_GET['wc-api'] );
+			$this->request( $ua, '/wc-api/probe_gw/' );
+			$this->assertSame( 'served', $this->inspect(), $ua . ' path' );
+		}
+	}
+
+	public function test_the_dispatched_store_route_decides_not_the_address_or_the_body() {
+		$this->server_says( 'block' );
+		$bot = function ( $path ) {
+			$this->request( 'python-requests/2.31.0', $path );
+		};
+		// POST /wp-json/wp/v2/types with rest_route=/wc/store/... in the body: the address says "not the Store API",
+		// the dispatched route says it is.
+		foreach ( array( '/wc/store/v1/products/24', '/WC/STORE/v1/cart', '//wc/store//v1/cart/add-item', '/Wc/Store/V1/Cart/Add-Item/' ) as $route ) {
+			$bot( '/wp-json/wp/v2/types' );
+			$out = ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( $route ) );
+			$this->assertInstanceOf( \WP_Error::class, $out, $route );
+			$this->assertSame( 403, $out->get_error_data()['status'] ?? null, $route );
+		}
+		// Not a Store API route, a person, another mode, or a result already decided: untouched.
+		$bot( '/wp-json/wp/v2/types' );
+		$this->assertNull( ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( '/wp/v2/types' ) ) );
+		$this->assertSame( 'already', ( new Bot_Guard() )->guard_rest( 'already', null, $this->store_route( '/wc/store/v1/cart' ) ) );
+		$this->server_says( 'substitute' );
+		$bot( '/wp-json/wp/v2/types' );
+		$this->assertNull( ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( '/wc/store/v1/cart' ) ) );
+		$this->server_says( 'block' );
+		$this->request( 'Mozilla/5.0 Chrome/126.0', '/wp-json/wp/v2/types', array( 'HTTP_ACCEPT' => 'text/html', 'HTTP_ACCEPT_LANGUAGE' => 'en' ) );
+		$this->assertNull( ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( '/wc/store/v1/cart' ) ) );
 	}
 
 	public function test_the_rest_route_is_judged_case_insensitively_and_from_the_post_body_first() {

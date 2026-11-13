@@ -168,8 +168,9 @@ plugin sends it; reading it back into reports is later.
    a proxy or CDN must give the real client address in the filter `socialscore_client_ip`; without it the address is the
    proxy's, which has no matching name, so the check is `unknown`, not `failed`. Only these engines are checked; the other
    declared bots are taken at their word.
-10. **`wc-api` is never touched.** Every request to it is left alone (this replaces the first rule, which skipped only a name some hook handled): a
-    webhook that is blocked is a lost payment, and the request builds no page.
+10. **A real `wc-api` request is never touched**, judged the way WooCommerce judges it (a non-empty text name in the query, or the
+    `/wc-api/<name>/` path). A webhook that is blocked is a lost payment, and the request builds no page. An empty name, a list or
+    a name in the POST body is not an API request to WooCommerce: it builds the page, so the guard treats it as a page.
 11. **admin-ajax is guarded for `woocommerce_*` actions only**: they are the storefront's own (variation lookup), open
     to visitors who are not logged in. Other plugins' admin-ajax actions are not ours to block.
 
@@ -212,6 +213,8 @@ plugin sends it; reading it back into reports is later.
 - [x] T28 {added} Substitute factor never 1.00 (30 steps, 0.85 to 1.15 without 1.00)
 - [x] T29 {added} `Bot_Verifier`: a declared Googlebot or Bingbot is checked by reverse then forward DNS, kept 24 hours per address; fail is a bad bot, no answer fails open with the signal `unverified_bot`
 - [x] T30 {added} `Identity::send` checks the switches again; social-score: Klaviyo list sync adds no bot and removes a listed one
+- [x] T31 {added} Bot_Guard: `rest_pre_dispatch` decides from the dispatched route (`$request->get_route()`, any case): in block mode a bad bot gets 403 on every Store API route, however the address or the POST body `rest_route` named it (body route behind `/wp-json/wp/v2/types`, `cart/add-item`, encoded and doubled paths, `index.php`, capitals); the post-dispatch scrub uses the same rule
+- [x] T32 {added} Bot_Guard: `wc-api` is judged as WooCommerce does (a query name that is text and not empty after `sanitize_key`, or the `/wc-api/<name>/` path); an empty name, a list or a POST body name is a page request and is blocked or substituted
 - [ ] T16 {added} Level 2 route and `level2` state (stage 6)
 - [ ] T17 {added} Mode screen in the dashboard `client`
 - [ ] T18 {added} Server-side hits into the traffic report

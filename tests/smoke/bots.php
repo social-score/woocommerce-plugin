@@ -172,6 +172,37 @@ foreach ( array( 'Java/11.0.2', 'Go-http-client/1.1' ) as $hook_ua ) {
 	ss_assert( 403 !== ss_as( $hook_ua, 'http://wordpress/?wc-api=wc_gateway_paypal' ), 'block mode: a gateway webhook (query form, ' . $hook_ua . ') is not blocked' );
 	ss_assert( 403 !== ss_as( $hook_ua, 'http://wordpress/wc-api/wc_gateway_paypal/' ), 'block mode: a gateway webhook (path form, ' . $hook_ua . ') is not blocked' );
 }
+// wc-api as WooCommerce reads it: a name that is text and not empty. Anything else is a page request and a bad bot is stopped.
+foreach ( array( 'an empty name' => $url . '?wc-api=', 'a list' => $url . '?wc-api[]=x' ) as $what => $probe ) {
+	ss_assert( 403 === ss_as( $BOT, $probe ), 'block mode: wc-api as ' . $what . ' is a page request and gets 403' );
+}
+$res = wp_remote_post( $url, array( 'timeout' => 60, 'user-agent' => $BOT, 'body' => array( 'wc-api' => 'x' ) ) );
+ss_assert( 403 === wp_remote_retrieve_response_code( $res ), 'block mode: wc-api in the POST body is a page request and gets 403' );
+foreach ( array( 'Go-http-client/1.1', 'Java/11.0.2' ) as $hook_ua ) {
+	ss_assert( 403 !== ss_as( $hook_ua, 'http://wordpress/?wc-api=probe_gw' ), 'block mode: /?wc-api=probe_gw passes for ' . $hook_ua );
+	ss_assert( 403 !== ss_as( $hook_ua, 'http://wordpress/wc-api/probe_gw/' ), 'block mode: /wc-api/probe_gw/ passes for ' . $hook_ua );
+}
+
+// The Store API reached any other way. WordPress reads rest_route from the POST body first, so the address can say anything.
+$post = function ( $ua, $url_, array $body ) {
+	return wp_remote_post( $url_, array( 'timeout' => 60, 'user-agent' => $ua, 'body' => $body ) );
+};
+foreach ( array( '/wc/store/v1/products/' . $pid, '/wc/store/v1/cart', '/WC/STORE/v1/cart' ) as $route ) {
+	$res = $post( $BOT, 'http://wordpress/wp-json/wp/v2/types?_method=GET', array( 'rest_route' => $route ) );
+	ss_assert( 403 === wp_remote_retrieve_response_code( $res ), 'block mode: POST /wp-json/wp/v2/types with rest_route=' . $route . ' in the body gets 403 (' . wp_remote_retrieve_response_code( $res ) . ')' );
+}
+$res = $post( $BOT, 'http://wordpress/wp-json/wp/v2/types', array( 'rest_route' => '/wc/store/v1/cart/add-item', 'id' => $pid, 'quantity' => 1 ) );
+ss_assert( 403 === wp_remote_retrieve_response_code( $res ), 'block mode: add-item through the body route gets 403' );
+$res = $post( $PERSON, 'http://wordpress/wp-json/wp/v2/types', array( 'rest_route' => '/wc/store/v1/products/' . $pid ) );
+ss_assert( 403 !== wp_remote_retrieve_response_code( $res ), 'block mode: a person is not blocked on the same request (' . wp_remote_retrieve_response_code( $res ) . ')' );
+$res = $post( $BOT, 'http://wordpress/wp-json/wc/store/v1/products/' . $pid, array( 'rest_route' => '/wp/v2/types' ) );
+ss_assert( 200 !== wp_remote_retrieve_response_code( $res ) && false === strpos( wp_remote_retrieve_body( $res ), '"prices"' ), 'block mode: Store API path with another route in the body gives a bot nothing (' . wp_remote_retrieve_response_code( $res ) . ')' );
+foreach ( array( 'an encoded slash' => '/wp-json/wc%2Fstore/v1/products/' . $pid, 'an encoded letter' => '/wp-json/%77c/store/v1/products/' . $pid, 'double encoding' => '/wp-json/wc%252Fstore/v1/products/' . $pid, 'double slashes' => '//wp-json//wc//store//v1/products/' . $pid, 'index.php' => '/index.php/wp-json/wc/store/v1/products/' . $pid, 'capitals' => '/WP-JSON/WC/STORE/v1/products/' . $pid ) as $what => $path ) {
+	$res  = wp_remote_get( 'http://wordpress' . $path, array( 'timeout' => 60, 'redirection' => 0, 'user-agent' => $BOT ) );
+	$code = wp_remote_retrieve_response_code( $res );
+	ss_assert( in_array( $code, array( 301, 302, 403, 404 ), true ) && false === strpos( wp_remote_retrieve_body( $res ), '"prices"' ), 'block mode: the Store API by ' . $what . ' gives a bot nothing (' . $code . ')' );
+}
+
 $res = $ajax( $BOT );
 ss_assert( 403 === wp_remote_retrieve_response_code( $res ), 'block mode: admin-ajax woocommerce_get_variation is blocked for a bot' );
 ss_assert( 403 === ss_as( $BOT, 'http://wordpress/wp-json/WC/STORE/v1/products/' . $pid ) || 404 === ss_as( $BOT, 'http://wordpress/wp-json/WC/STORE/v1/products/' . $pid ), 'block mode: the Store API in capitals is no way round' );

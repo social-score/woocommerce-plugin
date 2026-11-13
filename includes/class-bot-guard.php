@@ -118,6 +118,7 @@ class Bot_Guard {
 		add_filter( 'woocommerce_get_price_html', array( $this, 'price_html' ), 10, 2 );
 		add_filter( 'woocommerce_available_variation', array( $this, 'variation' ), 10, 3 );
 		add_filter( 'woocommerce_structured_data_product_offer', array( $this, 'structured_offer' ), 10, 2 );
+		add_filter( 'rest_pre_dispatch', array( $this, 'guard_rest' ), 10, 3 );
 		add_filter( 'rest_post_dispatch', array( $this, 'store_api' ), 10, 3 );
 	}
 
@@ -126,9 +127,10 @@ class Bot_Guard {
 	 * command line, the REST API outside the Store API (payment and SocialScore callbacks) and `wc-api` callbacks are left
 	 * alone, so an integration that uses an HTTP library is never taken for a scraper.
 	 *
+	 * @param  bool $dispatched_store True when WordPress has dispatched the request to a Store API route.
 	 * @return bool
 	 */
-	private function should_inspect() {
+	private function should_inspect( $dispatched_store = false ) {
 		if ( ( is_admin() && ! $this->is_storefront_ajax() ) || ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) || defined( 'WP_CLI' ) || is_user_logged_in() ) {
 			return false;
 		}
@@ -138,7 +140,9 @@ class Bot_Guard {
 		// Left alone: REST routes outside the Store API, xmlrpc and cron, and every `wc-api` request. WooCommerce answers a
 		// `wc-api` request with an empty 200 before any page is built (WC_API::handle_api_requests), so it shows nothing
 		// to take, and a payment webhook from a gateway must always get through, whether the gateway has loaded yet or not.
-		$skip = $this->is_rest_callback( $base, $path ) || $this->is_wc_api( $base, $path ) || $base . '/xmlrpc.php' === $path || $base . '/wp-cron.php' === $path;
+		// A request WordPress has dispatched to a Store API route is never skipped on what its address looks like: the route
+		// it was dispatched to decides (`rest_pre_dispatch`).
+		$skip = ! $dispatched_store && ( $this->is_rest_callback( $base, $path ) || $this->is_wc_api( $path, $base ) || $base . '/xmlrpc.php' === $path || $base . '/wp-cron.php' === $path );
 		return ! (bool) apply_filters( 'socialscore_bot_guard_skip', $skip, $path );
 	}
 
@@ -158,15 +162,18 @@ class Bot_Guard {
 	}
 
 	/**
-	 * Whether the request is a `wc-api` one: the query name (GET or POST) or the `/wc-api/<name>/` endpoint path.
+	 * Whether the request is a `wc-api` one, the way WooCommerce decides it.
 	 *
-	 * @param  string $base Path of the home URL, no trailing slash.
 	 * @param  string $path Path of the request.
+	 * @param  string $base Path of the home URL, no trailing slash.
 	 * @return bool
 	 */
-	private function is_wc_api( $base, $path ) {
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.NonceVerification.Missing -- Only the presence of the name is read.
-		return isset( $_GET['wc-api'] ) || isset( $_POST['wc-api'] ) || 0 === stripos( $path, $base . '/wc-api/' ) || strtolower( $path ) === $base . '/wc-api';
+	private function is_wc_api( $path, $base ) {
+		// As WooCommerce reads it (WC_API::handle_api_requests): the query name, as text, not empty after sanitising; or the
+		// `/wc-api/<name>/` endpoint. An empty name, a list (`wc-api[]=x`) or a name in the POST body is a page request.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Only the callback name is read.
+		$name = isset( $_GET['wc-api'] ) && is_string( $_GET['wc-api'] ) ? sanitize_key( wp_unslash( $_GET['wc-api'] ) ) : '';
+		return '' !== $name || 0 === stripos( $path, $base . '/wc-api/' );
 	}
 
 	/**
@@ -399,6 +406,29 @@ class Bot_Guard {
 	}
 
 	/**
+	 * Before WordPress runs a REST route: in block mode a bad bot gets 403 on every Store API route, decided from the route
+	 * WordPress dispatched (`$request->get_route()`), whatever way the address or the POST body named it. This stops a bot
+	 * that reaches the Store API through `POST /wp-json/wp/v2/types` with `rest_route=/wc/store/...` in the body, or by any
+	 * encoding of the path.
+	 *
+	 * @param  mixed            $result  Result so far.
+	 * @param  \WP_REST_Server  $server  Server.
+	 * @param  \WP_REST_Request $request Request.
+	 * @return mixed
+	 */
+	public function guard_rest( $result, $server, $request ) {
+		unset( $server );
+		if ( null !== $result || ! is_object( $request ) || ! self::is_store_route( (string) $request->get_route() ) ) {
+			return $result;
+		}
+		if ( Bot_Detector::BAD_BOT !== self::current()['class'] || ! $this->should_inspect( true ) || ! $this->acts() || self::MODE_BLOCK !== $this->mode() ) {
+			return $result;
+		}
+		self::no_cache();
+		return new \WP_Error( 'socialscore_blocked', 'Access denied.', array( 'status' => 403 ) );
+	}
+
+	/**
 	 * The Store API product answers (`/wc/store/v1/products`): no remaining stock for a bad bot, and, in substitute
 	 * mode, substitute prices (the API gives prices as integers in the smallest currency unit).
 	 *
@@ -413,7 +443,7 @@ class Bot_Guard {
 			return $response;
 		}
 		// The decision is the route WordPress dispatched, not the address the visitor typed.
-		if ( ! self::is_store_route( (string) $request->get_route() ) || ! $this->should_inspect() || ! $this->acts() ) {
+		if ( ! self::is_store_route( (string) $request->get_route() ) || ! $this->should_inspect( true ) || ! $this->acts() ) {
 			return $response;
 		}
 		$data = $response->get_data();
