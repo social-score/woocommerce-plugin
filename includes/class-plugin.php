@@ -31,10 +31,14 @@ class Plugin {
 		( new Enrichment() )->register();
 		( new Privacy() )->register();
 		( new Pixel() )->register();
+		( new Bot_Guard() )->register();
+		( new Not_Human() )->register();
+		( new Identity() )->register();
 
 		if ( is_admin() ) {
 			( new Admin_Page() )->register();
 			( new Check_Panels() )->register();
+			( new Reports_Page() )->register();
 		}
 	}
 

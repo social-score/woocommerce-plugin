@@ -36,8 +36,22 @@ if ( false !== strpos( $path, '/stores/st_gone/' ) ) {
 		} else {
 			touch( '/shared/pixel-off' );
 		}
+		if ( isset( $json['bot_mode'] ) ) {
+			file_put_contents( '/shared/bot-mode', $json['bot_mode'] );
+		}
 	}
-	echo json_encode( array( 'enabled' => ! file_exists( '/shared/pixel-off' ), 'site_id' => 'ps_abcdefghijklmnop', 'snippet_url' => 'https://pixel.socialscore.io/v1/p.js' ) );
+	// The bad-bot mode is the store's setting at SocialScore: a flag file stands in for it (flag when nothing is set).
+	echo json_encode( array( 'enabled' => ! file_exists( '/shared/pixel-off' ), 'site_id' => 'ps_abcdefghijklmnop', 'snippet_url' => 'https://pixel.socialscore.io/v1/p.js', 'domains' => array(), 'bot_mode' => file_exists( '/shared/bot-mode' ) ? trim( file_get_contents( '/shared/bot-mode' ) ) : 'flag' ) );
+} elseif ( preg_match( '#/stores/[^/]+/pixel/report$#', $path ) ) {
+	echo json_encode( array( 'group_by' => 'class', 'range' => array( 'from' => '2026-10-14', 'to' => '2026-11-12' ), 'totals' => array( 'sessions' => 120, 'humans' => 90, 'pages' => 400, 'duration_s_sum' => 0, 'view_item' => 50, 'add_to_cart' => 8, 'begin_checkout' => 4, 'purchase' => 2, 'login' => 1, 'orders' => 2, 'revenue' => array( 'EUR' => 55.5 ) ), 'series' => array( array( 'key' => 'human', 'sessions' => 90, 'orders' => 2 ), array( 'key' => 'bad_bot', 'sessions' => 30, 'orders' => 0 ) ) ) );
+} elseif ( preg_match( '#/stores/[^/]+/orders/(\d+)/session$#', $path, $m ) ) {
+	// The class the Pixel gave the visit of an order: a flag file per order id, else no visit yet.
+	if ( file_exists( '/shared/session-class-' . $m[1] ) ) {
+		echo json_encode( array( 'class' => trim( file_get_contents( '/shared/session-class-' . $m[1] ) ), 'signals' => array( 'webdriver' ), 'device_farm' => false, 'last_seen_at' => '2026-11-13T10:00:00Z', 'pages' => 3 ) );
+	} else {
+		http_response_code( 404 );
+		echo json_encode( array( 'detail' => 'session_not_found' ) );
+	}
 } elseif ( preg_match( '#/settings$#', $path ) ) {
 	echo json_encode( array( 'status' => 'active', 'settings' => array( 'order_any_customer' => true, 'manual_only' => false ) ) );
 } elseif ( 'DELETE' === $_SERVER['REQUEST_METHOD'] ) {

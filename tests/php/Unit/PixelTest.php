@@ -147,7 +147,7 @@ class PixelTest extends TestCase {
 	public function test_state_reads_the_api_once_per_ten_minutes() {
 		$this->connect_store( 'st_1' );
 		$this->pixel_answer();
-		$this->assertSame( array( 'enabled' => true, 'site_id' => self::SITE ), Pixel::state() );
+		$this->assertSame( array( 'enabled' => true, 'site_id' => self::SITE, 'bot_mode' => 'flag', 'level2' => false ), Pixel::state() );
 		Pixel::state();
 		$this->assertCount( 1, $this->http );
 		$this->assertSame( 'GET', $this->http[0]['args']['method'] );
@@ -169,7 +169,7 @@ class PixelTest extends TestCase {
 	public function test_a_site_id_that_is_not_valid_turns_the_pixel_off() {
 		$this->connect_store( 'st_1' );
 		$this->pixel_answer( true, 'ps_x");alert(1);//' );
-		$this->assertSame( array( 'enabled' => false, 'site_id' => '' ), Pixel::state() );
+		$this->assertSame( array( 'enabled' => false, 'site_id' => '', 'bot_mode' => 'flag', 'level2' => false ), Pixel::state() );
 	}
 
 	public function test_loader_gets_the_site_id_and_an_empty_source() {

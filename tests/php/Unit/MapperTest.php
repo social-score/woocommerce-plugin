@@ -105,4 +105,19 @@ class MapperTest extends TestCase {
 		$this->assertArrayNotHasKey( 'phone', $row );
 		$this->assertArrayNotHasKey( 'last_name', $row );
 	}
+
+	public function test_an_order_the_mcp_store_marked_is_sent_as_placed_by_an_agent() {
+		$order                               = new \WC_Order( array( 'id' => 5 ) );
+		$order->meta['_mcpstore_agent_order'] = 'yes';
+		$this->assertTrue( Mapper::order( $order )['placed_by_agent'] );
+	}
+
+	public function test_an_ordinary_order_sends_no_agent_field_at_all() {
+		$order = new \WC_Order( array( 'id' => 5 ) );
+		$this->assertArrayNotHasKey( 'placed_by_agent', Mapper::order( $order ) );
+		$order->meta['_mcpstore_agent_order'] = 'no';
+		$this->assertArrayNotHasKey( 'placed_by_agent', Mapper::order( $order ) );
+		$order->meta['_mcpstore_agent_order'] = '1';
+		$this->assertArrayNotHasKey( 'placed_by_agent', Mapper::order( $order ), 'only the value the module writes counts' );
+	}
 }

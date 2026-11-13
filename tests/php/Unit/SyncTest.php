@@ -7,6 +7,12 @@ use SocialScore\Tests\TestCase;
 
 class SyncTest extends TestCase {
 
+	protected function setUp(): void {
+		parent::setUp();
+		// The order sync also asks whether the look for the order's visit (Not_Human) is already scheduled.
+		Functions\when( 'as_has_scheduled_action' )->justReturn( false );
+	}
+
 	private function ok() {
 		return array( 'status' => 200, 'data' => null, 'retry_after' => null );
 	}
@@ -136,6 +142,7 @@ class SyncTest extends TestCase {
 
 	public function test_order_sync_pushes_customer_then_order_and_enriches() {
 		$this->connect_store();
+		Functions\when( 'as_schedule_single_action' )->justReturn( 1 );
 		$order = new \WC_Order( array( 'id' => 9, 'billing_email' => 'a@b.bg', 'total' => 10, 'created' => time() ) );
 		Functions\when( 'wc_get_order' )->justReturn( $order );
 		$this->http_responder = fn() => self::response( 200, array() );
@@ -173,7 +180,23 @@ class SyncTest extends TestCase {
 
 	public function test_order_accepted_in_the_batch_answer_still_queues_its_check() {
 		$this->order_flow( array( 'created' => 1, 'rejected' => array() ) );
+		Functions\when( 'as_schedule_single_action' )->justReturn( 1 );
 		Functions\expect( 'as_enqueue_async_action' )->once()->with( 'socialscore_run_check', array( 'order', '9', 0 ), 'socialscore' );
+		( new Sync() )->handle_order( 9 );
+		$this->assertTrue( true );
+	}
+
+	public function test_a_synced_order_gets_a_delayed_look_for_the_class_of_its_visit() {
+		$this->order_flow( array( 'created' => 1, 'rejected' => array() ) );
+		Functions\when( 'as_enqueue_async_action' )->justReturn( 1 );
+		Functions\expect( 'as_schedule_single_action' )->once()->with( \Mockery::type( 'int' ), 'socialscore_order_session', array( 9, 0 ), 'socialscore' );
+		( new Sync() )->handle_order( 9 );
+		$this->assertTrue( true );
+	}
+
+	public function test_an_order_the_api_set_aside_gets_no_look_for_its_visit() {
+		$this->order_flow( array( 'created' => 0, 'rejected' => array( array( 'external_id' => '9', 'reason' => 'customer_not_found' ) ) ) );
+		Functions\expect( 'as_schedule_single_action' )->never();
 		( new Sync() )->handle_order( 9 );
 		$this->assertTrue( true );
 	}
@@ -282,6 +305,7 @@ class SyncTest extends TestCase {
 
 	public function test_single_order_sync_stores_the_id_from_the_batch_answer() {
 		$this->connect_store();
+		Functions\when( 'as_schedule_single_action' )->justReturn( 1 );
 		$order = new \WC_Order( array( 'id' => 9, 'billing_email' => 'a@b.bg', 'created' => time() ) );
 		Functions\when( 'wc_get_order' )->justReturn( $order );
 		$this->http_responder = function ( $url ) {
