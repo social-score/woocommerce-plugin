@@ -655,6 +655,38 @@ class BotGuardTest extends TestCase {
 		}
 	}
 
+	public function test_no_quantity_leaves_the_store_api_in_any_mode_not_even_the_most_that_can_be_added() {
+		foreach ( array( 'flag', 'substitute', 'block' ) as $mode ) {
+			$this->server_says( $mode );
+			$this->request( 'curl/8.4.0' );
+			$product                = $this->real_product();
+			$product['add_to_cart'] = (object) array( 'text' => 'Add to cart', 'minimum' => 1, 'maximum' => 37, 'multiple_of' => 1 );
+			$out                    = ( new Bot_Guard() )->store_api( $this->store_api_response( $product ), null, $this->store_route( '/wc/store/v1/products/24' ) )->data;
+			$this->assertNull( $out['low_stock_remaining'], $mode );
+			$this->assertSame( 9999, $out['add_to_cart']->maximum, $mode );
+			$this->assertSame( 1, $out['add_to_cart']->minimum, $mode );
+		}
+	}
+
+	public function test_the_hook_is_the_one_inside_dispatch_so_the_blocks_hydration_is_covered() {
+		\Brain\Monkey\Filters\expectAdded( 'rest_request_after_callbacks' )->once();
+		\Brain\Monkey\Filters\expectAdded( 'rest_post_dispatch' )->never();
+		( new Bot_Guard() )->register();
+		$this->addToAssertionCount( 1 );
+	}
+
+	public function test_the_wc_api_endpoint_needs_a_name_that_is_not_empty_after_sanitising() {
+		$this->server_says( 'block' );
+		foreach ( array( '/wc-api/', '/wc-api//', '/wc-api/%20/', '/wc-api/%21%21/', '/WC-API/' ) as $path ) {
+			$this->request( 'curl/8.4.0', $path );
+			$this->assertSame( 'blocked', $this->inspect(), $path );
+		}
+		foreach ( array( '/wc-api/probe_gw/', '/wc-api/WC_Gateway_Paypal', '/WC-API/probe_gw/' ) as $path ) {
+			$this->request( 'Java/11.0.2', $path );
+			$this->assertSame( 'served', $this->inspect(), $path );
+		}
+	}
+
 	public function test_the_collection_data_price_range_has_no_real_price_in_substitute_mode() {
 		$this->server_says( 'substitute' );
 		$this->request( 'curl/8.4.0' );
@@ -728,5 +760,58 @@ class BotGuardTest extends TestCase {
 		$this->server_says( 'flag' );
 		Bot_Guard::reset();
 		$this->assertSame( 9.9, ( new Bot_Guard() )->shown_price( '9.90', 24 ) );
+	}
+
+	// The page of a block theme ---------------------------------------------------------------------------------------
+
+	private function hydrated_page() {
+		return '<html><script id="wc-settings">{"id":24,"name":"Mug","prices":{"price":"4747","regular_price":"4747","sale_price":"4747","price_range":null,"currency_code":"USD"},"is_in_stock":true,"low_stock_remaining":2,"add_to_cart":{"text":"Add","minimum":1,"maximum":2,"multiple_of":1}}</script>'
+			. '<div data-wp-context="{&quot;id&quot;:30,&quot;prices&quot;:{&quot;price&quot;:&quot;1990&quot;,&quot;price_range&quot;:{&quot;min_amount&quot;:&quot;1990&quot;,&quot;max_amount&quot;:&quot;2990&quot;}},&quot;low_stock_remaining&quot;:1}"></div></html>';
+	}
+
+	public function test_the_hydrated_json_of_a_block_theme_page_loses_all_quantities_in_flag_mode() {
+		$this->server_says( 'flag' );
+		$this->request( 'curl/8.4.0' );
+		$out = ( new Bot_Guard() )->clean_page( $this->hydrated_page() );
+		$this->assertStringNotContainsString( '"low_stock_remaining":2', $out );
+		$this->assertStringContainsString( '"low_stock_remaining":null', $out );
+		$this->assertStringContainsString( '&quot;low_stock_remaining&quot;:null', $out, 'also inside an attribute' );
+		$this->assertStringContainsString( '"maximum":9999', $out );
+		$this->assertStringContainsString( '"minimum":1', $out );
+		$this->assertStringContainsString( '"price":"4747"', $out, 'flag mode shows the selling price' );
+	}
+
+	public function test_the_hydrated_json_of_a_block_theme_page_gets_substitute_prices_in_substitute_mode() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		$out = ( new Bot_Guard() )->clean_page( $this->hydrated_page() );
+		$this->assertStringNotContainsString( '4747', $out );
+		$this->assertStringNotContainsString( '1990', $out );
+		$this->assertStringNotContainsString( '2990', $out );
+		$this->assertStringContainsString( '"price":"' . (int) round( Bot_Guard::substitute_price( 4747, 24 ) ) . '"', $out, 'the factor of the product id before the prices' );
+		$this->assertStringContainsString( '&quot;min_amount&quot;:&quot;' . (int) round( Bot_Guard::substitute_price( 1990, 30 ) ) . '&quot;', $out );
+		$this->assertStringContainsString( '"currency_code":"USD"', $out );
+		$this->assertStringContainsString( '"low_stock_remaining":null', $out );
+	}
+
+	public function test_a_page_with_nothing_to_clean_is_returned_as_it_is() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		$plain = '<html><p>Hello</p></html>';
+		$this->assertSame( $plain, ( new Bot_Guard() )->clean_page( $plain ) );
+		$this->assertSame( '', ( new Bot_Guard() )->clean_page( '' ) );
+	}
+
+	public function test_the_buffer_is_started_only_for_a_bad_bot_that_the_module_acts_on() {
+		$this->server_says( 'substitute' );
+		$level = ob_get_level();
+		$this->request( 'Mozilla/5.0 Chrome/126.0', '/', array( 'HTTP_ACCEPT' => 'text/html', 'HTTP_ACCEPT_LANGUAGE' => 'en' ) );
+		( new Bot_Guard() )->start_buffer();
+		$this->assertSame( $level, ob_get_level(), 'a person: no buffer' );
+		$this->request( 'curl/8.4.0' );
+		( new Bot_Guard() )->start_buffer();
+		$this->assertSame( $level + 1, ob_get_level(), 'a bad bot: one buffer' );
+		ob_end_clean();
+		$this->assertGreaterThanOrEqual( 1, $this->nocache, 'the page is marked uncacheable' );
 	}
 }

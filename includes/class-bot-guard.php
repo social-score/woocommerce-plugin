@@ -27,6 +27,8 @@ class Bot_Guard {
 	const MODE_SUBSTITUTE = 'substitute';
 	const MODE_BLOCK      = 'block';
 	// The substitute price is the real one times a factor between 0.85 and 1.15, fixed for a product and a day.
+	// What the Store API shows as the most one can add when stock is not managed.
+	const NO_LIMIT    = 9999;
 	const FACTOR_BASE = 85;
 	// 30 steps: 0.85 to 0.99 and 1.01 to 1.15. Never exactly 1.00, which would show the real price.
 	const FACTOR_SPREAD = 30;
@@ -118,8 +120,11 @@ class Bot_Guard {
 		add_filter( 'woocommerce_get_price_html', array( $this, 'price_html' ), 10, 2 );
 		add_filter( 'woocommerce_available_variation', array( $this, 'variation' ), 10, 3 );
 		add_filter( 'woocommerce_structured_data_product_offer', array( $this, 'structured_offer' ), 10, 2 );
+		add_action( 'template_redirect', array( $this, 'start_buffer' ), 0 );
 		add_filter( 'rest_pre_dispatch', array( $this, 'guard_rest' ), 10, 3 );
-		add_filter( 'rest_post_dispatch', array( $this, 'store_api' ), 10, 3 );
+		// After the route's callbacks, inside dispatch(): the server's own answers, and also WooCommerce Blocks' hydration of
+		// the page (it calls rest_do_request, which never reaches rest_post_dispatch), both pass here.
+		add_filter( 'rest_request_after_callbacks', array( $this, 'store_api' ), 10, 3 );
 	}
 
 	/**
@@ -182,7 +187,12 @@ class Bot_Guard {
 		// `/wc-api/<name>/` endpoint. An empty name, a list (`wc-api[]=x`) or a name in the POST body is a page request.
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Only the callback name is read.
 		$name = isset( $_GET['wc-api'] ) && is_string( $_GET['wc-api'] ) ? sanitize_key( wp_unslash( $_GET['wc-api'] ) ) : '';
-		return '' !== $name || 0 === stripos( $path, $base . '/wc-api/' );
+		if ( '' !== $name ) {
+			return true;
+		}
+		// The endpoint form needs a name that is not empty after sanitising: `/wc-api/`, `/wc-api//` and `/wc-api/%20/` give
+		// WooCommerce an empty name, and WordPress serves a normal page.
+		return 1 === preg_match( '#^' . preg_quote( $base, '#' ) . '/wc-api/([^/?]+)#i', $path, $m ) && '' !== sanitize_key( rawurldecode( $m[1] ) );
 	}
 
 	/**
@@ -414,6 +424,77 @@ class Bot_Guard {
 	}
 
 	/**
+	 * A block theme prints Store API product data into the page itself (WooCommerce Blocks puts it in script tags and in
+	 * block attributes, built by the product schema and not through a REST request), where no REST filter reaches it. For a
+	 * bad bot the page is therefore cleaned on its way out (`clean_page`).
+	 *
+	 * @return void
+	 */
+	public function start_buffer() {
+		if ( Bot_Detector::BAD_BOT !== self::current()['class'] || ! $this->should_inspect() || ! $this->acts() ) {
+			return;
+		}
+		self::no_cache();
+		ob_start( array( $this, 'clean_page' ) );
+	}
+
+	/**
+	 * The page of a bad bot with the product data in its JSON made safe: no remaining stock and no stock-sized maximum in any
+	 * mode, and in substitute mode the prices (minor units, as in the Store API) replaced as they are in the API answers.
+	 *
+	 * @param  string $html Page.
+	 * @return string
+	 */
+	public function clean_page( $html ) {
+		if ( ! is_string( $html ) || '' === $html || ( false === strpos( $html, 'low_stock_remaining' ) && false === strpos( $html, 'maximum' ) && false === strpos( $html, 'prices' ) ) ) {
+			return $html;
+		}
+		$q    = '(?:"|&quot;|\\\\u0022)';
+		$html = (string) preg_replace( '/(' . $q . 'low_stock_remaining' . $q . '\s*:\s*)\d+/', '${1}null', $html );
+		$html = (string) preg_replace_callback(
+			'/(' . $q . 'add_to_cart' . $q . '\s*:\s*\{[^{}]*?' . $q . 'maximum' . $q . '\s*:\s*)(\d+)/',
+			static function ( $m ) {
+				return (int) $m[2] < self::NO_LIMIT ? $m[1] . self::NO_LIMIT : $m[0];
+			},
+			$html
+		);
+		if ( self::MODE_SUBSTITUTE === $this->mode() ) {
+			$html = $this->substitute_page_prices( $html, $q );
+		}
+		return $html;
+	}
+
+	/**
+	 * Replaces the minor-unit prices of every `prices` object in a page, with the id of the product written just before it.
+	 *
+	 * @param  string $html Page.
+	 * @param  string $q    Pattern of a JSON quote.
+	 * @return string
+	 */
+	private function substitute_page_prices( $html, $q ) {
+		$last = 'page';
+		$key  = '/(' . $q . '(?:price|regular_price|sale_price|min_amount|max_amount|min_price|max_price)' . $q . '\\s*:\\s*' . $q . ')(\\d+)(' . $q . ')/';
+		return (string) preg_replace_callback(
+			'/' . $q . 'id' . $q . '\\s*:\\s*(\\d+)|' . $q . 'prices' . $q . '\\s*:\\s*\\{(?:[^{}]|\\{[^{}]*\\})*\\}/',
+			function ( $m ) use ( &$last, $key ) {
+				if ( isset( $m[1] ) && '' !== $m[1] ) {
+					$last = $m[1];
+					return $m[0];
+				}
+				$id = $last;
+				return (string) preg_replace_callback(
+					$key,
+					static function ( $n ) use ( $id ) {
+						return $n[1] . (int) round( self::substitute_price( (int) $n[2], $id ) ) . $n[3];
+					},
+					$m[0]
+				);
+			},
+			$html
+		);
+	}
+
+	/**
 	 * Before WordPress runs a REST route: in block mode a bad bot gets 403 on every Store API route, decided from the route
 	 * WordPress dispatched (`$request->get_route()`), whatever way the address or the POST body named it. This stops a bot
 	 * that reaches the Store API through `POST /wp-json/wp/v2/types` with `rest_route=/wc/store/...` in the body, or by any
@@ -476,8 +557,18 @@ class Bot_Guard {
 	private function scrub( $data, $substitute, $product_id = null ) {
 		$is_object = is_object( $data );
 		$node      = $is_object ? get_object_vars( $data ) : $data;
+		// No quantities for a bad bot, in every mode: the remaining stock, and the most that can be added to the cart, which is
+		// the stock when it is managed.
 		if ( array_key_exists( 'low_stock_remaining', $node ) ) {
 			$node['low_stock_remaining'] = null;
+		}
+		if ( isset( $node['add_to_cart'] ) && ( is_array( $node['add_to_cart'] ) || is_object( $node['add_to_cart'] ) ) ) {
+			$cart_is_object = is_object( $node['add_to_cart'] );
+			$cart           = $cart_is_object ? get_object_vars( $node['add_to_cart'] ) : $node['add_to_cart'];
+			if ( isset( $cart['maximum'] ) && is_numeric( $cart['maximum'] ) && (int) $cart['maximum'] < self::NO_LIMIT ) {
+				$cart['maximum'] = self::NO_LIMIT;
+			}
+			$node['add_to_cart'] = $cart_is_object ? (object) $cart : $cart;
 		}
 		if ( isset( $node['id'] ) && is_scalar( $node['id'] ) && ( isset( $node['prices'] ) ) ) {
 			$product_id = $node['id'];

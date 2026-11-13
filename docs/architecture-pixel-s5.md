@@ -219,6 +219,10 @@ plugin sends it; reading it back into reports is later.
 - [x] T33 {added} wc-api: a marker does not exempt admin-ajax or a Store API route; the exemption needs a non-empty text name in the query or the `/wc-api/<name>/` path (smoke: all three variants on a product give 403 in block mode and the substitute price in substitute mode; `probe_gw` with a Go and a Java agent passes)
 - [x] T34 {added} Substitute applies to every Store API version and route (products, `collection-data` price range, batch, v2 and later) except the visitor's own cart, checkout and order
 - [x] T35 {added} `Bot_Verifier` uses the published address ranges of Google (four files) and Bing, downloaded once a day by wp-cron into one option; no DNS and no network on the way of a request; the first day or a failed download fails open (`unverified_bot`)
+- [x] T36 {added} wc-api endpoint path: the name after `/wc-api/` must be non-empty after `sanitize_key`; `/wc-api/`, `/wc-api//` and `/wc-api/%20/` are page requests (403 in block)
+- [x] T37 {added} Store API filter moved to `rest_request_after_callbacks` (inside `dispatch()`), so the answers WooCommerce Blocks gets from `rest_do_request` are covered as well as the server's own
+- [x] T38 {added} Block-theme pages (twentytwentyfive): Store API data printed into the HTML does not pass any REST filter, so for a bad bot the page is cleaned on its way out (`Bot_Guard::start_buffer`/`clean_page`): `low_stock_remaining` becomes null and a stock-sized `add_to_cart.maximum` becomes 9999 in every mode; in substitute mode the minor-unit prices of every `prices` object (and price ranges) are replaced with the product's factor. Smoke on the real block theme looks for `4747`, `47.47` and the remaining stock in the whole product and shop page
+- [x] T39 {added} No quantity leaves the Store API in any mode: `low_stock_remaining` and the stock-sized `add_to_cart.maximum`
 - [ ] T16 {added} Level 2 route and `level2` state (stage 6)
 - [ ] T17 {added} Mode screen in the dashboard `client`
 - [ ] T18 {added} Server-side hits into the traffic report

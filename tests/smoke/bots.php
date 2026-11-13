@@ -58,6 +58,16 @@ $url = get_permalink( $product->get_id() );
 update_option( 'woocommerce_coming_soon', 'no' );
 delete_option( Bot_Stats::OPTION );
 ss_mode( 'flag' );
+$low = new WC_Product_Simple();
+$low->set_name( 'Low stock mug' );
+$low->set_regular_price( '47.47' );
+$low->set_manage_stock( true );
+$low->set_stock_quantity( 2 );
+$low->set_status( 'publish' );
+$low->save();
+$low_url  = get_permalink( $low->get_id() );
+$shop_url = wc_get_page_permalink( 'shop' );
+echo 'theme: ' . wp_get_theme()->get( 'Name' ) . ', block theme: ' . ( wp_is_block_theme() ? 'yes' : 'no' ) . "\n";
 $person_headers = array( 'Accept' => 'text/html,application/xhtml+xml', 'Accept-Language' => 'en-US,en;q=0.9' );
 
 // 1. Default mode (flag): nothing is stopped, the server still counts what it caught with no JavaScript.
@@ -95,6 +105,19 @@ ss_assert( false === strpos( $html, '37 in stock' ), 'in every mode the bot is n
 $html = wp_remote_retrieve_body( wp_remote_get( $url, array( 'timeout' => 60, 'user-agent' => $PERSON, 'headers' => $person_headers ) ) );
 ss_assert( false !== strpos( $html, '37 in stock' ), 'a person sees the shop\'s own stock text' );
 
+// 4b. A block theme puts the Store API data of the page into its HTML (the Blocks hydration). A bad bot gets no quantity
+//     there in any mode: not the remaining stock, not the most that can be added.
+foreach ( array( 'the product page' => $low_url, 'the shop page' => $shop_url ) as $what => $page_url ) {
+	$body = wp_remote_retrieve_body( wp_remote_get( $page_url, array( 'timeout' => 60, 'user-agent' => $BOT ) ) );
+	if ( preg_match( '/.{0,300}low_stock_remaining["\']?\s*:\s*[1-9].{0,60}/s', $body, $leak ) ) {
+		echo 'leak context: ' . $leak[0] . "\n";
+	}
+	ss_assert( 0 === preg_match( '/low_stock_remaining["\']?\s*:\s*[1-9]/', $body ), 'flag mode: ' . $what . ' has no remaining stock in its hydrated JSON' );
+	ss_assert( 0 === preg_match( '/"maximum"\s*:\s*"?(?:2|37)"?[,}]/', $body ), 'flag mode: ' . $what . ' has no stock-sized maximum for the cart' );
+}
+$body = wp_remote_retrieve_body( wp_remote_get( $low_url, array( 'timeout' => 60, 'user-agent' => $PERSON, 'headers' => $person_headers ) ) );
+ss_assert( 1 === preg_match( '/low_stock_remaining["\']?\s*:\s*2/', $body ) || false !== strpos( $body, '4747' ), 'a person still gets the real hydrated data (' . strlen( $body ) . ' bytes)' );
+
 // 5. Substitute mode: another price is shown to the bot, never charged.
 ss_mode( 'substitute' );
 $html = wp_remote_retrieve_body( wp_remote_get( $url, array( 'timeout' => 60, 'user-agent' => $BOT ) ) );
@@ -111,6 +134,11 @@ ss_assert( false !== stripos( (string) wp_remote_retrieve_header( $res, 'cache-c
 $res = wp_remote_get( $url . '?wc-api=x', array( 'timeout' => 60, 'user-agent' => $BOT ) );
 ss_assert( 0 === preg_match( '/(?<![\d.])9\.9(?:0)?(?!\d)/', wp_remote_retrieve_body( $res ) ), 'substitute mode: a made-up wc-api marker gives no real price (WooCommerce ends a wc-api request empty)' );
 
+// The hydrated JSON of a block theme carries the price in minor units too.
+foreach ( array( 'the product page' => $low_url, 'the shop page' => $shop_url ) as $what => $page_url ) {
+	$body = wp_remote_retrieve_body( wp_remote_get( $page_url, array( 'timeout' => 60, 'user-agent' => $BOT ) ) );
+	ss_assert( false === strpos( $body, '4747' ) && false === strpos( $body, '47.47' ) && 0 === preg_match( '/low_stock_remaining["\']?\s*:\s*[1-9]/', $body ), 'substitute mode: ' . $what . ' (hydrated JSON included) has no real price in minor units or in text, and no remaining stock' );
+}
 // wc-api as WooCommerce does not read it is a page request: a bot in substitute mode gets the substitute price, never the real one.
 $real = '/(?<![\d.])9\.9(?:0)?(?!\d)/';
 foreach ( array( 'an empty name' => $url . '?wc-api=', 'a list' => $url . '?wc-api[]=x' ) as $what => $probe ) {
@@ -202,6 +230,9 @@ foreach ( array( 'an empty name' => $url . '?wc-api=', 'a list' => $url . '?wc-a
 }
 $res = wp_remote_post( $url, array( 'timeout' => 60, 'user-agent' => $BOT, 'body' => array( 'wc-api' => 'x' ) ) );
 ss_assert( 403 === wp_remote_retrieve_response_code( $res ), 'block mode: wc-api in the POST body is a page request and gets 403' );
+foreach ( array( '/wc-api/', '/wc-api//', '/wc-api/%20/' ) as $probe_path ) {
+	ss_assert( 403 === ss_as( $BOT, 'http://wordpress' . $probe_path ), 'block mode: ' . $probe_path . ' has no name for WooCommerce, is a page request and gets 403' );
+}
 foreach ( array( 'Go-http-client/1.1', 'Java/11.0.2' ) as $hook_ua ) {
 	ss_assert( 403 !== ss_as( $hook_ua, 'http://wordpress/?wc-api=probe_gw' ), 'block mode: /?wc-api=probe_gw passes for ' . $hook_ua );
 	ss_assert( 403 !== ss_as( $hook_ua, 'http://wordpress/wc-api/probe_gw/' ), 'block mode: /wc-api/probe_gw/ passes for ' . $hook_ua );
