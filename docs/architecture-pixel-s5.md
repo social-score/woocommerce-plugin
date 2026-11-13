@@ -161,13 +161,14 @@ plugin sends it; reading it back into reports is later.
    person for ever.
 8. **Level 2 is dormant in three places** and every one is tested.
 
-9. **Declared search engines are checked by DNS** (Googlebot family against `googlebot.com`/`google.com`, Bingbot against
-   `search.msn.com`), the answer kept 24 hours per address. A name that resolves back to the same address but is not the
-   engine's is a bad bot (`fake_bot`). Anything that cannot be decided (no answer, no host name, a private address, a
-   name that does not resolve back) **fails open**: it stays a known bot with the signal `unverified_bot`. A shop behind
-   a proxy or CDN must give the real client address in the filter `socialscore_client_ip`; without it the address is the
-   proxy's, which has no matching name, so the check is `unknown`, not `failed`. Only these engines are checked; the other
-   declared bots are taken at their word.
+9. **Declared search engines are checked by their published address ranges** (Googlebot family against Google's four files under
+   `developers.google.com/static/crawling/ipranges/` (the old `/search/apis/ipranges/` addresses redirect there), Bingbot against
+   `bing.com/toolbox/bingbot.json`; checked 13.11.2026). A daily wp-cron job downloads them into one option (`autoload=no`); an engine
+   whose download fails or comes back empty keeps its old list. The check on a request is a comparison with that list: **no DNS, no
+   network, no write**. A public address in none of the engine's ranges is a bad bot (`fake_bot`). No list yet (the first day), or a
+   private address, **fails open**: a known bot with the signal `unverified_bot`. A shop behind a proxy or CDN must give the real
+   client address in the filter `socialscore_client_ip`, or the proxy's address is in no range; `socialscore_verify_declared_bots`
+   returns false to switch the check off. Only these engines are checked; the other declared bots are taken at their word.
 10. **A real `wc-api` request is never touched**, judged the way WooCommerce judges it (a non-empty text name in the query, or the
     `/wc-api/<name>/` path). A webhook that is blocked is a lost payment, and the request builds no page. An empty name, a list or
     a name in the POST body is not an API request to WooCommerce: it builds the page, so the guard treats it as a page.
@@ -182,14 +183,14 @@ plugin sends it; reading it back into reports is later.
 - Server-side hits in the traffic report: later (decision 6).
 - Publishing to WordPress.org and the Shopify App Store (5.7): the owner. `readme.txt` now describes the reports page and the
   bot handling, because the external-services text must be true before review.
-- A shop behind a CDN must set `socialscore_client_ip` for the DNS check of Googlebot and Bingbot to give a result.
+- A shop behind a CDN must set `socialscore_client_ip` (or switch the check off) for the Googlebot and Bingbot check to be right.
 
 ## Tasks
 
 - [x] T1 social-score: `stores.pixel_bot_mode` (migration `c3e8a5d1f7b4`), `bot_mode` in `GET`/`PATCH .../pixel`, snapshot and docs {verified}
 - [x] T2 social-score: `pixel/bots.py`, bots out of audiences (`AudienceMembers`) and segments (`execution_member_ids`, `without_bots`) {verified}
 - [x] T3 woocommerce: `Bot_Detector` (headers to class and signals) and its tests {verified}
-- [x] T4 woocommerce: `Bot_Guard` modes: flag, substitute, block; stock without quantities; skips for integrations {rejected: substitute leaves Store API prices real (prices is an object, scrub only walks arrays), price_range not scrubbed, /WC/STORE route case skips scrub, admin-ajax woocommerce_get_variation unguarded, gateway webhooks hooked in the gateway constructor get 403 in block mode}
+- [x] T4 woocommerce: `Bot_Guard` modes: flag, substitute, block; stock without quantities; skips for integrations {rejected r2: block-theme product and shop pages embed Store API product JSON for a bad bot with the real price ("4747") and low_stock_remaining:2 in substitute and flag mode; on 6cb84aa an empty/array/POST wc-api serves the page unguarded}
 - [x] T5 woocommerce: `Bot_Stats` counts per day and class {verified}
 - [x] T6 woocommerce: `Not_Human` flag on orders from the request, and from the session route through a delayed job; note, list cell, order screen {verified}
 - [x] T7 woocommerce: `Pixel::state()` carries `bot_mode` and `level2` {verified}
@@ -199,22 +200,25 @@ plugin sends it; reading it back into reports is later.
 - [x] T11 shopify: Reports route, proxy allow-list for the report {verified}
 - [x] T12 shopify: `socialscore-identity` embed and script, off, tested {verified}
 - [x] T13 pixel: tests that a hash event is dropped and a hash on `login` is refused on Level 1 {verified}
-- [x] T14 smoke: WordPress and WooCommerce run the bot scenario over HTTP (flag, substitute, block, reports, order flag) {rejected: SMOKE OK, but no substitute-mode Store API case and no real gateway webhook case, so it passes with the T4 defects present}
+- [x] T14 smoke: WordPress and WooCommerce run the bot scenario over HTTP (flag, substitute, block, reports, order flag) {rejected r2: SMOKE OK on 6cb84aa, but it misses the hydrated JSON leak (it searches "9.90", the JSON holds "990") and the empty/array wc-api cases; the working-tree smoke fails at bots.php:196 (POST to a GET-only route without _method=GET, 404)}
 - [x] T15 readme and listing texts {verified}
 - [x] T19 {added} Orders from the MCP store: `placed_by_agent` in the plugin row and in social-score {verified}
-- [x] T20 {added} Bot_Guard: a callback is skipped only when really routed (a `wc-api` name some hook handles; a REST path under the home URL or `rest_route`, which WordPress routes to REST on any address and so never renders a page); a marker added to a page address no longer lets a bot through {rejected: has_action at init priority 1 is false for gateways that hook in their constructor (payment gateways not loaded yet) and /wc-api/<name>/ path form is ignored; real webhook got 403; rest_route in the POST body (WordPress reads $_POST before $_GET) skips the guard on a /wp-json/wp/v2/* path while WordPress routes to /wc/store: in block mode a bot read real price + stock and added to cart (201)}
+- [x] T20 {added} Bot_Guard: a callback is skipped only when really routed (a `wc-api` name some hook handles; a REST path under the home URL or `rest_route`, which WordPress routes to REST on any address and so never renders a page); a marker added to a page address no longer lets a bot through {rejected r2: replaced by T26, which skips every wc-api request; on 6cb84aa ?wc-api=, ?wc-api[]=x, ?wc-api=%20 and POST wc-api= give the normal product page in block mode (200, "2 in stock")}
 - [x] T21 {added} Bot_Guard: every response it changes, and the 403, is sent with `nocache_headers`, `Cache-Control: private, no-store` and `DONOTCACHEPAGE` {verified}
 - [x] T22 {added} Shopify: checked, no analog (the app changes no storefront response; the embed only observes) {verified}
-- [x] T23 {added} Bot_Guard: the Store API `prices` and `price_range` are objects, and are changed as objects; substitute applies to `/wc/store/v1/products` only, never to the cart; checked in the smoke on a real answer
-- [x] T24 {added} Bot_Guard: a Store API route is judged from the route WordPress dispatched, lower-cased, slashes collapsed; `rest_route` is read from the POST body first, as WordPress does; an unreadable route is checked, not skipped
-- [x] T25 {added} Bot_Guard: admin-ajax actions `woocommerce_*` are guarded like the storefront (they answer visitors who are not logged in); other admin screens and actions are not
-- [x] T26 {added} Bot_Guard: every `wc-api` request (query, POST, `/wc-api/<name>/`) is left alone: a gateway webhook must never get a 403, and WooCommerce answers it with a stub, not a page (smoke: 400, 2 bytes); the earlier rule that looked for a hook at `init` priority 1 saw no gateway yet
-- [x] T27 {added} Pixel: the price in the Pixel events and in `data-ss-price` goes through `Bot_Guard::shown_price`
-- [x] T28 {added} Substitute factor never 1.00 (30 steps, 0.85 to 1.15 without 1.00)
-- [x] T29 {added} `Bot_Verifier`: a declared Googlebot or Bingbot is checked by reverse then forward DNS, kept 24 hours per address; fail is a bad bot, no answer fails open with the signal `unverified_bot`
-- [x] T30 {added} `Identity::send` checks the switches again; social-score: Klaviyo list sync adds no bot and removes a listed one
-- [x] T31 {added} Bot_Guard: `rest_pre_dispatch` decides from the dispatched route (`$request->get_route()`, any case): in block mode a bad bot gets 403 on every Store API route, however the address or the POST body `rest_route` named it (body route behind `/wp-json/wp/v2/types`, `cart/add-item`, encoded and doubled paths, `index.php`, capitals); the post-dispatch scrub uses the same rule
-- [x] T32 {added} Bot_Guard: `wc-api` is judged as WooCommerce does (a query name that is text and not empty after `sanitize_key`, or the `/wc-api/<name>/` path); an empty name, a list or a POST body name is a page request and is blocked or substituted
+- [x] T23 {added} Bot_Guard: the Store API `prices` and `price_range` are objects, and are changed as objects; substitute applies to `/wc/store/v1/products` only, never to the cart; checked in the smoke on a real answer {rejected: direct Store API product answers are now substituted (verified live), but product JSON hydrated into pages does not go through rest_post_dispatch and stays real; collection-data price_range shows real min/max (990/7272)}
+- [x] T24 {added} Bot_Guard: a Store API route is judged from the route WordPress dispatched, lower-cased, slashes collapsed; `rest_route` is read from the POST body first, as WordPress does; an unreadable route is checked, not skipped {verified: body rest_route, /WC/STORE, unversioned /wc/store/products, rest_route[] all 403 in block; direct answers clean in substitute}
+- [x] T25 {added} Bot_Guard: admin-ajax actions `woocommerce_*` are guarded like the storefront (they answer visitors who are not logged in); other admin screens and actions are not {verified: admin-ajax woocommerce_get_variation 403 in block, substituted in substitute}
+- [x] T26 {added} Bot_Guard: every `wc-api` request (query, POST, `/wc-api/<name>/`) is left alone: a gateway webhook must never get a 403, and WooCommerce answers it with a stub, not a page (smoke: 400, 2 bytes); the earlier rule that looked for a hook at `init` priority 1 saw no gateway yet {rejected: every wc-api request skipped is a bypass: empty name, list and POST-body name render the normal product page with no block, no substitute and the stock quantity}
+- [x] T27 {added} Pixel: the price in the Pixel events and in `data-ss-price` goes through `Bot_Guard::shown_price` {verified: data-ss-price on /shop/ for a bad bot shows substitute values (41.3 for 47.47)}
+- [x] T28 {added} Substitute factor never 1.00 (30 steps, 0.85 to 1.15 without 1.00) {verified: code and unit tests; factor 0.85-0.99 or 1.01-1.15}
+- [x] T29 {added} `Bot_Verifier`: a declared Googlebot or Bingbot is checked by reverse then forward DNS, kept 24 hours per address; fail is a bad bot, no answer fails open with the signal `unverified_bot` {verified with limit: real Googlebot/Bingbot 200, consistent non-engine PTR 403 (cached); a fake Googlebot from an IP with no PTR or a PTR without matching forward still passes (fails open by design)}
+- [x] T30 {added} `Identity::send` checks the switches again; social-score: Klaviyo list sync adds no bot and removes a listed one {verified: social-score suite 9451 OK incl. 3 Klaviyo bot tests; Identity unit tests}
+- [x] T31 {added} Bot_Guard: `rest_pre_dispatch` decides from the dispatched route (`$request->get_route()`, any case): in block mode a bad bot gets 403 on every Store API route, however the address or the POST body `rest_route` named it (body route behind `/wp-json/wp/v2/types`, `cart/add-item`, encoded and doubled paths, `index.php`, capitals); the post-dispatch scrub uses the same rule {verified on the uncommitted working tree only, not pushed: body rest_route cart/add-item 403 in block}
+- [x] T32 {added} Bot_Guard: `wc-api` is judged as WooCommerce does (a query name that is text and not empty after `sanitize_key`, or the `/wc-api/<name>/` path); an empty name, a list or a POST body name is a page request and is blocked or substituted {verified on the uncommitted working tree only, not pushed: empty/array/POST wc-api 403 in block, substituted in substitute}
+- [x] T33 {added} wc-api: a marker does not exempt admin-ajax or a Store API route; the exemption needs a non-empty text name in the query or the `/wc-api/<name>/` path (smoke: all three variants on a product give 403 in block mode and the substitute price in substitute mode; `probe_gw` with a Go and a Java agent passes)
+- [x] T34 {added} Substitute applies to every Store API version and route (products, `collection-data` price range, batch, v2 and later) except the visitor's own cart, checkout and order
+- [x] T35 {added} `Bot_Verifier` uses the published address ranges of Google (four files) and Bing, downloaded once a day by wp-cron into one option; no DNS and no network on the way of a request; the first day or a failed download fails open (`unverified_bot`)
 - [ ] T16 {added} Level 2 route and `level2` state (stage 6)
 - [ ] T17 {added} Mode screen in the dashboard `client`
 - [ ] T18 {added} Server-side hits into the traffic report

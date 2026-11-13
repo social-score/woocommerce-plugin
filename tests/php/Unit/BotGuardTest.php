@@ -31,6 +31,7 @@ class BotGuardTest extends TestCase {
 		$this->hooked  = array();
 		$this->nocache = 0;
 		$this->orders  = array();
+		Functions\when( 'wp_doing_ajax' )->justReturn( false );
 		Functions\when( 'is_admin' )->justReturn( false );
 		Functions\when( 'has_action' )->alias( fn( $tag ) => in_array( $tag, $this->hooked, true ) );
 		Functions\when( 'wp_doing_cron' )->justReturn( false );
@@ -643,6 +644,63 @@ class BotGuardTest extends TestCase {
 		$out = ( new Bot_Guard() )->store_api( $this->store_api_response( $this->real_product() ), null, $this->store_route( '/wc/store/v1/cart' ) )->data;
 		$this->assertSame( '990', $out['prices']->price, 'what the cart charges is not changed' );
 		$this->assertNull( $out['low_stock_remaining'] );
+	}
+
+	public function test_substitute_applies_to_every_store_api_version_and_route_that_can_carry_a_price() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		foreach ( array( '/wc/store/v1/products', '/wc/store/products/24', '/wc/store/v2/products/24', '/wc/store/v1/products/collection-data', '/wc/store/v1/batch', '/WC/STORE/V3/PRODUCTS' ) as $route ) {
+			$out = ( new Bot_Guard() )->store_api( $this->store_api_response( $this->real_product() ), null, $this->store_route( $route ) )->data;
+			$this->assertNotSame( '990', $out['prices']->price, $route );
+		}
+	}
+
+	public function test_the_collection_data_price_range_has_no_real_price_in_substitute_mode() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		$data = array( 'price_range' => (object) array( 'min_price' => '990', 'max_price' => '1990', 'currency_code' => 'USD' ), 'attribute_counts' => array() );
+		$out  = ( new Bot_Guard() )->store_api( $this->store_api_response( $data ), null, $this->store_route( '/wc/store/v1/products/collection-data' ) )->data;
+		$this->assertNotSame( '990', $out['price_range']->min_price );
+		$this->assertNotSame( '1990', $out['price_range']->max_price );
+		$this->assertSame( 'USD', $out['price_range']->currency_code );
+		$this->assertLessThan( (int) $out['price_range']->max_price, (int) $out['price_range']->min_price );
+	}
+
+	public function test_only_the_visitors_own_cart_and_checkout_keep_real_prices() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		foreach ( array( '/wc/store/v1/cart', '/wc/store/v1/cart/items', '/wc/store/v1/cart/add-item', '/wc/store/cart', '/wc/store/v2/cart', '/wc/store/v1/checkout', '/wc/store/v1/checkout/24', '/wc/store/v1/order/12' ) as $route ) {
+			$out = ( new Bot_Guard() )->store_api( $this->store_api_response( $this->real_product() ), null, $this->store_route( $route ) )->data;
+			$this->assertSame( '990', $out['prices']->price, $route );
+			$this->assertNull( $out['low_stock_remaining'], $route );
+		}
+	}
+
+	public function test_a_wc_api_marker_does_not_exempt_admin_ajax() {
+		$this->server_says( 'block' );
+		Functions\when( 'is_admin' )->justReturn( true );
+		Functions\when( 'wp_doing_ajax' )->justReturn( true );
+		$this->request( 'python-requests/2.31.0', '/wp-admin/admin-ajax.php?wc-api=probe_gw' );
+		$_REQUEST['action'] = 'woocommerce_get_variation';
+		$_GET['wc-api']     = 'probe_gw';
+		$this->assertSame( 'blocked', $this->inspect() );
+		unset( $_REQUEST['action'], $_GET['wc-api'] );
+		// The same marker on the storefront endpoint is the gateway callback.
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'wp_doing_ajax' )->justReturn( false );
+		$this->request( 'python-requests/2.31.0', '/?wc-api=probe_gw' );
+		$_GET['wc-api'] = 'probe_gw';
+		$this->assertSame( 'served', $this->inspect() );
+		unset( $_GET['wc-api'] );
+	}
+
+	public function test_a_wc_api_marker_does_not_exempt_a_store_api_route() {
+		$this->server_says( 'block' );
+		$this->request( 'python-requests/2.31.0', '/wp-json/wc/store/v1/cart?wc-api=probe_gw' );
+		$_GET['wc-api'] = 'probe_gw';
+		$out            = ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( '/wc/store/v1/cart' ) );
+		unset( $_GET['wc-api'] );
+		$this->assertInstanceOf( \WP_Error::class, $out );
 	}
 
 	public function test_the_substitute_factor_is_never_exactly_one() {

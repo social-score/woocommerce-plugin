@@ -51,7 +51,7 @@ class Bot_Guard {
 	}
 
 	/**
-	 * A declared Googlebot or Bingbot is checked by DNS (Bot_Verifier). One that fails is a bad bot; one that cannot be
+	 * A declared Googlebot or Bingbot is checked against the published address ranges (Bot_Verifier). One that fails is a bad bot; one that cannot be
 	 * checked stays a known bot with the signal `unverified_bot`.
 	 *
 	 * @param  array $verdict Result of Bot_Detector::classify().
@@ -61,12 +61,12 @@ class Bot_Guard {
 		if ( Bot_Detector::INFO_BOT !== $verdict['class'] || ! Connection::is_connected() ) {
 			return $verdict;
 		}
-		$domains = Bot_Verifier::domains_for( isset( $_SERVER['HTTP_USER_AGENT'] ) && is_string( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : '' );
-		if ( ! $domains ) {
+		$engine = Bot_Verifier::engine_for( isset( $_SERVER['HTTP_USER_AGENT'] ) && is_string( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : '' );
+		if ( '' === $engine ) {
 			return $verdict;
 		}
 		$ip     = (string) apply_filters( 'socialscore_client_ip', isset( $_SERVER['REMOTE_ADDR'] ) && is_string( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '' );
-		$result = Bot_Verifier::verify( $ip, $domains );
+		$result = Bot_Verifier::verify( $ip, $engine );
 		if ( Bot_Verifier::FAILED === $result ) {
 			return array_merge(
 				$verdict,
@@ -142,8 +142,17 @@ class Bot_Guard {
 		// to take, and a payment webhook from a gateway must always get through, whether the gateway has loaded yet or not.
 		// A request WordPress has dispatched to a Store API route is never skipped on what its address looks like: the route
 		// it was dispatched to decides (`rest_pre_dispatch`).
-		$skip = ! $dispatched_store && ( $this->is_rest_callback( $base, $path ) || $this->is_wc_api( $path, $base ) || $base . '/xmlrpc.php' === $path || $base . '/wp-cron.php' === $path );
+		$skip = ! $dispatched_store && ( $this->is_rest_callback( $base, $path ) || ( $this->is_wc_api( $path, $base ) && ! $this->is_ajax() ) || $base . '/xmlrpc.php' === $path || $base . '/wp-cron.php' === $path );
 		return ! (bool) apply_filters( 'socialscore_bot_guard_skip', $skip, $path );
+	}
+
+	/**
+	 * Whether this is an admin-ajax request: a `wc-api` marker in it does not exempt it (admin-ajax is not the API endpoint).
+	 *
+	 * @return bool
+	 */
+	private function is_ajax() {
+		return function_exists( 'wp_doing_ajax' ) && wp_doing_ajax();
 	}
 
 	/**
@@ -188,11 +197,10 @@ class Bot_Guard {
 		// WordPress reads rest_route from the POST body first, then the query.
 		// phpcs:disable WordPress.Security.NonceVerification
 		$param = '';
-		foreach ( array( isset( $_POST['rest_route'] ) ? $_POST['rest_route'] : null, isset( $_GET['rest_route'] ) ? $_GET['rest_route'] : null ) as $candidate ) {
-			if ( null !== $candidate ) {
-				$param = is_string( $candidate ) ? sanitize_text_field( wp_unslash( $candidate ) ) : '?';
-				break;
-			}
+		if ( isset( $_POST['rest_route'] ) ) {
+			$param = is_string( $_POST['rest_route'] ) ? sanitize_text_field( wp_unslash( $_POST['rest_route'] ) ) : '?';
+		} elseif ( isset( $_GET['rest_route'] ) ) {
+			$param = is_string( $_GET['rest_route'] ) ? sanitize_text_field( wp_unslash( $_GET['rest_route'] ) ) : '?';
 		}
 		// phpcs:enable WordPress.Security.NonceVerification
 		if ( '' === $param && 0 === stripos( $path, $base . '/wp-json/' ) ) {
@@ -449,8 +457,10 @@ class Bot_Guard {
 		$data = $response->get_data();
 		self::no_cache();
 		if ( is_array( $data ) || is_object( $data ) ) {
-			$route      = '/' . trim( (string) preg_replace( '#/+#', '/', strtolower( (string) $request->get_route() ) ), '/' );
-			$substitute = self::MODE_SUBSTITUTE === $this->mode() && 0 === strpos( $route, '/wc/store/v1/products' );
+			// Substitute on every Store API route and version that can carry a price (products, collection data, batch, any
+			// later version), except what is the visitor's own cart and checkout: those show what is charged.
+			$route      = '/' . trim( (string) preg_replace( '#/+#', '/', strtolower( rawurldecode( (string) $request->get_route() ) ) ), '/' );
+			$substitute = self::MODE_SUBSTITUTE === $this->mode() && 1 !== preg_match( '#^/wc/store(/v\d+)?/(cart|checkout|order)(/|$)#', $route );
 			$response->set_data( $this->scrub( $data, $substitute ) );
 		}
 		return $response;
@@ -475,8 +485,12 @@ class Bot_Guard {
 		if ( $substitute && isset( $node['prices'] ) && ( is_array( $node['prices'] ) || is_object( $node['prices'] ) ) && null !== $product_id ) {
 			$node['prices'] = $this->substitute_prices( $node['prices'], $product_id );
 		}
+		// The collection data of the products route has a price range of its own, with no product id.
+		if ( $substitute && ! isset( $node['prices'] ) && isset( $node['price_range'] ) && ( is_array( $node['price_range'] ) || is_object( $node['price_range'] ) ) ) {
+			$node['price_range'] = $this->substitute_range( $node['price_range'], null === $product_id ? 'collection' : $product_id );
+		}
 		foreach ( $node as $key => $value ) {
-			if ( 'prices' !== $key && ( is_array( $value ) || is_object( $value ) ) ) {
+			if ( 'prices' !== $key && ( is_array( $value ) || is_object( $value ) ) && ! ( 'price_range' === $key && $substitute && ! isset( $node['prices'] ) ) ) {
 				$node[ $key ] = $this->scrub( $value, $substitute, $product_id );
 			}
 		}
@@ -500,16 +514,28 @@ class Bot_Guard {
 			}
 		}
 		if ( isset( $p['price_range'] ) && ( is_array( $p['price_range'] ) || is_object( $p['price_range'] ) ) ) {
-			$range_is_object = is_object( $p['price_range'] );
-			$range           = $range_is_object ? get_object_vars( $p['price_range'] ) : $p['price_range'];
-			foreach ( array( 'min_amount', 'max_amount' ) as $key ) {
-				if ( isset( $range[ $key ] ) && ctype_digit( (string) $range[ $key ] ) ) {
-					$range[ $key ] = (string) (int) round( self::substitute_price( (int) $range[ $key ], $product_id ) );
-				}
-			}
-			$p['price_range'] = $range_is_object ? (object) $range : $range;
+			$p['price_range'] = $this->substitute_range( $p['price_range'], $product_id );
 		}
 		return $is_object ? (object) $p : $p;
+	}
+
+	/**
+	 * A price range of the Store API: `min_amount` and `max_amount` of a product, `min_price` and `max_price` of the
+	 * collection data.
+	 *
+	 * @param  array|object $range      Range.
+	 * @param  int|string   $product_id Product id, or a word for a collection.
+	 * @return array|object
+	 */
+	private function substitute_range( $range, $product_id ) {
+		$is_object = is_object( $range );
+		$r         = $is_object ? get_object_vars( $range ) : $range;
+		foreach ( array( 'min_amount', 'max_amount', 'min_price', 'max_price' ) as $key ) {
+			if ( isset( $r[ $key ] ) && ctype_digit( (string) $r[ $key ] ) ) {
+				$r[ $key ] = (string) (int) round( self::substitute_price( (int) $r[ $key ], $product_id ) );
+			}
+		}
+		return $is_object ? (object) $r : $r;
 	}
 
 	/**

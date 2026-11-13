@@ -111,6 +111,30 @@ ss_assert( false !== stripos( (string) wp_remote_retrieve_header( $res, 'cache-c
 $res = wp_remote_get( $url . '?wc-api=x', array( 'timeout' => 60, 'user-agent' => $BOT ) );
 ss_assert( 0 === preg_match( '/(?<![\d.])9\.9(?:0)?(?!\d)/', wp_remote_retrieve_body( $res ) ), 'substitute mode: a made-up wc-api marker gives no real price (WooCommerce ends a wc-api request empty)' );
 
+// wc-api as WooCommerce does not read it is a page request: a bot in substitute mode gets the substitute price, never the real one.
+$real = '/(?<![\d.])9\.9(?:0)?(?!\d)/';
+foreach ( array( 'an empty name' => $url . '?wc-api=', 'a list' => $url . '?wc-api[]=x' ) as $what => $probe ) {
+	$body = wp_remote_retrieve_body( wp_remote_get( $probe, array( 'timeout' => 60, 'user-agent' => $BOT ) ) );
+	ss_assert( 0 === preg_match( $real, $body ) && 1 === preg_match( '#<span class="price"><span class="woocommerce-Price-amount#', $body ), 'substitute mode: wc-api as ' . $what . ' is a page request and shows the substitute price' );
+}
+$body = wp_remote_retrieve_body( wp_remote_post( $url, array( 'timeout' => 60, 'user-agent' => $BOT, 'body' => array( 'wc-api' => 'x' ) ) ) );
+ss_assert( 0 === preg_match( $real, $body ), 'substitute mode: wc-api in the POST body is a page request and shows no real price' );
+
+// Other versions and routes of the Store API that can carry a price.
+foreach ( array( '/wp-json/wc/store/v1/products/collection-data?calculate_price_range=true', '/wp-json/wc/store/v1/products' ) as $route ) {
+	$body = wp_remote_retrieve_body( wp_remote_get( 'http://wordpress' . $route, array( 'timeout' => 60, 'user-agent' => $BOT ) ) );
+	ss_assert( false === strpos( $body, '"price":"990"' ) && false === strpos( $body, '"min_price":"990"' ) && false === strpos( $body, '"min_amount":"990"' ), 'substitute mode: ' . $route . ' shows no real price' );
+}
+$body = wp_remote_retrieve_body( wp_remote_post( 'http://wordpress/wp-json/wc/store/v1/batch', array( 'timeout' => 60, 'user-agent' => $BOT, 'headers' => array( 'Content-Type' => 'application/json' ), 'body' => wp_json_encode( array( 'requests' => array( array( 'path' => '/wc/store/v1/products/' . $product->get_id(), 'method' => 'GET' ) ) ) ) ) ) );
+ss_assert( false === strpos( $body, '"price":"990"' ), 'substitute mode: the Store API batch route shows no real price' );
+
+// The published address ranges of Google and Bing, downloaded by the daily job (real files).
+\SocialScore\Bot_Verifier::refresh();
+$ranges = get_option( \SocialScore\Bot_Verifier::OPTION );
+ss_assert( is_array( $ranges ) && count( $ranges['google'] ?? array() ) > 50 && count( $ranges['bing'] ?? array() ) >= 3, 'the job stored the published ranges (' . count( $ranges['google'] ?? array() ) . ' Google, ' . count( $ranges['bing'] ?? array() ) . ' Bing)' );
+ss_assert( \SocialScore\Bot_Verifier::VERIFIED === \SocialScore\Bot_Verifier::verify( '157.55.39.1', 'bing' ) && \SocialScore\Bot_Verifier::FAILED === \SocialScore\Bot_Verifier::verify( '203.0.113.50', 'bing' ), 'an address is checked against the stored list without any DNS' );
+ss_assert( false !== wp_next_scheduled( \SocialScore\Bot_Verifier::HOOK ), 'the daily job is scheduled' );
+
 // The Store API: prices is an object, price_range too; the route is case-insensitive.
 $pid = $product->get_id();
 foreach ( array( 'http://wordpress/wp-json/wc/store/v1/products/' . $pid, 'http://wordpress/?rest_route=/WC/STORE/v1/products/' . $pid, 'http://wordpress/wp-json/WC/STORE/v1/products/' . $pid ) as $api ) {
@@ -148,8 +172,8 @@ $variation->set_stock_quantity( 41 );
 $variation->set_status( 'publish' );
 $variation->save();
 WC_Product_Variable::sync( $variable->get_id() );
-$ajax = function ( $ua, array $headers = array() ) use ( $variable ) {
-	return wp_remote_post( 'http://wordpress/wp-admin/admin-ajax.php', array( 'timeout' => 60, 'user-agent' => $ua, 'headers' => $headers, 'body' => array( 'action' => 'woocommerce_get_variation', 'product_id' => $variable->get_id(), 'attribute_size' => 'S' ) ) );
+$ajax = function ( $ua, array $headers = array(), $query = '' ) use ( $variable ) {
+	return wp_remote_post( 'http://wordpress/wp-admin/admin-ajax.php' . $query, array( 'timeout' => 60, 'user-agent' => $ua, 'headers' => $headers, 'body' => array( 'action' => 'woocommerce_get_variation', 'product_id' => $variable->get_id(), 'attribute_size' => 'S' ) ) );
 };
 $res  = $ajax( $BOT );
 $data = json_decode( wp_remote_retrieve_body( $res ), true );
@@ -205,6 +229,8 @@ foreach ( array( 'an encoded slash' => '/wp-json/wc%2Fstore/v1/products/' . $pid
 
 $res = $ajax( $BOT );
 ss_assert( 403 === wp_remote_retrieve_response_code( $res ), 'block mode: admin-ajax woocommerce_get_variation is blocked for a bot' );
+$res = $ajax( $BOT, array(), '?wc-api=probe_gw' );
+ss_assert( 403 === wp_remote_retrieve_response_code( $res ), 'block mode: a wc-api marker does not exempt admin-ajax' );
 ss_assert( 403 === ss_as( $BOT, 'http://wordpress/wp-json/WC/STORE/v1/products/' . $pid ) || 404 === ss_as( $BOT, 'http://wordpress/wp-json/WC/STORE/v1/products/' . $pid ), 'block mode: the Store API in capitals is no way round' );
 $res = wp_remote_get( $url, array( 'timeout' => 60, 'user-agent' => $BOT ) );
 ss_assert( false !== stripos( (string) wp_remote_retrieve_header( $res, 'cache-control' ), 'no-store' ), 'block mode: the 403 cannot be cached (' . wp_remote_retrieve_header( $res, 'cache-control' ) . ')' );
