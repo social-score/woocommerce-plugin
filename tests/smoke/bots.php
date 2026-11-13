@@ -122,10 +122,10 @@ ss_assert( 1 === preg_match( '/low_stock_remaining["\']?\s*:\s*2/', $body ) || f
 $dresses = array( '"', '\\"', '\\\\"', '&quot;', '&#34;', '&#x22;', '%22', '\\u0022' );
 $blob    = '';
 foreach ( $dresses as $i => $q ) {
-	$blob .= '<div data-case="' . $i . '" data-x=\'{' . $q . 'id' . $q . ':88,' . $q . 'prices' . $q . ':{' . $q . 'price' . $q . ':' . $q . '4747' . $q . ',' . $q . 'price_range' . $q . ':{' . $q . 'min_amount' . $q . ':' . $q . '4747' . $q . '}},' . $q . 'low_stock_remaining' . $q . ':2,' . $q . 'add_to_cart' . $q . ':{' . $q . 'maximum' . $q . ':2}}\'>case ' . $i . '</div>';
+	$blob .= '<div data-case="' . $i . '" data-x=\'{' . $q . 'id' . $q . ':' . $low->get_id() . ',' . $q . 'prices' . $q . ':{' . $q . 'price' . $q . ':' . $q . '4747' . $q . ',' . $q . 'price_range' . $q . ':{' . $q . 'min_amount' . $q . ':' . $q . '4747' . $q . '}},' . $q . 'low_stock_remaining' . $q . ':2,' . $q . 'add_to_cart' . $q . ':{' . $q . 'maximum' . $q . ':2}}\'>case ' . $i . '</div>';
 }
 kses_remove_filters();
-$dressed_id = wp_insert_post( wp_slash( array( 'post_title' => 'Dressed JSON', 'post_name' => 'dressed-json', 'post_status' => 'publish', 'post_type' => 'page', 'post_content' => '<!-- wp:html -->' . $blob . '<!-- /wp:html -->' ) ) );
+$dressed_id = wp_insert_post( wp_slash( array( 'post_title' => 'Dressed JSON', 'post_name' => 'dressed-json', 'post_status' => 'publish', 'post_type' => 'page', 'post_content' => '<!-- wp:shortcode -->[product id="' . $low->get_id() . '"]<!-- /wp:shortcode --><!-- wp:html -->' . $blob . '<!-- /wp:html -->' ) ) );
 $dressed    = get_permalink( $dressed_id );
 $body       = wp_remote_retrieve_body( wp_remote_get( $dressed, array( 'timeout' => 60, 'user-agent' => $PERSON, 'headers' => $person_headers ) ) );
 ss_assert( false !== strpos( $body, 'case 7' ) && 8 === substr_count( $body, '4747' ) / 2, 'the test page carries the data in all eight dresses for a person (' . substr_count( $body, '4747' ) . ' prices)' );

@@ -56,6 +56,7 @@ grep -v '^Deprecated' /tmp/plugin-check.txt || true
 if grep -q "ERROR" /tmp/plugin-check.txt; then fail "Plugin Check reported errors"; fi
 
 echo "== PHP log must be empty of notices, warnings, deprecations, fatals"
-if grep -E "PHP (Notice|Warning|Deprecated|Fatal|Parse)" /shared/debug.log; then fail "PHP problems in debug.log"; fi
+# WP-CLI's own phar (Symfony Finder, run by `plugin check`) prints deprecations on newer PHP: not this plugin's.
+if grep -E "PHP (Notice|Warning|Deprecated|Fatal|Parse)" /shared/debug.log | grep -v "phar:///usr/local/bin/wp/"; then fail "PHP problems in debug.log"; fi
 echo "debug.log lines: $(wc -l < /shared/debug.log)"
 echo "SMOKE OK"
