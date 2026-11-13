@@ -65,7 +65,7 @@ class Bot_Settings {
 			if ( false === strpos( $item, '/' ) && false !== filter_var( $item, FILTER_VALIDATE_IP ) ) {
 				$item .= false !== strpos( $item, ':' ) ? '/128' : '/32';
 			}
-			if ( Bot_Verifier::is_cidr( $item ) ) {
+			if ( Bot_Verifier::is_cidr( $item ) && self::narrow_enough( $item ) ) {
 				$out[ $item ] = $item;
 			}
 			if ( count( $out ) >= self::MAX_PROXIES ) {
@@ -73,6 +73,29 @@ class Bot_Settings {
 			}
 		}
 		return array_values( $out );
+	}
+
+	/**
+	 * Whether a range may be a trusted proxy. A trusted proxy decides whose address is believed, so a range that covers a large
+	 * part of the internet would switch the check off: `0.0.0.0/0`, `::/0`, an IPv4 range shorter than /16 and an IPv6 range
+	 * shorter than /32 are refused. A private network is allowed whole (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`,
+	 * `127.0.0.0/8`, `fc00::/7`, `::1`): its addresses are not the internet's.
+	 *
+	 * @param  string $cidr Range.
+	 * @return bool
+	 */
+	public static function narrow_enough( $cidr ) {
+		list( $net, $bits ) = explode( '/', $cidr, 2 );
+		$bits               = (int) $bits;
+		$v6                 = false !== strpos( $net, ':' );
+		foreach ( array( '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8', 'fc00::/7', '::1/128' ) as $private ) {
+			list( , $floor ) = explode( '/', $private, 2 );
+			if ( $bits >= (int) $floor && Bot_Verifier::in_range( $net, $private ) ) {
+				return true;
+			}
+		}
+		// Anything else must be a public network, and not a wide one (0.0.0.0/16 is not a public network).
+		return false !== filter_var( $net, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) && $bits >= ( $v6 ? 32 : 16 );
 	}
 
 	/**
@@ -99,10 +122,19 @@ class Bot_Settings {
 	 * Notes that a declared search engine came through what looks like a proxy the shop has not described: the merchant
 	 * is told on the reports page, before the search engines are turned away.
 	 *
+	 * Called only for a case that is plausible (see Bot_Guard): the address the proxy gave is one of the engine's.
+	 *
 	 * @param  string $kind cloudflare or proxy.
 	 * @return void
 	 */
 	public static function hint( $kind ) {
+		// At most one write an hour for each kind, whatever the traffic: a request that merely looks like a proxy case cannot
+		// turn the database into a counter.
+		$lock = self::HINTS . '_' . ( 'cloudflare' === $kind ? 'cloudflare' : 'proxy' );
+		if ( false !== get_transient( $lock ) ) {
+			return;
+		}
+		set_transient( $lock, 1, HOUR_IN_SECONDS );
 		$hints = get_option( self::HINTS, array() );
 		$hints = is_array( $hints ) ? $hints : array();
 		$kind  = 'cloudflare' === $kind ? 'cloudflare' : 'proxy';

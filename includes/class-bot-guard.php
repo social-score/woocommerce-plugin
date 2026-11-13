@@ -29,6 +29,8 @@ class Bot_Guard {
 	// The substitute price is the real one times a factor between 0.85 and 1.15, fixed for a product and a day.
 	// What the Store API shows as the most one can add when stock is not managed.
 	const NO_LIMIT = 9999;
+	// The headers a proxy writes the client into.
+	const PROXY_HEADERS = array( 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'HTTP_FORWARDED', 'HTTP_TRUE_CLIENT_IP' );
 	// The ONE list of what carries a quantity or a price in the Store API. The API filter and the page cleaner both use it.
 	const NULL_KEYS     = array( 'low_stock_remaining', 'stock_quantity', 'quantity_in_stock' );
 	const LIMIT_PARENTS = array( 'add_to_cart', 'quantity_limits' );
@@ -88,9 +90,11 @@ class Bot_Guard {
 		$result = Bot_Verifier::verify( $client['ip'], $engine );
 		// A declared search engine that is turned away, or cannot be checked, from an address that has the marks of a proxy the
 		// shop has not described: the merchant is told on the reports page (before the engines lose the shop).
-		if ( 'cloudflare' === $client['why'] ) {
+		// Only when what the headers say is really that engine's address: a scraper cannot make the module warn the merchant by
+		// writing headers.
+		if ( 'cloudflare' === $client['why'] && self::header_names_the_engine( array( 'HTTP_CF_CONNECTING_IP' ), $engine ) ) {
 			Bot_Settings::hint( 'cloudflare' );
-		} elseif ( Bot_Verifier::FAILED === $result && self::has_proxy_headers() ) {
+		} elseif ( Bot_Verifier::FAILED === $result && self::header_names_the_engine( self::PROXY_HEADERS, $engine ) ) {
 			Bot_Settings::hint( 'proxy' );
 		}
 		if ( Bot_Verifier::FAILED === $result ) {
@@ -217,14 +221,22 @@ class Bot_Guard {
 	}
 
 	/**
-	 * Whether the request carries a header a proxy writes.
+	 * Whether any address in these headers is a real address of the engine the request claims to be.
 	 *
+	 * @param  string[] $headers Server keys.
+	 * @param  string   $engine  Engine.
 	 * @return bool
 	 */
-	private static function has_proxy_headers() {
-		foreach ( array( 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'HTTP_FORWARDED', 'HTTP_TRUE_CLIENT_IP' ) as $header ) {
-			if ( ! empty( $_SERVER[ $header ] ) ) {
-				return true;
+	private static function header_names_the_engine( array $headers, $engine ) {
+		foreach ( $headers as $header ) {
+			if ( empty( $_SERVER[ $header ] ) || ! is_string( $_SERVER[ $header ] ) ) {
+				continue;
+			}
+			preg_match_all( '/[0-9a-f:.]{3,45}/i', sanitize_text_field( wp_unslash( $_SERVER[ $header ] ) ), $found );
+			foreach ( array_slice( $found[0], 0, 10 ) as $address ) {
+				if ( false !== filter_var( $address, FILTER_VALIDATE_IP ) && Bot_Verifier::VERIFIED === Bot_Verifier::verify( $address, $engine ) ) {
+					return true;
+				}
 			}
 		}
 		return false;

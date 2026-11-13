@@ -289,6 +289,38 @@ class ReportsPageTest extends TestCase {
 		$this->assertFalse( Bot_Settings::get()['behind_cloudflare'], 'an unchecked box is off' );
 	}
 
+	public function test_a_shop_manager_cannot_change_the_proxy_settings_only_an_administrator_can() {
+		Functions\when( 'current_user_can' )->alias( fn( $cap ) => 'manage_woocommerce' === $cap );
+		Functions\when( 'wp_die' )->alias(
+			function () {
+				throw new \RuntimeException( 'denied' );
+			}
+		);
+		$_POST = array( 'trusted_proxies' => '0.0.0.0/0' );
+		try {
+			( new Reports_Page() )->save_proxy();
+			$this->fail( 'a shop manager must be refused' );
+		} catch ( \RuntimeException $e ) {
+			$this->assertSame( 'denied', $e->getMessage() );
+		}
+		$_POST = array();
+		$this->assertSame( array(), Bot_Settings::get()['trusted_proxies'] );
+		// The form is not offered to a shop manager on the page either.
+		Functions\when( 'is_wp_error' )->alias( fn( $t ) => $t instanceof \WP_Error );
+		$this->http_responder = fn() => self::response( 200, array( 'enabled' => true, 'site_id' => self::SITE, 'snippet_url' => 'x' ) );
+		ob_start();
+		( new Reports_Page() )->render();
+		$page = ob_get_clean();
+		$this->assertStringNotContainsString( 'name="trusted_proxies"', $page );
+		$this->assertStringContainsString( 'Only an administrator can change the proxy settings', $page );
+	}
+
+	public function test_an_administrator_cannot_save_a_range_that_covers_the_internet() {
+		$to = $this->save_proxy( array( 'behind_cloudflare' => '', 'trusted_proxies' => "0.0.0.0/0\n::/0\n10.0.0.0/8", 'proxy_header' => 'X-Forwarded-For' ) );
+		$this->assertStringContainsString( 'proxy_saved', $to );
+		$this->assertSame( array( '10.0.0.0/8' ), Bot_Settings::get()['trusted_proxies'] );
+	}
+
 	public function test_only_someone_who_may_manage_the_shop_can_save_the_proxy_settings() {
 		Functions\when( 'current_user_can' )->justReturn( false );
 		Functions\when( 'wp_die' )->alias(
@@ -304,6 +336,7 @@ class ReportsPageTest extends TestCase {
 		$this->assertSame( '', Reports_Page::hints_html() );
 		Bot_Settings::hint( 'cloudflare' );
 		Bot_Settings::hint( 'proxy' );
+		$this->transients = array();
 		Bot_Settings::hint( 'proxy' );
 		$html = Reports_Page::hints_html();
 		$this->assertStringContainsString( 'behind Cloudflare: 1 requests', $html );

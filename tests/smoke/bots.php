@@ -316,8 +316,11 @@ update_option( \SocialScore\Bot_Verifier::OPTION, array( 'google_common' => arra
 delete_option( \SocialScore\Bot_Settings::OPTION );
 delete_option( \SocialScore\Bot_Settings::HINTS );
 // "Behind Cloudflare" is off (the default): Cloudflare is not trusted. Never verified, never 403, whatever the header says.
+ss_assert( 403 !== ss_as( $GOOGLE, $url, array( 'CF-Connecting-IP' => '203.0.113.50' ) ), 'block mode, Behind Cloudflare off: a scraper writing the header is not turned into a 403 either (nothing is trusted)' );
+ss_assert( false === get_option( \SocialScore\Bot_Settings::HINTS ), 'a scraper writing headers makes no warning for the merchant, and writes nothing' );
 ss_assert( 403 !== ss_as( $GOOGLE, $url, array( 'CF-Connecting-IP' => '66.249.66.1' ) ), 'block mode, Behind Cloudflare off: Googlebot from a Cloudflare address is unverified and never gets 403' );
-ss_assert( 403 !== ss_as( $GOOGLE, $url, array( 'CF-Connecting-IP' => '203.0.113.50' ) ), 'block mode, Behind Cloudflare off: and a scraper writing the header is not turned into a 403 either (nothing is trusted)' );
+wp_cache_flush(); // This process read the option before the web request wrote it.
+ss_assert( isset( \SocialScore\Bot_Settings::hints()['cloudflare'] ), 'the real Googlebot address in the header makes the warning for Cloudflare' );
 // A private address with only a forwarding header: a proxy nobody described, unknown.
 update_option( \SocialScore\Bot_Verifier::OPTION, array( 'google_common' => array( '66.249.64.0/19' ), 'cloudflare' => array( '203.0.113.0/24' ), 'fetched' => time() ), false );
 ss_assert( 403 !== ss_as( $GOOGLE, $url, array( 'X-Forwarded-For' => '66.249.66.1' ) ), 'block mode: Googlebot from a private address with only X-Forwarded-For is unverified and never gets 403' );

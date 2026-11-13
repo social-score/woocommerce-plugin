@@ -321,22 +321,67 @@ class BotVerifierTest extends TestCase {
 
 	// The warning for the merchant -------------------------------------------------------------------------------------
 
-	public function test_a_declared_engine_turned_away_with_proxy_marks_is_counted_for_the_merchant() {
-		$this->as_bot( self::GOOGLEBOT, self::OTHER_IP, array( 'HTTP_X_FORWARDED_FOR' => self::GOOGLE_IP ) );
-		$this->as_bot( self::GOOGLEBOT, self::OTHER_IP, array( 'HTTP_X_FORWARDED_FOR' => self::GOOGLE_IP ) );
-		$this->assertSame( 2, Bot_Settings::hints()['proxy']['count'] );
-		$this->assertArrayNotHasKey( 'cloudflare', Bot_Settings::hints() );
+	public function test_a_scraper_cannot_make_the_module_warn_the_merchant_by_writing_headers() {
+		$this->as_bot( self::GOOGLEBOT, self::OTHER_IP, array( 'HTTP_X_FORWARDED_FOR' => '1.2.3.4, 5.6.7.8' ) );
+		$this->as_bot( self::GOOGLEBOT, self::OTHER_IP, array( 'HTTP_CF_CONNECTING_IP' => self::OTHER_IP ) );
+		$this->as_bot( self::GOOGLEBOT, '104.16.20.30', array( 'HTTP_CF_CONNECTING_IP' => self::OTHER_IP ) );
+		$this->as_bot( self::GOOGLEBOT, '104.16.20.30', array( 'HTTP_CF_CONNECTING_IP' => 'junk' ) );
+		$this->as_bot( self::BINGBOT, '104.16.20.30', array( 'HTTP_CF_CONNECTING_IP' => self::GOOGLE_IP ) );
+		$this->assertSame( array(), Bot_Settings::hints(), 'a Google address in the header does not make a Bing request plausible' );
+		$this->assertSame( array(), $this->transients, 'no lock written either' );
 	}
 
-	public function test_a_cloudflare_address_with_the_setting_off_is_counted_with_the_advice_for_cloudflare() {
+	public function test_googlebot_through_cloudflare_with_its_real_address_makes_the_warning_for_cloudflare() {
 		$this->as_bot( self::GOOGLEBOT, '104.16.20.30', array( 'HTTP_CF_CONNECTING_IP' => self::GOOGLE_IP ) );
 		$this->assertSame( 1, Bot_Settings::hints()['cloudflare']['count'] );
+		$this->assertArrayNotHasKey( 'proxy', Bot_Settings::hints() );
+	}
+
+	public function test_a_real_googlebot_address_in_the_headers_of_a_public_proxy_makes_the_warning_for_a_proxy() {
+		$this->as_bot( self::GOOGLEBOT, self::OTHER_IP, array( 'HTTP_X_FORWARDED_FOR' => '10.1.1.1, ' . self::GOOGLE_IP ) );
+		$this->assertSame( 1, Bot_Settings::hints()['proxy']['count'] );
+		// A Bing address does not do for a Google request.
+		$this->transients = array();
+		$this->as_bot( self::GOOGLEBOT, self::OTHER_IP, array( 'HTTP_X_FORWARDED_FOR' => self::BING_IP ) );
+		$this->assertSame( 1, Bot_Settings::hints()['proxy']['count'] );
+	}
+
+	public function test_the_warning_is_written_at_most_once_an_hour_for_each_kind() {
+		for ( $i = 0; $i < 20; $i++ ) {
+			$this->as_bot( self::GOOGLEBOT, '104.16.20.30', array( 'HTTP_CF_CONNECTING_IP' => self::GOOGLE_IP ) );
+			$this->as_bot( self::GOOGLEBOT, self::OTHER_IP, array( 'HTTP_X_FORWARDED_FOR' => self::GOOGLE_IP ) );
+		}
+		$this->assertSame( 1, Bot_Settings::hints()['cloudflare']['count'] );
+		$this->assertSame( 1, Bot_Settings::hints()['proxy']['count'] );
+		$this->assertSame( 'no', $this->autoload[ Bot_Settings::HINTS ], 'not autoloaded' );
+		$this->transients = array(); // An hour later.
+		$this->as_bot( self::GOOGLEBOT, '104.16.20.30', array( 'HTTP_CF_CONNECTING_IP' => self::GOOGLE_IP ) );
+		$this->assertSame( 2, Bot_Settings::hints()['cloudflare']['count'] );
 	}
 
 	public function test_a_plain_scraper_and_a_real_crawl_leave_no_note() {
 		$this->as_bot( self::GOOGLEBOT, self::OTHER_IP );
 		$this->as_bot( self::GOOGLEBOT, self::GOOGLE_IP );
 		$this->assertSame( array(), Bot_Settings::hints() );
+	}
+
+	public function test_a_trusted_proxy_range_that_would_switch_the_check_off_is_refused() {
+		$refused = array( '0.0.0.0/0', '::/0', '0.0.0.0/8', '1.0.0.0/8', '8.8.0.0/15', '66.249.0.0/12', '2001:db8::/16', '2001:4860::/31', '100.64.0.0/10', '0.0.0.0/16', '10.0.0.0/7', '172.16.0.0/11' );
+		foreach ( $refused as $cidr ) {
+			$this->assertSame( array(), Bot_Settings::ranges( $cidr ), $cidr );
+		}
+		foreach ( array( '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '192.168.1.0/24', '127.0.0.1', 'fd00::/8', 'fc00::/7', '198.51.100.0/24', '203.0.113.9', '2001:db8::/32', '66.249.0.0/16' ) as $cidr ) {
+			$this->assertNotSame( array(), Bot_Settings::ranges( $cidr ), $cidr );
+		}
+		Bot_Settings::save( false, "0.0.0.0/0\n::/0\n198.51.100.0/24", 'X-Forwarded-For' );
+		$this->assertSame( array( '198.51.100.0/24' ), Bot_Settings::get()['trusted_proxies'], 'the wide ones are not stored' );
+	}
+
+	public function test_a_wide_range_from_the_filter_does_not_get_in_either() {
+		Functions\when( 'apply_filters' )->alias( fn( $tag, $value ) => 'socialscore_trusted_proxies' === $tag ? array( '0.0.0.0/0', '198.51.100.0/24' ) : $value );
+		$this->assertSame( array( '198.51.100.0/24' ), Bot_Settings::get()['trusted_proxies'] );
+		// So a scraper behind no declared proxy is still judged by its own address.
+		$this->assertSame( 'bad_bot', $this->as_bot( self::GOOGLEBOT, self::OTHER_IP, array( 'HTTP_X_FORWARDED_FOR' => self::GOOGLE_IP ) )['class'] );
 	}
 
 	public function test_the_settings_are_read_back_clean() {

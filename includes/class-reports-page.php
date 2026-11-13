@@ -332,7 +332,8 @@ class Reports_Page {
 	 * @return void
 	 */
 	public function save_proxy() {
-		if ( ! current_user_can( Config::CAPABILITY ) ) {
+		// A trusted proxy decides whose address the module believes: only an administrator may name one, not a shop manager.
+		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'You are not allowed to do this.', 'socialscore' ), '', array( 'response' => 403 ) );
 		}
 		check_admin_referer( self::PROXY_ACTION );
@@ -478,7 +479,11 @@ class Reports_Page {
 		echo '<h2>' . esc_html__( 'Proxy or CDN in front of the shop', 'socialscore' ) . '</h2>';
 		echo wp_kses_post( self::hints_html() );
 		echo '<p class="description">' . esc_html__( 'Googlebot and Bingbot are checked by the address they come from. Behind a proxy that address is the proxy\'s, so the shop has to say which proxies it trusts. Until it does, a search engine that cannot be checked is never blocked.', 'socialscore' ) . '</p>';
-		echo wp_kses( self::proxy_form_html(), self::form_tags() );
+		if ( current_user_can( 'manage_options' ) ) {
+			echo wp_kses( self::proxy_form_html(), self::form_tags() );
+		} else {
+			echo '<p>' . esc_html__( 'Only an administrator can change the proxy settings.', 'socialscore' ) . '</p>';
+		}
 
 		echo '<h2>' . esc_html__( 'Warnings', 'socialscore' ) . '</h2>' . wp_kses_post( self::warnings_html() ) . '</div>';
 	}
