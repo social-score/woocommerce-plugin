@@ -43,9 +43,18 @@ class PrivacyTest extends TestCase {
 		$this->connect_store();
 		$this->user( 15 );
 		$this->http_responder = function ( $url ) {
-			return self::response( 200, array( 'store_id' => 42, 'external_id' => '15', 'customers_redacted' => false !== strpos( $url, '/customers/15' ) ? 1 : 0, 'orders_redacted' => 3, 'profile_erased' => true ) );
+			return self::response(
+				200,
+				array(
+					'store_id'           => 42,
+					'external_id'        => '15',
+					'customers_redacted' => false !== strpos( $url, '/customers/15' ) ? 1 : 0,
+					'orders_redacted'    => 3,
+					'profile_erased'     => true,
+				)
+			);
 		};
-		$result = ( new Privacy() )->erase( 'a@b.bg', 1 );
+		$result               = ( new Privacy() )->erase( 'a@b.bg', 1 );
 
 		$this->assertCount( 2, $this->http );
 		$this->assertSame( 'DELETE', $this->http[0]['args']['method'] );
@@ -60,7 +69,14 @@ class PrivacyTest extends TestCase {
 	public function test_erase_reports_nothing_removed_when_the_store_had_no_such_customer() {
 		$this->connect_store();
 		$this->user( 0 );
-		$this->http_responder = fn() => self::response( 200, array( 'customers_redacted' => 0, 'orders_redacted' => 0, 'profile_erased' => false ) );
+		$this->http_responder = fn() => self::response(
+			200,
+			array(
+				'customers_redacted' => 0,
+				'orders_redacted'    => 0,
+				'profile_erased'     => false,
+			)
+		);
 		$result               = ( new Privacy() )->erase( 'a@b.bg' );
 		$this->assertFalse( $result['items_removed'] );
 		$this->assertFalse( $result['items_retained'] );
@@ -84,7 +100,13 @@ class PrivacyTest extends TestCase {
 		$this->assertTrue( $erased['items_retained'], 'data sent before a disconnect may still be held' );
 		$this->assertCount( 1, $erased['messages'] );
 		$this->assertTrue( $erased['done'] );
-		$this->assertSame( array( 'data' => array(), 'done' => true ), $privacy->export( 'a@b.bg' ) );
+		$this->assertSame(
+			array(
+				'data' => array(),
+				'done' => true,
+			),
+			$privacy->export( 'a@b.bg' )
+		);
 		$this->assertSame( array(), $this->http );
 	}
 
@@ -95,12 +117,33 @@ class PrivacyTest extends TestCase {
 			200,
 			array(
 				'store_id' => 42,
-				'customer' => array( 'external_id' => 'guest-x', 'email' => 'a@b.bg', 'first_name' => 'Ivan', 'orders_count' => 3, 'phone' => '' ),
-				'orders'   => array( array( 'external_id' => '1001', 'total' => '59.90', 'currency' => 'EUR', 'labels' => array( 'review_before_shipping', 'new_customer' ), 'items' => array( array( 'product_id' => '9', 'name' => 'Boots', 'quantity' => 2, 'price' => '29.95' ) ) ) ),
+				'customer' => array(
+					'external_id'  => 'guest-x',
+					'email'        => 'a@b.bg',
+					'first_name'   => 'Ivan',
+					'orders_count' => 3,
+					'phone'        => '',
+				),
+				'orders'   => array(
+					array(
+						'external_id' => '1001',
+						'total'       => '59.90',
+						'currency'    => 'EUR',
+						'labels'      => array( 'review_before_shipping', 'new_customer' ),
+						'items'       => array(
+							array(
+								'product_id' => '9',
+								'name'       => 'Boots',
+								'quantity'   => 2,
+								'price'      => '29.95',
+							),
+						),
+					),
+				),
 				'profile'  => array( 'schema_version' => '2.0' ),
 			)
 		);
-		$result = ( new Privacy() )->export( 'a@b.bg', 1 );
+		$result               = ( new Privacy() )->export( 'a@b.bg', 1 );
 
 		$this->assertTrue( $result['done'] );
 		$this->assertSame( 'GET', $this->http[0]['args']['method'] );
@@ -142,10 +185,16 @@ class PrivacyTest extends TestCase {
 
 	public function test_erase_removes_the_pixel_visit_ids_from_the_orders_of_the_email() {
 		$this->user( 0 );
-		$with    = new \WC_Order( array( 'id' => 1 ) );
-		$with->meta = array( '_ss_pixel_visitor' => 'a', '_ss_pixel_session' => 'b', '_ss_checkout_ref' => 'r', '_ss_pixel_purchase_sent' => '1', 'other' => 'x' );
-		$without = new \WC_Order( array( 'id' => 2 ) );
-		$seen    = null;
+		$with       = new \WC_Order( array( 'id' => 1 ) );
+		$with->meta = array(
+			'_ss_pixel_visitor'       => 'a',
+			'_ss_pixel_session'       => 'b',
+			'_ss_checkout_ref'        => 'r',
+			'_ss_pixel_purchase_sent' => '1',
+			'other'                   => 'x',
+		);
+		$without    = new \WC_Order( array( 'id' => 2 ) );
+		$seen       = null;
 		Functions\when( 'wc_get_orders' )->alias(
 			function ( $args ) use ( &$seen, $with, $without ) {
 				$seen = $args;
@@ -154,7 +203,14 @@ class PrivacyTest extends TestCase {
 		);
 		$result = ( new Privacy() )->erase( ' A@B.bg ' );
 		$this->assertSame( 'a@b.bg', $seen['billing_email'] );
-		$this->assertSame( array( '_ss_pixel_purchase_sent' => '1', 'other' => 'x' ), $with->meta, 'both visit ids and the checkout ref are gone, the rest stays' );
+		$this->assertSame(
+			array(
+				'_ss_pixel_purchase_sent' => '1',
+				'other'                   => 'x',
+			),
+			$with->meta,
+			'both visit ids and the checkout ref are gone, the rest stays'
+		);
 		$this->assertSame( 1, $with->meta_saves );
 		$this->assertSame( 0, $without->meta_saves );
 		$this->assertTrue( $result['items_removed'], 'a store that is not connected still erased the local ids' );
@@ -163,8 +219,11 @@ class PrivacyTest extends TestCase {
 
 	public function test_erase_removes_a_checkout_ref_kept_alone_on_an_order() {
 		$this->user( 0 );
-		$only = new \WC_Order( array( 'id' => 3 ) );
-		$only->meta = array( '_ss_checkout_ref' => 'r', 'other' => 'x' );
+		$only       = new \WC_Order( array( 'id' => 3 ) );
+		$only->meta = array(
+			'_ss_checkout_ref' => 'r',
+			'other'            => 'x',
+		);
 		Functions\when( 'wc_get_orders' )->justReturn( array( $only ) );
 		$result = ( new Privacy() )->erase( 'a@b.bg' );
 		$this->assertSame( array( 'other' => 'x' ), $only->meta );
@@ -174,10 +233,15 @@ class PrivacyTest extends TestCase {
 
 	public function test_export_lists_the_pixel_visit_ids_kept_on_the_orders_of_the_email() {
 		$this->user( 0 );
-		$with = new \WC_Order( array( 'id' => 11 ) );
-		$with->meta = array( '_ss_pixel_visitor' => 'v-1', '_ss_pixel_session' => 's-1', '_ss_checkout_ref' => 'r-1', '_ss_pixel_purchase_sent' => '1' );
-		$none = new \WC_Order( array( 'id' => 12 ) );
-		$seen = null;
+		$with       = new \WC_Order( array( 'id' => 11 ) );
+		$with->meta = array(
+			'_ss_pixel_visitor'       => 'v-1',
+			'_ss_pixel_session'       => 's-1',
+			'_ss_checkout_ref'        => 'r-1',
+			'_ss_pixel_purchase_sent' => '1',
+		);
+		$none       = new \WC_Order( array( 'id' => 12 ) );
+		$seen       = null;
 		Functions\when( 'wc_get_orders' )->alias(
 			function ( $args ) use ( &$seen, $with, $none ) {
 				$seen = $args;
@@ -191,6 +255,14 @@ class PrivacyTest extends TestCase {
 		$this->assertSame( 'socialscore-pixel', $group['group_id'] );
 		$this->assertSame( 'socialscore-pixel-order-11', $group['item_id'] );
 		$rows = array_column( $group['data'], 'value', 'name' );
-		$this->assertSame( array( 'Order' => '11', 'Visit id' => 'v-1', 'Session id' => 's-1', 'Checkout reference' => 'r-1' ), $rows );
+		$this->assertSame(
+			array(
+				'Order'              => '11',
+				'Visit id'           => 'v-1',
+				'Session id'         => 's-1',
+				'Checkout reference' => 'r-1',
+			),
+			$rows
+		);
 	}
 }

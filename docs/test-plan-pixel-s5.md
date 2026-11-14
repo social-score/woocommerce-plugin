@@ -1,6 +1,6 @@
 # Test plan: Pixel stage 5 (store modules)
 
-Result: PASS 13.11.2026
+Result: PASS 14.11.2026 (phpcs clean; phpunit 373 tests, 1753 assertions; smoke OK)
 
 Architecture: `architecture-pixel-s5.md`. The done criterion of the stage: **in a test WooCommerce shop a bot without
 JavaScript is caught, its order gets a flag, and the mode "block" stops the request.** It is proven twice: as a unit test

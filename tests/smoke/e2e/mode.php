@@ -13,6 +13,11 @@ foreach ( $pages as $slug => $shortcode ) {
 		update_option( $opt, get_post( $id )->post_content, false );
 	}
 	$content = 'classic' === $mode ? $shortcode : get_option( $opt );
-	wp_update_post( array( 'ID' => $id, 'post_content' => $content ) );
+	wp_update_post(
+		array(
+			'ID'           => $id,
+			'post_content' => $content,
+		)
+	);
 }
 echo "pages: $mode\n";

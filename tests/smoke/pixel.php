@@ -15,7 +15,14 @@ function ss_log() {
 	return array_map( fn( $l ) => json_decode( $l, true ), $lines );
 }
 function ss_get( $url, array $cookies = array() ) {
-	$res = wp_remote_get( $url, array( 'timeout' => 60, 'redirection' => 0, 'cookies' => $cookies ) );
+	$res = wp_remote_get(
+		$url,
+		array(
+			'timeout'     => 60,
+			'redirection' => 0,
+			'cookies'     => $cookies,
+		)
+	);
 	if ( is_wp_error( $res ) ) {
 		fwrite( STDERR, 'GET failed: ' . $res->get_error_message() . "\n" );
 		exit( 1 );
@@ -31,7 +38,13 @@ function ss_jar( $res, array $jar ) {
 function ss_run_queue() {
 	for ( $i = 0; $i < 20; $i++ ) {
 		\ActionScheduler::runner()->run();
-		if ( ! as_get_scheduled_actions( array( 'group' => 'socialscore', 'status' => \ActionScheduler_Store::STATUS_PENDING ), 'ids' ) ) {
+		if ( ! as_get_scheduled_actions(
+			array(
+				'group'  => 'socialscore',
+				'status' => \ActionScheduler_Store::STATUS_PENDING,
+			),
+			'ids'
+		) ) {
 			break;
 		}
 		sleep( 1 );
@@ -68,36 +81,88 @@ ss_assert( 1 === count( $gets ), 'the Pixel state is read once for two page view
 // 2. Switched off through the REST proxy: no script at once.
 $cookies = array();
 for ( $try = 0; $try < 4 && count( $cookies ) < 2; $try++ ) {
-	$login   = wp_remote_post( 'http://wordpress/wp-login.php', array( 'redirection' => 0, 'timeout' => 60, 'cookies' => array( 'wordpress_test_cookie' => 'WP Cookie check' ), 'body' => array( 'log' => 'admin', 'pwd' => 'admin', 'wp-submit' => 'Log In', 'testcookie' => 1 ) ) );
+	$login   = wp_remote_post(
+		'http://wordpress/wp-login.php',
+		array(
+			'redirection' => 0,
+			'timeout'     => 60,
+			'cookies'     => array( 'wordpress_test_cookie' => 'WP Cookie check' ),
+			'body'        => array(
+				'log'        => 'admin',
+				'pwd'        => 'admin',
+				'wp-submit'  => 'Log In',
+				'testcookie' => 1,
+			),
+		)
+	);
 	$cookies = is_wp_error( $login ) ? array() : wp_remote_retrieve_cookies( $login );
 }
-$nonce = wp_remote_retrieve_body( wp_remote_get( 'http://wordpress/wp-admin/admin-ajax.php?action=rest-nonce', array( 'cookies' => $cookies, 'timeout' => 60 ) ) );
+$nonce = wp_remote_retrieve_body(
+	wp_remote_get(
+		'http://wordpress/wp-admin/admin-ajax.php?action=rest-nonce',
+		array(
+			'cookies' => $cookies,
+			'timeout' => 60,
+		)
+	)
+);
 $patch = function ( $enabled ) use ( $cookies, $nonce ) {
-	return wp_remote_request( 'http://wordpress/?rest_route=/socialscore/v1/proxy/api/v2/stores/st_1/pixel', array( 'method' => 'PATCH', 'timeout' => 60, 'cookies' => $cookies, 'headers' => array( 'X-WP-Nonce' => $nonce, 'Content-Type' => 'application/json' ), 'body' => wp_json_encode( array( 'enabled' => $enabled ) ) ) );
+	return wp_remote_request(
+		'http://wordpress/?rest_route=/socialscore/v1/proxy/api/v2/stores/st_1/pixel',
+		array(
+			'method'  => 'PATCH',
+			'timeout' => 60,
+			'cookies' => $cookies,
+			'headers' => array(
+				'X-WP-Nonce'   => $nonce,
+				'Content-Type' => 'application/json',
+			),
+			'body'    => wp_json_encode( array( 'enabled' => $enabled ) ),
+		)
+	);
 };
-$res = $patch( false );
+$res   = $patch( false );
 ss_assert( 200 === wp_remote_retrieve_response_code( $res ) && false === strpos( wp_remote_retrieve_body( $res ), 'sk_mock' ), 'PATCH pixel through the proxy is allowed' );
 $body = wp_remote_retrieve_body( ss_get( $url ) );
 ss_assert( false === strpos( $body, 'data-site' ) && false === strpos( $body, 'pixel.socialscore.io' ) && false === strpos( $body, 'pixel-events' ), 'with the Pixel off the page has no Pixel script at all' );
-$res = $patch( true );
+$res  = $patch( true );
 $body = wp_remote_retrieve_body( ss_get( $url ) );
 ss_assert( false !== strpos( $body, 'data-site' ), 'switched on again: the loader is back at once' );
-$admin = wp_remote_retrieve_body( wp_remote_get( 'http://wordpress/wp-admin/admin.php?page=socialscore', array( 'cookies' => $cookies, 'timeout' => 60 ) ) );
+$admin = wp_remote_retrieve_body(
+	wp_remote_get(
+		'http://wordpress/wp-admin/admin.php?page=socialscore',
+		array(
+			'cookies' => $cookies,
+			'timeout' => 60,
+		)
+	)
+);
 ss_assert( false === strpos( $admin, 'pixel.socialscore.io' ) && false === strpos( $admin, 'data-site' ), 'the admin has no loader' );
 
 // 3. Classic checkout: old Pixel cookies in the request are not copied onto the order.
 wc_load_cart();
 update_option( 'woocommerce_cod_settings', array( 'enabled' => 'yes' ) );
 WC()->payment_gateways()->init();
-$address = array( 'billing_first_name' => 'Ana', 'billing_last_name' => 'Ivanova', 'billing_email' => 'ana@example.test', 'billing_country' => 'BG', 'billing_address_1' => 'A 1', 'billing_city' => 'Sofia', 'billing_postcode' => '1000', 'billing_phone' => '0888123456', 'payment_method' => 'cod', 'shipping_method' => array() );
+$address = array(
+	'billing_first_name' => 'Ana',
+	'billing_last_name'  => 'Ivanova',
+	'billing_email'      => 'ana@example.test',
+	'billing_country'    => 'BG',
+	'billing_address_1'  => 'A 1',
+	'billing_city'       => 'Sofia',
+	'billing_postcode'   => '1000',
+	'billing_phone'      => '0888123456',
+	'payment_method'     => 'cod',
+	'shipping_method'    => array(),
+);
 WC()->cart->empty_cart();
 WC()->cart->add_to_cart( $product->get_id(), 1 );
 $_COOKIE['ss_pv'] = $V4_A;
 $_COOKIE['ss_ps'] = $V4_B;
 WC()->session->set( 'socialscore_checkout_ref', $V4_A );
 $_POST['ss_checkout_ref'] = $V4_A;
-$id1   = WC()->checkout()->create_order( $address );
-$order = wc_get_order( $id1 );
+$id1                      = WC()->checkout()->create_order( $address );
+$order                    = wc_get_order( $id1 );
 ss_assert( $order && '' === $order->get_meta( '_ss_pixel_visitor' ) && '' === $order->get_meta( '_ss_pixel_session' ), 'classic checkout stores no visit or session id in the order meta (HPOS: ' . ( \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled() ? 'on' : 'off' ) . ')' );
 ss_assert( $V4_A === $order->get_meta( '_ss_checkout_ref' ), 'classic checkout keeps the posted checkout ref that is the one of its own session' );
 WC()->cart->empty_cart();
@@ -106,8 +171,8 @@ $_COOKIE['ss_pv'] = "' OR 1=1 --";
 $_COOKIE['ss_ps'] = '3f2b8c1e-5d4a-1b7e-9c3d-1a2b3c4d5e6f';
 WC()->session->set( 'socialscore_checkout_ref', $V4_A );
 $_POST['ss_checkout_ref'] = $V4_B; // A ref the session never made.
-$id2    = WC()->checkout()->create_order( $address );
-$order2 = wc_get_order( $id2 );
+$id2                      = WC()->checkout()->create_order( $address );
+$order2                   = wc_get_order( $id2 );
 ss_assert( $order2 && '' === $order2->get_meta( '_ss_pixel_visitor' ) && '' === $order2->get_meta( '_ss_pixel_session' ), 'classic checkout with a junk cookie still makes the order and stores no id' );
 ss_assert( '' === (string) $order2->get_meta( '_ss_checkout_ref' ), 'classic checkout drops a posted ref that is not the one of its own session' );
 unset( $_POST['ss_checkout_ref'] );
@@ -121,13 +186,40 @@ WC()->session->set( 'socialscore_checkout_ref', $V4_B );
 $req = new WP_REST_Request( 'POST', '/wc/store/v1/checkout' );
 $req->set_header( 'Content-Type', 'application/json' );
 $req->set_header( 'Nonce', wp_create_nonce( 'wc_store_api' ) );
-$req->set_body( wp_json_encode( array(
-	'billing_address'  => array( 'first_name' => 'Ana', 'last_name' => 'Ivanova', 'email' => 'blocks@example.test', 'country' => 'BG', 'address_1' => 'A 1', 'city' => 'Sofia', 'postcode' => '1000', 'phone' => '0888123456', 'state' => '', 'address_2' => '', 'company' => '' ),
-	'shipping_address' => array( 'first_name' => 'Ana', 'last_name' => 'Ivanova', 'country' => 'BG', 'address_1' => 'A 1', 'city' => 'Sofia', 'postcode' => '1000', 'phone' => '', 'state' => '', 'address_2' => '', 'company' => '' ),
-	'payment_method'   => 'cod',
-	'extensions'       => array( 'socialscore' => array( 'ss_checkout_ref' => $V4_B ) ),
-) ) );
-$out = rest_do_request( $req );
+$req->set_body(
+	wp_json_encode(
+		array(
+			'billing_address'  => array(
+				'first_name' => 'Ana',
+				'last_name'  => 'Ivanova',
+				'email'      => 'blocks@example.test',
+				'country'    => 'BG',
+				'address_1'  => 'A 1',
+				'city'       => 'Sofia',
+				'postcode'   => '1000',
+				'phone'      => '0888123456',
+				'state'      => '',
+				'address_2'  => '',
+				'company'    => '',
+			),
+			'shipping_address' => array(
+				'first_name' => 'Ana',
+				'last_name'  => 'Ivanova',
+				'country'    => 'BG',
+				'address_1'  => 'A 1',
+				'city'       => 'Sofia',
+				'postcode'   => '1000',
+				'phone'      => '',
+				'state'      => '',
+				'address_2'  => '',
+				'company'    => '',
+			),
+			'payment_method'   => 'cod',
+			'extensions'       => array( 'socialscore' => array( 'ss_checkout_ref' => $V4_B ) ),
+		)
+	)
+);
+$out  = rest_do_request( $req );
 $data = $out->get_data();
 ss_assert( 200 === $out->get_status() && ! empty( $data['order_id'] ), 'Store API checkout made an order (HTTP ' . $out->get_status() . ' ' . ( 200 === $out->get_status() ? '' : wp_json_encode( $data ) ) . ')' );
 $order3 = wc_get_order( (int) $data['order_id'] );
@@ -187,8 +279,15 @@ ss_assert( '' === (string) wc_get_order( $id1 )->get_meta( '_ss_pixel_purchase_s
 // The buyer: a customer account with an order of their own. A visitor who is not a shop manager sees store pages
 // only when the store is not in coming-soon mode (the default of a new store).
 update_option( 'woocommerce_coming_soon', 'no' );
-$buyer = wp_insert_user( array( 'user_login' => 'buyer', 'user_pass' => 'buyer-pass', 'user_email' => 'buyer@example.test', 'role' => 'customer' ) );
-$mk    = function () use ( $buyer, $product ) {
+$buyer         = wp_insert_user(
+	array(
+		'user_login' => 'buyer',
+		'user_pass'  => 'buyer-pass',
+		'user_email' => 'buyer@example.test',
+		'role'       => 'customer',
+	)
+);
+$mk            = function () use ( $buyer, $product ) {
 	$o = wc_create_order( array( 'customer_id' => $buyer ) );
 	$o->add_product( $product, 1 );
 	$o->set_billing_email( 'buyer@example.test' );
@@ -199,7 +298,20 @@ $mk    = function () use ( $buyer, $product ) {
 };
 $buyer_cookies = array();
 for ( $try = 0; $try < 4 && count( $buyer_cookies ) < 2; $try++ ) {
-	$login         = wp_remote_post( 'http://wordpress/wp-login.php', array( 'redirection' => 0, 'timeout' => 60, 'cookies' => array( 'wordpress_test_cookie' => 'WP Cookie check' ), 'body' => array( 'log' => 'buyer', 'pwd' => 'buyer-pass', 'wp-submit' => 'Log In', 'testcookie' => 1 ) ) );
+	$login         = wp_remote_post(
+		'http://wordpress/wp-login.php',
+		array(
+			'redirection' => 0,
+			'timeout'     => 60,
+			'cookies'     => array( 'wordpress_test_cookie' => 'WP Cookie check' ),
+			'body'        => array(
+				'log'        => 'buyer',
+				'pwd'        => 'buyer-pass',
+				'wp-submit'  => 'Log In',
+				'testcookie' => 1,
+			),
+		)
+	);
 	$buyer_cookies = is_wp_error( $login ) ? array() : wp_remote_retrieve_cookies( $login );
 }
 ss_assert( count( $buyer_cookies ) >= 2, 'the buyer logged in' );
@@ -216,7 +328,12 @@ $html = wp_remote_retrieve_body( ss_get( $thanks, $buyer_cookies ) );
 ss_assert( false === strpos( $html, '"type":"purchase"' ), 'a second visit to the thank-you page does not push it again' );
 
 // The same thank-you page with the classic checkout shortcode.
-wp_update_post( array( 'ID' => wc_get_page_id( 'checkout' ), 'post_content' => '[woocommerce_checkout]' ) );
+wp_update_post(
+	array(
+		'ID'           => wc_get_page_id( 'checkout' ),
+		'post_content' => '[woocommerce_checkout]',
+	)
+);
 $buy2 = $mk();
 $html = wp_remote_retrieve_body( ss_get( $buy2->get_checkout_order_received_url(), $buyer_cookies ) );
 ss_assert( 1 === substr_count( $html, '"type":"purchase"' ), 'classic shortcode thank-you page pushes purchase once' );
@@ -238,7 +355,12 @@ for ( $try = 0; $try < 4 && count( $login_cookies ) < 2; $try++ ) {
 			'redirection' => 0,
 			'timeout'     => 60,
 			'cookies'     => array( 'wordpress_test_cookie' => 'WP Cookie check' ),
-			'body'        => array( 'log' => 'admin', 'pwd' => 'admin', 'wp-submit' => 'Log In', 'testcookie' => 1 ),
+			'body'        => array(
+				'log'        => 'admin',
+				'pwd'        => 'admin',
+				'wp-submit'  => 'Log In',
+				'testcookie' => 1,
+			),
 		)
 	);
 	$login_cookies = is_wp_error( $login ) ? array() : wp_remote_retrieve_cookies( $login );

@@ -10,7 +10,11 @@ class EnrichmentLabelsTest extends TestCase {
 
 	private function settings( array $over = array() ) {
 		$this->transients['socialscore_trigger_settings'] = $over + array(
-			'on_new_account' => false, 'every_account' => false, 'order_new_customer' => false, 'order_any_customer' => false, 'manual_only' => false,
+			'on_new_account'     => false,
+			'every_account'      => false,
+			'order_new_customer' => false,
+			'order_any_customer' => false,
+			'manual_only'        => false,
 		);
 	}
 
@@ -45,7 +49,12 @@ class EnrichmentLabelsTest extends TestCase {
 		Functions\expect( 'as_enqueue_async_action' )->never();
 		$this->http_responder = fn() => self::response( 500, '' );
 		Enrichment::after_order_sync( new \WC_Order( array( 'created' => time() ) ) );
-		$this->settings( array( 'manual_only' => true, 'order_any_customer' => true ) );
+		$this->settings(
+			array(
+				'manual_only'        => true,
+				'order_any_customer' => true,
+			)
+		);
 		Enrichment::after_order_sync( new \WC_Order( array( 'created' => time() ) ) );
 		$this->assertTrue( true );
 	}
@@ -55,7 +64,14 @@ class EnrichmentLabelsTest extends TestCase {
 		$this->settings( array( 'order_any_customer' => true ) );
 		Functions\when( 'as_has_scheduled_action' )->justReturn( false );
 		Functions\expect( 'as_enqueue_async_action' )->once()->with( 'socialscore_run_check', array( 'order', '9', 0 ), 'socialscore' );
-		Enrichment::after_order_sync( new \WC_Order( array( 'id' => 9, 'created' => time() ) ) );
+		Enrichment::after_order_sync(
+			new \WC_Order(
+				array(
+					'id'      => 9,
+					'created' => time(),
+				)
+			)
+		);
 		$this->assertTrue( true );
 	}
 
@@ -65,8 +81,24 @@ class EnrichmentLabelsTest extends TestCase {
 		Functions\when( 'as_has_scheduled_action' )->justReturn( false );
 		Functions\expect( 'wc_get_orders' )->twice()->andReturn( array( 1, 2 ), array( 1 ) );
 		Functions\expect( 'as_enqueue_async_action' )->once();
-		Enrichment::after_order_sync( new \WC_Order( array( 'id' => 9, 'created' => time(), 'billing_email' => 'r@x.bg' ) ) );
-		Enrichment::after_order_sync( new \WC_Order( array( 'id' => 10, 'created' => time(), 'billing_email' => 'n@x.bg' ) ) );
+		Enrichment::after_order_sync(
+			new \WC_Order(
+				array(
+					'id'            => 9,
+					'created'       => time(),
+					'billing_email' => 'r@x.bg',
+				)
+			)
+		);
+		Enrichment::after_order_sync(
+			new \WC_Order(
+				array(
+					'id'            => 10,
+					'created'       => time(),
+					'billing_email' => 'n@x.bg',
+				)
+			)
+		);
 		$this->assertTrue( true );
 	}
 
@@ -75,7 +107,7 @@ class EnrichmentLabelsTest extends TestCase {
 		$this->settings( array( 'order_any_customer' => true ) );
 		Functions\expect( 'as_enqueue_async_action' )->never();
 		Enrichment::after_order_sync( new \WC_Order( array( 'created' => time() - 10 * 86400 ) ) );
-		$checked = new \WC_Order( array( 'created' => time() ) );
+		$checked                               = new \WC_Order( array( 'created' => time() ) );
 		$checked->meta['_socialscore_checked'] = 'done';
 		Enrichment::after_order_sync( $checked );
 		$this->assertTrue( true );
@@ -85,7 +117,11 @@ class EnrichmentLabelsTest extends TestCase {
 		$this->connect_store();
 		Functions\when( 'as_has_scheduled_action' )->justReturn( false );
 		$queued = array();
-		Functions\when( 'as_enqueue_async_action' )->alias( function ( $h, $a ) use ( &$queued ) { $queued[] = $a; } );
+		Functions\when( 'as_enqueue_async_action' )->alias(
+			function ( $h, $a ) use ( &$queued ) {
+				$queued[] = $a;
+			}
+		);
 
 		$this->settings( array( 'on_new_account' => true ) );
 		Enrichment::after_customer_sync( 5, true );
@@ -118,7 +154,7 @@ class EnrichmentLabelsTest extends TestCase {
 		$this->connect_store();
 		$order = new \WC_Order( array( 'id' => 9 ) );
 		Functions\when( 'wc_get_order' )->justReturn( $order );
-		Functions\when( 'wc_get_logger' )->justReturn( new class { public function warning() {} } );
+		Functions\when( 'wc_get_logger' )->justReturn( new class() { public function warning() {} } );
 		Functions\expect( 'as_schedule_single_action' )->never();
 		$this->http_responder = fn() => self::response( 402, array( 'detail' => 'plan_required' ) );
 		( new Enrichment() )->handle_check( 'order', '9', 0 );
@@ -130,7 +166,7 @@ class EnrichmentLabelsTest extends TestCase {
 		$this->connect_store();
 		$order = new \WC_Order( array( 'id' => 9 ) );
 		Functions\when( 'wc_get_order' )->justReturn( $order );
-		Functions\when( 'wc_get_logger' )->justReturn( new class { public function warning() {} } );
+		Functions\when( 'wc_get_logger' )->justReturn( new class() { public function warning() {} } );
 		Functions\expect( 'as_schedule_single_action' )->never();
 		$this->http_responder = fn() => self::response( 402, array( 'detail' => 'quota_exhausted' ) );
 		( new Enrichment() )->handle_check( 'order', '9', 0 );
@@ -139,8 +175,16 @@ class EnrichmentLabelsTest extends TestCase {
 
 	public function test_trigger_settings_are_cached_from_the_server() {
 		$this->connect_store();
-		$this->http_responder = fn() => self::response( 200, array( 'settings' => array( 'order_any_customer' => true, 'manual_only' => false ) ) );
-		$s = Enrichment::trigger_settings();
+		$this->http_responder = fn() => self::response(
+			200,
+			array(
+				'settings' => array(
+					'order_any_customer' => true,
+					'manual_only'        => false,
+				),
+			)
+		);
+		$s                    = Enrichment::trigger_settings();
 		$this->assertTrue( $s['order_any_customer'] );
 		Enrichment::trigger_settings();
 		$this->assertCount( 1, $this->http, 'second read comes from the transient' );

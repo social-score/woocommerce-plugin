@@ -14,7 +14,11 @@ class SyncTest extends TestCase {
 	}
 
 	private function ok() {
-		return array( 'status' => 200, 'data' => null, 'retry_after' => null );
+		return array(
+			'status'      => 200,
+			'data'        => null,
+			'retry_after' => null,
+		);
 	}
 
 	public function test_push_in_batches_chunks_at_500() {
@@ -36,7 +40,11 @@ class SyncTest extends TestCase {
 		$res   = Sync::push_in_batches(
 			function () use ( &$calls ) {
 				++$calls;
-				return array( 'status' => 500, 'data' => null, 'retry_after' => null );
+				return array(
+					'status'      => 500,
+					'data'        => null,
+					'retry_after' => null,
+				);
 			},
 			array_fill( 0, 900, array( 'x' => 1 ) )
 		);
@@ -46,27 +54,108 @@ class SyncTest extends TestCase {
 	}
 
 	public function test_retry_delay_backoff_429_and_give_up() {
-		$err429 = array( 'status' => 429, 'data' => null, 'retry_after' => 900 );
+		$err429 = array(
+			'status'      => 429,
+			'data'        => null,
+			'retry_after' => 900,
+		);
 		$this->assertSame( 900, Sync::retry_delay( $err429, 0 ), '429 honours Retry-After when longer than the backoff' );
-		$this->assertSame( 300, Sync::retry_delay( array( 'status' => 429, 'data' => null, 'retry_after' => 1 ), 1 ) );
-		$this->assertSame( 60, Sync::retry_delay( array( 'status' => 503, 'data' => null, 'retry_after' => null ), 0 ) );
+		$this->assertSame(
+			300,
+			Sync::retry_delay(
+				array(
+					'status'      => 429,
+					'data'        => null,
+					'retry_after' => 1,
+				),
+				1
+			)
+		);
+		$this->assertSame(
+			60,
+			Sync::retry_delay(
+				array(
+					'status'      => 503,
+					'data'        => null,
+					'retry_after' => null,
+				),
+				0
+			)
+		);
 		$this->assertSame( 1800, Sync::retry_delay( new \WP_Error( 'x', 'down' ), 2 ) );
-		$this->assertNull( Sync::retry_delay( array( 'status' => 400, 'data' => null, 'retry_after' => null ), 0 ) );
-		$this->assertNull( Sync::retry_delay( array( 'status' => 402, 'data' => null, 'retry_after' => null ), 0 ) );
-		$this->assertNull( Sync::retry_delay( array( 'status' => 503, 'data' => null, 'retry_after' => null ), Sync::MAX_ATTEMPTS - 1 ) );
+		$this->assertNull(
+			Sync::retry_delay(
+				array(
+					'status'      => 400,
+					'data'        => null,
+					'retry_after' => null,
+				),
+				0
+			)
+		);
+		$this->assertNull(
+			Sync::retry_delay(
+				array(
+					'status'      => 402,
+					'data'        => null,
+					'retry_after' => null,
+				),
+				0
+			)
+		);
+		$this->assertNull(
+			Sync::retry_delay(
+				array(
+					'status'      => 503,
+					'data'        => null,
+					'retry_after' => null,
+				),
+				Sync::MAX_ATTEMPTS - 1
+			)
+		);
 	}
 
 	public function test_idempotency_in_progress_is_retried_other_409_is_not() {
-		$busy = array( 'status' => 409, 'data' => array( 'detail' => 'idempotency_in_progress' ), 'retry_after' => null );
-		$pass = array( 'status' => 409, 'data' => array( 'detail' => 'pass_through_mode' ), 'retry_after' => null );
+		$busy = array(
+			'status'      => 409,
+			'data'        => array( 'detail' => 'idempotency_in_progress' ),
+			'retry_after' => null,
+		);
+		$pass = array(
+			'status'      => 409,
+			'data'        => array( 'detail' => 'pass_through_mode' ),
+			'retry_after' => null,
+		);
 		$this->assertSame( 60, Sync::retry_delay( $busy, 0 ) );
 		$this->assertNull( Sync::retry_delay( $pass, 0 ) );
 	}
 
 	public function test_rejected_items_are_logged_without_personal_data() {
 		$lines = array();
-		Functions\when( 'wc_get_logger' )->justReturn( new class( $lines ) { private $l; public function __construct( array &$l ) { $this->l = &$l; } public function warning( $m ) { $this->l[] = $m; } } );
-		Sync::log_rejected( array( 'status' => 200, 'data' => array( 'created' => 1, 'rejected' => array( array( 'index' => 3, 'external_id' => 'c-9', 'reason' => 'invalid_email' ) ) ), 'retry_after' => null ) );
+		Functions\when( 'wc_get_logger' )->justReturn(
+			new class( $lines ) { private $l;
+				public function __construct( array &$l ) {
+					$this->l = &$l;
+				} public function warning( $m ) {
+					$this->l[] = $m;
+				} }
+		);
+		Sync::log_rejected(
+			array(
+				'status'      => 200,
+				'data'        => array(
+					'created'  => 1,
+					'rejected' => array(
+						array(
+							'index'       => 3,
+							'external_id' => 'c-9',
+							'reason'      => 'invalid_email',
+						),
+					),
+				),
+				'retry_after' => null,
+			)
+		);
 		$this->assertSame( array( 'API rejected item c-9 (index 3): invalid_email' ), $lines );
 	}
 
@@ -79,14 +168,36 @@ class SyncTest extends TestCase {
 				$this->assertSame( 'socialscore', $group );
 			}
 		);
-		$this->assertFalse( Sync::settle( array( 'status' => 500, 'data' => null, 'retry_after' => null ), 'socialscore_sync_order', array( 77 ), 0 ) );
+		$this->assertFalse(
+			Sync::settle(
+				array(
+					'status'      => 500,
+					'data'        => null,
+					'retry_after' => null,
+				),
+				'socialscore_sync_order',
+				array( 77 ),
+				0
+			)
+		);
 		$this->assertTrue( Sync::settle( $this->ok(), 'socialscore_sync_order', array( 77 ), 0 ) );
 	}
 
 	public function test_settle_does_not_reschedule_client_errors() {
 		Functions\expect( 'as_schedule_single_action' )->never();
-		Functions\when( 'wc_get_logger' )->justReturn( new class { public function warning() {} } );
-		$this->assertFalse( Sync::settle( array( 'status' => 422, 'data' => null, 'retry_after' => null ), 'h', array( 1 ), 0 ) );
+		Functions\when( 'wc_get_logger' )->justReturn( new class() { public function warning() {} } );
+		$this->assertFalse(
+			Sync::settle(
+				array(
+					'status'      => 422,
+					'data'        => null,
+					'retry_after' => null,
+				),
+				'h',
+				array( 1 ),
+				0
+			)
+		);
 	}
 
 	public function test_queue_skips_when_not_connected_paused_or_already_queued() {
@@ -143,7 +254,14 @@ class SyncTest extends TestCase {
 	public function test_order_sync_pushes_customer_then_order_and_enriches() {
 		$this->connect_store();
 		Functions\when( 'as_schedule_single_action' )->justReturn( 1 );
-		$order = new \WC_Order( array( 'id' => 9, 'billing_email' => 'a@b.bg', 'total' => 10, 'created' => time() ) );
+		$order = new \WC_Order(
+			array(
+				'id'            => 9,
+				'billing_email' => 'a@b.bg',
+				'total'         => 10,
+				'created'       => time(),
+			)
+		);
 		Functions\when( 'wc_get_order' )->justReturn( $order );
 		$this->http_responder = fn() => self::response( 200, array() );
 		( new Sync() )->handle_order( 9 );
@@ -156,22 +274,56 @@ class SyncTest extends TestCase {
 	private function order_flow( $orders_body ) {
 		$this->connect_store();
 		$this->transients['socialscore_trigger_settings'] = array(
-			'on_new_account' => false, 'every_account' => false, 'order_new_customer' => false, 'order_any_customer' => true, 'manual_only' => false,
+			'on_new_account'     => false,
+			'every_account'      => false,
+			'order_new_customer' => false,
+			'order_any_customer' => true,
+			'manual_only'        => false,
 		);
-		$order = new \WC_Order( array( 'id' => 9, 'billing_email' => 'bad', 'total' => 10, 'created' => time() ) );
+		$order = new \WC_Order(
+			array(
+				'id'            => 9,
+				'billing_email' => 'bad',
+				'total'         => 10,
+				'created'       => time(),
+			)
+		);
 		Functions\when( 'wc_get_order' )->justReturn( $order );
-		Functions\when( 'wc_get_logger' )->justReturn( new class { public function warning() {} } );
+		Functions\when( 'wc_get_logger' )->justReturn( new class() { public function warning() {} } );
 		Functions\when( 'as_has_scheduled_action' )->justReturn( false );
 		$this->http_responder = function ( $url ) use ( $orders_body ) {
 			if ( false !== strpos( $url, 'customers:batch' ) ) {
-				return self::response( 200, array( 'created' => 0, 'rejected' => array( array( 'index' => 0, 'external_id' => 'guest:x', 'reason' => 'invalid_email' ) ) ) );
+				return self::response(
+					200,
+					array(
+						'created'  => 0,
+						'rejected' => array(
+							array(
+								'index'       => 0,
+								'external_id' => 'guest:x',
+								'reason'      => 'invalid_email',
+							),
+						),
+					)
+				);
 			}
 			return self::response( 200, $orders_body );
 		};
 	}
 
 	public function test_order_rejected_inside_a_200_batch_answer_is_not_checked_or_retried() {
-		$this->order_flow( array( 'created' => 0, 'rejected' => array( array( 'index' => 0, 'external_id' => '9', 'reason' => 'customer_not_found' ) ) ) );
+		$this->order_flow(
+			array(
+				'created'  => 0,
+				'rejected' => array(
+					array(
+						'index'       => 0,
+						'external_id' => '9',
+						'reason'      => 'customer_not_found',
+					),
+				),
+			)
+		);
 		Functions\expect( 'as_enqueue_async_action' )->never();
 		Functions\expect( 'as_schedule_single_action' )->never();
 		( new Sync() )->handle_order( 9 );
@@ -179,7 +331,12 @@ class SyncTest extends TestCase {
 	}
 
 	public function test_order_accepted_in_the_batch_answer_still_queues_its_check() {
-		$this->order_flow( array( 'created' => 1, 'rejected' => array() ) );
+		$this->order_flow(
+			array(
+				'created'  => 1,
+				'rejected' => array(),
+			)
+		);
 		Functions\when( 'as_schedule_single_action' )->justReturn( 1 );
 		Functions\expect( 'as_enqueue_async_action' )->once()->with( 'socialscore_run_check', array( 'order', '9', 0 ), 'socialscore' );
 		( new Sync() )->handle_order( 9 );
@@ -187,7 +344,12 @@ class SyncTest extends TestCase {
 	}
 
 	public function test_a_synced_order_gets_a_delayed_look_for_the_class_of_its_visit() {
-		$this->order_flow( array( 'created' => 1, 'rejected' => array() ) );
+		$this->order_flow(
+			array(
+				'created'  => 1,
+				'rejected' => array(),
+			)
+		);
 		Functions\when( 'as_enqueue_async_action' )->justReturn( 1 );
 		Functions\expect( 'as_schedule_single_action' )->once()->with( \Mockery::type( 'int' ), 'socialscore_order_session', array( 9, 0 ), 'socialscore' );
 		( new Sync() )->handle_order( 9 );
@@ -195,22 +357,59 @@ class SyncTest extends TestCase {
 	}
 
 	public function test_an_order_the_api_set_aside_gets_no_look_for_its_visit() {
-		$this->order_flow( array( 'created' => 0, 'rejected' => array( array( 'external_id' => '9', 'reason' => 'customer_not_found' ) ) ) );
+		$this->order_flow(
+			array(
+				'created'  => 0,
+				'rejected' => array(
+					array(
+						'external_id' => '9',
+						'reason'      => 'customer_not_found',
+					),
+				),
+			)
+		);
 		Functions\expect( 'as_schedule_single_action' )->never();
 		( new Sync() )->handle_order( 9 );
 		$this->assertTrue( true );
 	}
 
 	public function test_has_rejected_only_for_a_non_empty_rejected_list() {
-		$this->assertTrue( Sync::has_rejected( array( 'status' => 200, 'data' => array( 'rejected' => array( array( 'reason' => 'x' ) ) ) ) ) );
-		$this->assertFalse( Sync::has_rejected( array( 'status' => 200, 'data' => array( 'rejected' => array() ) ) ) );
-		$this->assertFalse( Sync::has_rejected( array( 'status' => 200, 'data' => null ) ) );
+		$this->assertTrue(
+			Sync::has_rejected(
+				array(
+					'status' => 200,
+					'data'   => array( 'rejected' => array( array( 'reason' => 'x' ) ) ),
+				)
+			)
+		);
+		$this->assertFalse(
+			Sync::has_rejected(
+				array(
+					'status' => 200,
+					'data'   => array( 'rejected' => array() ),
+				)
+			)
+		);
+		$this->assertFalse(
+			Sync::has_rejected(
+				array(
+					'status' => 200,
+					'data'   => null,
+				)
+			)
+		);
 		$this->assertFalse( Sync::has_rejected( new \WP_Error( 'x', 'down' ) ) );
 	}
 
 	public function test_order_sync_429_schedules_retry_without_checking() {
 		$this->connect_store();
-		$order = new \WC_Order( array( 'id' => 9, 'billing_email' => 'a@b.bg', 'created' => time() ) );
+		$order = new \WC_Order(
+			array(
+				'id'            => 9,
+				'billing_email' => 'a@b.bg',
+				'created'       => time(),
+			)
+		);
 		Functions\when( 'wc_get_order' )->justReturn( $order );
 		$this->http_responder = fn() => self::response( 429, '', array( 'retry-after' => '600' ) );
 		Functions\expect( 'as_schedule_single_action' )->once()->andReturnUsing(
@@ -229,14 +428,21 @@ class SyncTest extends TestCase {
 	public function test_import_page_transitions() {
 		$this->connect_store();
 		$this->http_responder = fn() => self::response( 200, array() );
-		$enqueued = array();
-		Functions\when( 'as_enqueue_async_action' )->alias( function ( $hook, $args ) use ( &$enqueued ) { $enqueued[] = $args; } );
+		$enqueued             = array();
+		Functions\when( 'as_enqueue_async_action' )->alias(
+			function ( $hook, $args ) use ( &$enqueued ) {
+				$enqueued[] = $args;
+			}
+		);
 		Functions\when( 'get_users' )->alias(
 			function ( $a ) {
 				$GLOBALS['ss_customers'] = array();
-				$ids = $a['paged'] < 2 ? range( 1, 500 ) : array( 501, 502 );
+				$ids                     = $a['paged'] < 2 ? range( 1, 500 ) : array( 501, 502 );
 				foreach ( $ids as $id ) {
-					$GLOBALS['ss_customers'][ $id ] = array( 'id' => $id, 'email' => "u$id@x.bg" );
+					$GLOBALS['ss_customers'][ $id ] = array(
+						'id'    => $id,
+						'email' => "u$id@x.bg",
+					);
 				}
 				return $ids;
 			}
@@ -249,11 +455,25 @@ class SyncTest extends TestCase {
 		$this->assertSame( 'no', $this->autoload['socialscore_sync_state'] );
 
 		$order_args = null;
-		Functions\when( 'wc_get_order_statuses' )->justReturn( array( 'wc-pending' => 'Pending', 'wc-processing' => 'Processing', 'wc-completed' => 'Completed', 'wc-checkout-draft' => 'Draft' ) );
+		Functions\when( 'wc_get_order_statuses' )->justReturn(
+			array(
+				'wc-pending'        => 'Pending',
+				'wc-processing'     => 'Processing',
+				'wc-completed'      => 'Completed',
+				'wc-checkout-draft' => 'Draft',
+			)
+		);
 		Functions\when( 'wc_get_orders' )->alias(
 			function ( $args ) use ( &$order_args ) {
 				$order_args = $args;
-				return array( new \WC_Order( array( 'id' => 5, 'billing_email' => 'o@x.bg' ) ) );
+				return array(
+					new \WC_Order(
+						array(
+							'id'            => 5,
+							'billing_email' => 'o@x.bg',
+						)
+					),
+				);
 			}
 		);
 		$sync->handle_import( 'orders', 1, 0 );
@@ -266,7 +486,10 @@ class SyncTest extends TestCase {
 
 	public function test_batch_ids_of_orders_are_kept_in_the_order_meta_without_requeueing() {
 		$this->connect_store();
-		$orders = array( 9 => new \WC_Order( array( 'id' => 9 ) ), 10 => new \WC_Order( array( 'id' => 10 ) ) );
+		$orders = array(
+			9  => new \WC_Order( array( 'id' => 9 ) ),
+			10 => new \WC_Order( array( 'id' => 10 ) ),
+		);
 		$orders[10]->update_meta_data( 'x', 1 );
 		Functions\when( 'wc_get_order' )->alias( fn( $id ) => $orders[ $id ] ?? false );
 		Functions\expect( 'as_enqueue_async_action' )->never();
@@ -276,10 +499,22 @@ class SyncTest extends TestCase {
 			'data'        => array(
 				'created' => 2,
 				'ids'     => array(
-					array( 'external_id' => '9', 'id' => 501 ),
-					array( 'external_id' => '10', 'id' => 502 ),
-					array( 'external_id' => '404', 'id' => 503 ), // Not a shop order any more.
-					array( 'external_id' => 'guest-x', 'id' => 504 ), // Not an order id.
+					array(
+						'external_id' => '9',
+						'id'          => 501,
+					),
+					array(
+						'external_id' => '10',
+						'id'          => 502,
+					),
+					array(
+						'external_id' => '404',
+						'id'          => 503,
+					), // Not a shop order any more.
+					array(
+						'external_id' => 'guest-x',
+						'id'          => 504,
+					), // Not an order id.
 				),
 			),
 		);
@@ -293,7 +528,13 @@ class SyncTest extends TestCase {
 		Sync::record_order_ids( $answer );
 		$this->assertSame( 1, $orders[9]->store->added, 'an unchanged id is not written again' );
 		Sync::record_order_ids( new \WP_Error( 'x', 'down' ) );
-		Sync::record_order_ids( array( 'status' => 500, 'data' => $answer['data'], 'retry_after' => null ) );
+		Sync::record_order_ids(
+			array(
+				'status'      => 500,
+				'data'        => $answer['data'],
+				'retry_after' => null,
+			)
+		);
 		$this->assertSame( 1, $orders[9]->store->added );
 
 		$answer['data']['ids'][0]['id'] = 601;
@@ -306,10 +547,27 @@ class SyncTest extends TestCase {
 	public function test_single_order_sync_stores_the_id_from_the_batch_answer() {
 		$this->connect_store();
 		Functions\when( 'as_schedule_single_action' )->justReturn( 1 );
-		$order = new \WC_Order( array( 'id' => 9, 'billing_email' => 'a@b.bg', 'created' => time() ) );
+		$order = new \WC_Order(
+			array(
+				'id'            => 9,
+				'billing_email' => 'a@b.bg',
+				'created'       => time(),
+			)
+		);
 		Functions\when( 'wc_get_order' )->justReturn( $order );
 		$this->http_responder = function ( $url ) {
-			return self::response( 200, false !== strpos( $url, 'orders:batch' ) ? array( 'created' => 1, 'ids' => array( array( 'external_id' => '9', 'id' => 777 ) ) ) : array() );
+			return self::response(
+				200,
+				false !== strpos( $url, 'orders:batch' ) ? array(
+					'created' => 1,
+					'ids'     => array(
+						array(
+							'external_id' => '9',
+							'id'          => 777,
+						),
+					),
+				) : array()
+			);
 		};
 		( new Sync() )->handle_order( 9 );
 		$this->assertSame( 777, $order->get_meta( '_socialscore_order_id' ) );
@@ -318,7 +576,18 @@ class SyncTest extends TestCase {
 	public function test_import_batches_report_ids_to_the_callback_and_stop_at_a_failure() {
 		$seen = array();
 		Sync::push_in_batches(
-			fn( $chunk ) => array( 'status' => 200, 'data' => array( 'ids' => array( array( 'external_id' => (string) count( $chunk ), 'id' => 1 ) ) ), 'retry_after' => null ),
+			fn( $chunk ) => array(
+				'status'      => 200,
+				'data'        => array(
+					'ids' => array(
+						array(
+							'external_id' => (string) count( $chunk ),
+							'id'          => 1,
+						),
+					),
+				),
+				'retry_after' => null,
+			),
 			array_fill( 0, 501, array( 'x' => 1 ) ),
 			function ( $answer ) use ( &$seen ) {
 				$seen[] = $answer['data']['ids'][0]['external_id'];
@@ -327,7 +596,17 @@ class SyncTest extends TestCase {
 		$this->assertSame( array( '500', '1' ), $seen );
 
 		$seen = array();
-		Sync::push_in_batches( fn() => array( 'status' => 500, 'data' => null, 'retry_after' => null ), array( array( 'x' => 1 ) ), function () use ( &$seen ) { $seen[] = 1; } );
+		Sync::push_in_batches(
+			fn() => array(
+				'status'      => 500,
+				'data'        => null,
+				'retry_after' => null,
+			),
+			array( array( 'x' => 1 ) ),
+			function () use ( &$seen ) {
+				$seen[] = 1;
+			}
+		);
 		$this->assertSame( array(), $seen );
 	}
 

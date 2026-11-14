@@ -116,17 +116,30 @@ namespace {
 	/** Order fake: every getter reads from the $d array. */
 	class WC_Order {
 		public $d;
-		public $meta  = array();
-		public $notes = array();
-		public $saves = 0;
+		public $meta       = array();
+		public $notes      = array();
+		public $saves      = 0;
 		public $meta_saves = 0;
 		public $store;
 		public function __construct( array $d = array() ) {
 			$this->d = $d + array(
-				'id' => 1, 'customer_id' => 0, 'billing_email' => '', 'billing_phone' => '', 'billing_first_name' => '',
-				'billing_last_name' => '', 'billing_city' => '', 'billing_postcode' => '', 'billing_country' => '',
-				'shipping_city' => '', 'shipping_postcode' => '', 'shipping_country' => '', 'total' => 0, 'currency' => 'EUR',
-				'created' => 1700000000, 'items' => array(), 'status' => 'processing',
+				'id'                 => 1,
+				'customer_id'        => 0,
+				'billing_email'      => '',
+				'billing_phone'      => '',
+				'billing_first_name' => '',
+				'billing_last_name'  => '',
+				'billing_city'       => '',
+				'billing_postcode'   => '',
+				'billing_country'    => '',
+				'shipping_city'      => '',
+				'shipping_postcode'  => '',
+				'shipping_country'   => '',
+				'total'              => 0,
+				'currency'           => 'EUR',
+				'created'            => 1700000000,
+				'items'              => array(),
+				'status'             => 'processing',
 			);
 		}
 		public function __call( $name, $args ) {
@@ -154,7 +167,11 @@ namespace {
 		public function get_meta_data() {
 			$rows = array();
 			foreach ( $this->meta as $k => $v ) {
-				$rows[] = (object) array( 'id' => 100 + count( $rows ), 'key' => $k, 'value' => $v );
+				$rows[] = (object) array(
+					'id'    => 100 + count( $rows ),
+					'key'   => $k,
+					'value' => $v,
+				);
 			}
 			return $rows;
 		}

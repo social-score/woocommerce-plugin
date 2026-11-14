@@ -31,7 +31,11 @@ class AdminHposTest extends TestCase {
 	public function test_meta_box_registered_on_the_right_screen() {
 		Functions\when( 'wc_get_page_screen_id' )->alias( fn( $t ) => 'woocommerce_page_wc-orders' );
 		$screens = array();
-		Functions\when( 'add_meta_box' )->alias( function ( $id, $title, $cb, $screen ) use ( &$screens ) { $screens[] = $screen; } );
+		Functions\when( 'add_meta_box' )->alias(
+			function ( $id, $title, $cb, $screen ) use ( &$screens ) {
+				$screens[] = $screen;
+			}
+		);
 		OrderUtil::$hpos = true;
 		( new Check_Panels() )->add_meta_box();
 		OrderUtil::$hpos = false;
@@ -73,7 +77,13 @@ class AdminHposTest extends TestCase {
 	}
 
 	public function test_column_inserted_after_status_and_shows_labels() {
-		$cols = ( new Check_Panels() )->add_column( array( 'cb' => '', 'order_status' => 'Status', 'order_total' => 'Total' ) );
+		$cols = ( new Check_Panels() )->add_column(
+			array(
+				'cb'           => '',
+				'order_status' => 'Status',
+				'order_total'  => 'Total',
+			)
+		);
 		$this->assertSame( array( 'cb', 'order_status', 'socialscore_risk', 'order_total' ), array_keys( $cols ) );
 
 		$order = new \WC_Order();
@@ -86,7 +96,11 @@ class AdminHposTest extends TestCase {
 		$this->assertSame( '', Admin_Page::result_notice( 'whatever' )[1] );
 		$this->assertSame( 'notice-error', Admin_Page::result_notice( 'state' )[0] );
 		$this->assertSame( '', Admin_Page::import_status_text() );
-		$this->options['socialscore_sync_state'] = array( 'status' => 'running', 'customers' => 500, 'orders' => 0 );
+		$this->options['socialscore_sync_state'] = array(
+			'status'    => 'running',
+			'customers' => 500,
+			'orders'    => 0,
+		);
 		$this->assertStringContainsString( '500 customers', Admin_Page::import_status_text() );
 		$this->options['socialscore_sync_state']['status'] = 'done';
 		$this->assertStringContainsString( 'Import finished', Admin_Page::import_status_text() );
@@ -104,7 +118,11 @@ class HposDeclarationTest extends TestCase {
 		$callbacks = array();
 		Functions\when( 'plugin_dir_path' )->justReturn( dirname( __DIR__, 3 ) . '/' );
 		Functions\when( 'plugin_dir_url' )->justReturn( 'https://example.test/' );
-		Functions\when( 'add_action' )->alias( function ( $hook, $cb ) use ( &$callbacks ) { $callbacks[ $hook ][] = $cb; } );
+		Functions\when( 'add_action' )->alias(
+			function ( $hook, $cb ) use ( &$callbacks ) {
+				$callbacks[ $hook ][] = $cb;
+			}
+		);
 		Functions\when( 'register_deactivation_hook' )->justReturn();
 
 		require dirname( __DIR__, 3 ) . '/socialscore.php';

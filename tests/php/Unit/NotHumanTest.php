@@ -40,7 +40,7 @@ class NotHumanTest extends TestCase {
 	}
 
 	private function order( $id = 5 ) {
-		$order              = new \WC_Order( array( 'id' => $id ) );
+		$order               = new \WC_Order( array( 'id' => $id ) );
 		$this->orders[ $id ] = $order;
 		return $order;
 	}
@@ -69,7 +69,16 @@ class NotHumanTest extends TestCase {
 
 	public function test_a_bad_bot_visit_flags_the_order_names_the_signals_and_adds_one_note() {
 		$order = $this->order( 5 );
-		$this->api_says( 200, array( 'class' => 'bad_bot', 'signals' => array( 'webdriver', 'page_burst', 'Bad Code', 7 ), 'device_farm' => true, 'last_seen_at' => '2026-11-13T10:00:00Z', 'pages' => 9 ) );
+		$this->api_says(
+			200,
+			array(
+				'class'        => 'bad_bot',
+				'signals'      => array( 'webdriver', 'page_burst', 'Bad Code', 7 ),
+				'device_farm'  => true,
+				'last_seen_at' => '2026-11-13T10:00:00Z',
+				'pages'        => 9,
+			)
+		);
 
 		( new Not_Human() )->handle_session( 5, 0 );
 
@@ -86,7 +95,13 @@ class NotHumanTest extends TestCase {
 
 	public function test_saving_the_flag_does_not_wake_the_order_sync() {
 		$order = $this->order( 5 );
-		$this->api_says( 200, array( 'class' => 'ai_agent', 'signals' => array( 'declared_agent' ) ) );
+		$this->api_says(
+			200,
+			array(
+				'class'   => 'ai_agent',
+				'signals' => array( 'declared_agent' ),
+			)
+		);
 		Functions\expect( 'as_enqueue_async_action' )->never();
 		( new Not_Human() )->handle_session( 5, 0 );
 		$this->assertSame( 1, $order->saves );
@@ -95,7 +110,13 @@ class NotHumanTest extends TestCase {
 
 	public function test_a_person_gets_no_flag_and_is_not_asked_again() {
 		$order = $this->order( 5 );
-		$this->api_says( 200, array( 'class' => 'human', 'signals' => array() ) );
+		$this->api_says(
+			200,
+			array(
+				'class'   => 'human',
+				'signals' => array(),
+			)
+		);
 		( new Not_Human() )->handle_session( 5, 0 );
 		$this->assertNull( Not_Human::for_order( $order ) );
 		$this->assertSame( 'human', $order->get_meta( Not_Human::META_VISIT ) );
@@ -104,9 +125,21 @@ class NotHumanTest extends TestCase {
 
 	public function test_a_later_look_that_finds_a_person_removes_the_flag_the_pixel_set() {
 		$order = $this->order( 5 );
-		$this->api_says( 200, array( 'class' => 'bad_bot', 'signals' => array( 'webdriver' ) ) );
+		$this->api_says(
+			200,
+			array(
+				'class'   => 'bad_bot',
+				'signals' => array( 'webdriver' ),
+			)
+		);
 		( new Not_Human() )->handle_session( 5, 0 );
-		$this->api_says( 200, array( 'class' => 'lurker', 'signals' => array() ) );
+		$this->api_says(
+			200,
+			array(
+				'class'   => 'lurker',
+				'signals' => array(),
+			)
+		);
 		( new Not_Human() )->handle_session( 5, 1 );
 		$this->assertNull( Not_Human::for_order( $order ) );
 	}
@@ -115,7 +148,13 @@ class NotHumanTest extends TestCase {
 		$order = $this->order( 5 );
 		$order->update_meta_data( Not_Human::META_CLASS, 'bad_bot' );
 		$order->update_meta_data( Not_Human::META_SOURCE, 'server' );
-		$this->api_says( 200, array( 'class' => 'human', 'signals' => array() ) );
+		$this->api_says(
+			200,
+			array(
+				'class'   => 'human',
+				'signals' => array(),
+			)
+		);
 		( new Not_Human() )->handle_session( 5, 0 );
 		$this->assertSame( 'bad_bot', Not_Human::for_order( $order )['class'] );
 	}
@@ -144,7 +183,13 @@ class NotHumanTest extends TestCase {
 
 	public function test_an_answer_with_a_class_this_version_does_not_know_changes_nothing() {
 		$order = $this->order( 5 );
-		$this->api_says( 200, array( 'class' => 'quantum_bot', 'signals' => array() ) );
+		$this->api_says(
+			200,
+			array(
+				'class'   => 'quantum_bot',
+				'signals' => array(),
+			)
+		);
 		( new Not_Human() )->handle_session( 5, 0 );
 		$this->assertSame( '', $order->get_meta( Not_Human::META_VISIT ) );
 		$this->assertNull( Not_Human::for_order( $order ) );

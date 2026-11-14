@@ -44,7 +44,14 @@ class PixelTest extends TestCase {
 	}
 
 	private function pixel_answer( $enabled = true, $site = self::SITE ) {
-		$this->http_responder = fn() => self::response( 200, array( 'enabled' => $enabled, 'site_id' => $site, 'snippet_url' => 'https://pixel.socialscore.io/v1/p.js' ) );
+		$this->http_responder = fn() => self::response(
+			200,
+			array(
+				'enabled'     => $enabled,
+				'site_id'     => $site,
+				'snippet_url' => 'https://pixel.socialscore.io/v1/p.js',
+			)
+		);
 	}
 
 	// No device storage, no order link by cookie ---------------------------------------------------------------
@@ -152,7 +159,15 @@ class PixelTest extends TestCase {
 	public function test_state_reads_the_api_once_per_ten_minutes() {
 		$this->connect_store( 'st_1' );
 		$this->pixel_answer();
-		$this->assertSame( array( 'enabled' => true, 'site_id' => self::SITE, 'bot_mode' => 'flag', 'level2' => false ), Pixel::state() );
+		$this->assertSame(
+			array(
+				'enabled'  => true,
+				'site_id'  => self::SITE,
+				'bot_mode' => 'flag',
+				'level2'   => false,
+			),
+			Pixel::state()
+		);
 		Pixel::state();
 		$this->assertCount( 1, $this->http );
 		$this->assertSame( 'GET', $this->http[0]['args']['method'] );
@@ -174,7 +189,15 @@ class PixelTest extends TestCase {
 	public function test_a_site_id_that_is_not_valid_turns_the_pixel_off() {
 		$this->connect_store( 'st_1' );
 		$this->pixel_answer( true, 'ps_x");alert(1);//' );
-		$this->assertSame( array( 'enabled' => false, 'site_id' => '', 'bot_mode' => 'flag', 'level2' => false ), Pixel::state() );
+		$this->assertSame(
+			array(
+				'enabled'  => false,
+				'site_id'  => '',
+				'bot_mode' => 'flag',
+				'level2'   => false,
+			),
+			Pixel::state()
+		);
 	}
 
 	public function test_loader_gets_the_site_id_and_an_empty_source() {
@@ -235,14 +258,16 @@ class PixelTest extends TestCase {
 		$this->pixel_answer();
 		Functions\when( 'is_product' )->justReturn( true );
 		Functions\when( 'get_queried_object_id' )->justReturn( 77 );
-		Functions\when( 'wc_get_product' )->justReturn( new class() {
-			public function get_id() {
-				return 77;
+		Functions\when( 'wc_get_product' )->justReturn(
+			new class() {
+				public function get_id() {
+					return 77;
+				}
+				public function get_price() {
+					return '19.90';
+				}
 			}
-			public function get_price() {
-				return '19.90';
-			}
-		} );
+		);
 		( new Pixel() )->enqueue();
 		$this->assertSame(
 			'window.ssPixel=window.ssPixel||[];window.ssPixel.push({"type":"view_item","data":{"item_id":"77","price":19.9,"currency":"EUR"}});',
@@ -277,7 +302,12 @@ class PixelTest extends TestCase {
 		Functions\when( 'has_block' )->justReturn( true );
 		Functions\when( 'is_order_received_page' )->justReturn( false );
 		Functions\when( 'is_checkout_pay_page' )->justReturn( false );
-		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 59.9, 2 ), 'session' => null ) );
+		Functions\when( 'WC' )->justReturn(
+			(object) array(
+				'cart'    => $this->cart( 59.9, 2 ),
+				'session' => null,
+			)
+		);
 		( new Pixel() )->enqueue();
 		$this->assertStringContainsString( '{"type":"begin_checkout","data":{"value":59.9,"currency":"EUR","items":2}}', $this->inline['socialscore-pixel'][1] );
 	}
@@ -289,7 +319,12 @@ class PixelTest extends TestCase {
 		Functions\when( 'has_block' )->justReturn( true );
 		Functions\when( 'is_order_received_page' )->justReturn( false );
 		Functions\when( 'is_checkout_pay_page' )->justReturn( false );
-		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 0, 0, true ), 'session' => null ) );
+		Functions\when( 'WC' )->justReturn(
+			(object) array(
+				'cart'    => $this->cart( 0, 0, true ),
+				'session' => null,
+			)
+		);
 		( new Pixel() )->enqueue();
 		$this->assertCount( 1, $this->inline['socialscore-pixel'] );
 	}
@@ -304,7 +339,12 @@ class PixelTest extends TestCase {
 		if ( $own ) {
 			$session->data['socialscore_checkout_ref'] = $own;
 		}
-		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 59.9, 2 ), 'session' => $session ) );
+		Functions\when( 'WC' )->justReturn(
+			(object) array(
+				'cart'    => $this->cart( 59.9, 2 ),
+				'session' => $session,
+			)
+		);
 		return $session;
 	}
 
@@ -346,7 +386,12 @@ class PixelTest extends TestCase {
 		Functions\when( 'has_block' )->justReturn( true );
 		Functions\when( 'is_order_received_page' )->justReturn( false );
 		Functions\when( 'is_checkout_pay_page' )->justReturn( false );
-		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 59.9, 2 ), 'session' => null ) );
+		Functions\when( 'WC' )->justReturn(
+			(object) array(
+				'cart'    => $this->cart( 59.9, 2 ),
+				'session' => null,
+			)
+		);
 		( new Pixel() )->enqueue();
 		$this->assertStringNotContainsString( 'cart_token', $this->inline['socialscore-pixel'][1] );
 	}
@@ -359,7 +404,12 @@ class PixelTest extends TestCase {
 		( new Pixel() )->print_ref_field();
 		$this->assertSame( '<input type="hidden" name="ss_checkout_ref" value="' . self::REF_A . '" />', ob_get_clean() );
 
-		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 0, 0, true ), 'session' => $this->session() ) );
+		Functions\when( 'WC' )->justReturn(
+			(object) array(
+				'cart'    => $this->cart( 0, 0, true ),
+				'session' => $this->session(),
+			)
+		);
 		ob_start();
 		( new Pixel() )->print_ref_field();
 		$this->assertSame( '', ob_get_clean(), 'empty cart' );
@@ -398,7 +448,12 @@ class PixelTest extends TestCase {
 	}
 
 	public function test_an_order_without_a_session_ref_never_takes_a_posted_one() {
-		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => null, 'session' => $this->session() ) );
+		Functions\when( 'WC' )->justReturn(
+			(object) array(
+				'cart'    => null,
+				'session' => $this->session(),
+			)
+		);
 		$_POST['ss_checkout_ref'] = self::REF_A;
 		$order                    = new \WC_Order( array( 'id' => 5 ) );
 		( new Pixel() )->capture_classic_ref( $order, array() );
@@ -437,7 +492,7 @@ class PixelTest extends TestCase {
 
 	public function test_a_ref_already_on_the_order_is_not_replaced() {
 		$this->ref_session( self::REF_A );
-		$order                       = new \WC_Order( array( 'id' => 5 ) );
+		$order                           = new \WC_Order( array( 'id' => 5 ) );
 		$order->meta['_ss_checkout_ref'] = self::REF_B;
 		( new Pixel() )->capture_block_ref( $order, $this->request( array( 'socialscore' => array( 'ss_checkout_ref' => self::REF_A ) ) ) );
 		$this->assertSame( self::REF_B, $order->meta['_ss_checkout_ref'] );
@@ -450,7 +505,7 @@ class PixelTest extends TestCase {
 	}
 
 	public function test_the_order_row_syncs_the_ref_as_cart_token_and_leaves_out_anything_else() {
-		$order                       = new \WC_Order( array( 'id' => 5 ) );
+		$order                           = new \WC_Order( array( 'id' => 5 ) );
 		$order->meta['_ss_checkout_ref'] = self::REF_A;
 		$this->assertSame( self::REF_A, Mapper::order( $order )['cart_token'] );
 
@@ -491,19 +546,34 @@ class PixelTest extends TestCase {
 		$this->connect_store( 'st_1' );
 		$this->pixel_answer();
 		$session = $this->session();
-		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => null, 'session' => $session ) );
-		Functions\when( 'wc_get_product' )->justReturn( new class() {
-			public function get_id() {
-				return 7;
+		Functions\when( 'WC' )->justReturn(
+			(object) array(
+				'cart'    => null,
+				'session' => $session,
+			)
+		);
+		Functions\when( 'wc_get_product' )->justReturn(
+			new class() {
+				public function get_id() {
+					return 7;
+				}
+				public function get_price() {
+					return '5.00';
+				}
 			}
-			public function get_price() {
-				return '5.00';
-			}
-		} );
+		);
 		$pixel = new Pixel();
 		$pixel->remember_add_to_cart( 'abc', 12, 2, 0 );
 		$this->assertSame( 'add_to_cart', $session->data['socialscore_pixel_events'][0]['type'] );
-		$this->assertSame( array( 'item_id' => '12', 'quantity' => 2, 'price' => 5.0, 'currency' => 'EUR' ), $session->data['socialscore_pixel_events'][0]['data'] );
+		$this->assertSame(
+			array(
+				'item_id'  => '12',
+				'quantity' => 2,
+				'price'    => 5.0,
+				'currency' => 'EUR',
+			),
+			$session->data['socialscore_pixel_events'][0]['data']
+		);
 
 		( new Pixel() )->enqueue();
 		$this->assertStringContainsString( '"type":"add_to_cart"', $this->inline['socialscore-pixel'][1] );
@@ -518,7 +588,12 @@ class PixelTest extends TestCase {
 		$this->connect_store( 'st_1' );
 		$this->pixel_answer();
 		$session = $this->session();
-		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => null, 'session' => $session ) );
+		Functions\when( 'WC' )->justReturn(
+			(object) array(
+				'cart'    => null,
+				'session' => $session,
+			)
+		);
 		Functions\when( 'wp_doing_ajax' )->justReturn( true );
 		( new Pixel() )->remember_add_to_cart( 'abc', 12, 1, 0 );
 		$this->assertSame( array(), $session->data );
@@ -528,7 +603,12 @@ class PixelTest extends TestCase {
 		$this->connect_store( 'st_1' );
 		$this->pixel_answer( false );
 		$session = $this->session();
-		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => null, 'session' => $session ) );
+		Functions\when( 'WC' )->justReturn(
+			(object) array(
+				'cart'    => null,
+				'session' => $session,
+			)
+		);
 		( new Pixel() )->remember_add_to_cart( 'abc', 12, 1, 0 );
 		$this->assertSame( array(), $session->data );
 		$this->assertSame( array( 'a' => 1 ), ( new Pixel() )->loop_button_args( array( 'a' => 1 ), new \stdClass() ) );
@@ -571,7 +651,12 @@ class PixelTest extends TestCase {
 		$this->pixel_answer();
 		Functions\when( 'is_order_received_page' )->justReturn( false );
 		Functions\when( 'is_checkout_pay_page' )->justReturn( false );
-		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 59.9, 2 ), 'session' => null ) );
+		Functions\when( 'WC' )->justReturn(
+			(object) array(
+				'cart'    => $this->cart( 59.9, 2 ),
+				'session' => null,
+			)
+		);
 		$pixel = new Pixel();
 		$pixel->begin_checkout_classic();
 		$pixel->begin_checkout_classic();
@@ -585,7 +670,12 @@ class PixelTest extends TestCase {
 		Functions\when( 'is_checkout' )->justReturn( true );
 		Functions\when( 'is_order_received_page' )->justReturn( false );
 		Functions\when( 'is_checkout_pay_page' )->justReturn( false );
-		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 59.9, 2 ), 'session' => null ) );
+		Functions\when( 'WC' )->justReturn(
+			(object) array(
+				'cart'    => $this->cart( 59.9, 2 ),
+				'session' => null,
+			)
+		);
 		$pixel = new Pixel();
 		$pixel->enqueue();
 		$this->assertCount( 1, $this->inline['socialscore-pixel'], 'the form hook reports it, not the enqueue hook' );
@@ -600,7 +690,12 @@ class PixelTest extends TestCase {
 		Functions\when( 'has_block' )->justReturn( true );
 		Functions\when( 'is_order_received_page' )->justReturn( false );
 		Functions\when( 'is_checkout_pay_page' )->justReturn( false );
-		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 10, 1 ), 'session' => null ) );
+		Functions\when( 'WC' )->justReturn(
+			(object) array(
+				'cart'    => $this->cart( 10, 1 ),
+				'session' => null,
+			)
+		);
 		$pixel = new Pixel();
 		$pixel->enqueue();
 		$pixel->begin_checkout_classic();
@@ -612,7 +707,12 @@ class PixelTest extends TestCase {
 		$this->pixel_answer();
 		Functions\when( 'is_order_received_page' )->justReturn( false );
 		Functions\when( 'is_checkout_pay_page' )->justReturn( false );
-		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => $this->cart( 0, 0, true ), 'session' => null ) );
+		Functions\when( 'WC' )->justReturn(
+			(object) array(
+				'cart'    => $this->cart( 0, 0, true ),
+				'session' => null,
+			)
+		);
 		( new Pixel() )->begin_checkout_classic();
 		$this->assertSame( array(), $this->inline );
 	}
@@ -623,7 +723,12 @@ class PixelTest extends TestCase {
 		$this->connect_store( 'st_1' );
 		$this->pixel_answer();
 		$session = $this->session();
-		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => null, 'session' => $session ) );
+		Functions\when( 'WC' )->justReturn(
+			(object) array(
+				'cart'    => null,
+				'session' => $session,
+			)
+		);
 		Functions\when( 'wc_get_product' )->alias(
 			function ( $id ) {
 				return new class( $id ) {
@@ -641,7 +746,16 @@ class PixelTest extends TestCase {
 			}
 		);
 		( new Pixel() )->remember_add_to_cart( 'abc', 12, 1, 40 );
-		$this->assertSame( array( 'item_id' => '12', 'quantity' => 1, 'price' => 9.0, 'currency' => 'EUR', 'variant_id' => '40' ), $session->data['socialscore_pixel_events'][0]['data'] );
+		$this->assertSame(
+			array(
+				'item_id'    => '12',
+				'quantity'   => 1,
+				'price'      => 9.0,
+				'currency'   => 'EUR',
+				'variant_id' => '40',
+			),
+			$session->data['socialscore_pixel_events'][0]['data']
+		);
 		( new Pixel() )->remember_add_to_cart( 'abd', 13, 1, 0 );
 		$this->assertArrayNotHasKey( 'variant_id', $session->data['socialscore_pixel_events'][1]['data'] );
 	}
@@ -653,7 +767,13 @@ class PixelTest extends TestCase {
 		$this->pixel_answer();
 		Functions\when( 'get_current_user_id' )->justReturn( 1 );
 		Functions\when( 'current_user_can' )->justReturn( true );
-		$order = new \WC_Order( array( 'id' => 340, 'customer_id' => 77, 'total' => '10' ) );
+		$order = new \WC_Order(
+			array(
+				'id'          => 340,
+				'customer_id' => 77,
+				'total'       => '10',
+			)
+		);
 		Functions\when( 'wc_get_order' )->justReturn( $order );
 		( new Pixel() )->purchase( 340 );
 		$this->assertSame( array(), $this->inline );
@@ -673,7 +793,13 @@ class PixelTest extends TestCase {
 			list( $viewer, $customer, $manager ) = $case;
 			Functions\when( 'get_current_user_id' )->justReturn( $viewer );
 			Functions\when( 'current_user_can' )->justReturn( $manager );
-			$order = new \WC_Order( array( 'id' => 350 + $i, 'customer_id' => $customer, 'total' => '10' ) );
+			$order = new \WC_Order(
+				array(
+					'id'          => 350 + $i,
+					'customer_id' => $customer,
+					'total'       => '10',
+				)
+			);
 			Functions\when( 'wc_get_order' )->justReturn( $order );
 			$this->inline = array();
 			( new Pixel() )->purchase( 350 + $i );
@@ -687,7 +813,15 @@ class PixelTest extends TestCase {
 	public function test_purchase_is_pushed_once_per_order_and_holds_no_personal_data() {
 		$this->connect_store( 'st_1' );
 		$this->pixel_answer();
-		$order = new \WC_Order( array( 'id' => 321, 'total' => '120.50', 'currency' => 'EUR', 'billing_email' => 'ana@example.com', 'billing_phone' => '+359888' ) );
+		$order = new \WC_Order(
+			array(
+				'id'            => 321,
+				'total'         => '120.50',
+				'currency'      => 'EUR',
+				'billing_email' => 'ana@example.com',
+				'billing_phone' => '+359888',
+			)
+		);
 		Functions\when( 'wc_get_order' )->justReturn( $order );
 		$pixel = new Pixel();
 		$pixel->purchase( 321 );
@@ -707,8 +841,19 @@ class PixelTest extends TestCase {
 		$this->connect_store( 'st_1' );
 		$this->pixel_answer();
 		Functions\when( 'wp_script_is' )->justReturn( false );
-		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => null, 'session' => null ) );
-		$order = new \WC_Order( array( 'id' => 322, 'total' => '10', 'currency' => 'EUR' ) );
+		Functions\when( 'WC' )->justReturn(
+			(object) array(
+				'cart'    => null,
+				'session' => null,
+			)
+		);
+		$order = new \WC_Order(
+			array(
+				'id'       => 322,
+				'total'    => '10',
+				'currency' => 'EUR',
+			)
+		);
 		Functions\when( 'wc_get_order' )->justReturn( $order );
 		$pixel = new Pixel();
 		$pixel->purchase( 322 );
@@ -733,7 +878,12 @@ class PixelTest extends TestCase {
 	public function test_event_json_cannot_close_the_script_tag() {
 		$this->connect_store( 'st_1' );
 		$this->pixel_answer();
-		$order = new \WC_Order( array( 'id' => 9, 'currency' => '</script><script>alert(1)</script>' ) );
+		$order = new \WC_Order(
+			array(
+				'id'       => 9,
+				'currency' => '</script><script>alert(1)</script>',
+			)
+		);
 		Functions\when( 'wc_get_order' )->justReturn( $order );
 		( new Pixel() )->purchase( 9 );
 		$this->assertStringNotContainsString( '</script>', $this->inline['socialscore-pixel'][0] );
@@ -776,7 +926,12 @@ class PixelTest extends TestCase {
 			$this->markTestSkipped( 'Run npm run build first.' );
 		}
 		$deps = null;
-		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => null, 'session' => null ) );
+		Functions\when( 'WC' )->justReturn(
+			(object) array(
+				'cart'    => null,
+				'session' => null,
+			)
+		);
 		Functions\when( 'wp_enqueue_script' )->alias(
 			function ( $handle, $src = '', $d = array() ) use ( &$deps ) {
 				if ( 'socialscore-pixel-events' === $handle ) {
@@ -805,9 +960,15 @@ class PixelTest extends TestCase {
 		$inner                = null;
 		$this->http_responder = function () use ( &$inner ) {
 			$inner = Pixel::state();
-			return self::response( 200, array( 'enabled' => true, 'site_id' => self::SITE ) );
+			return self::response(
+				200,
+				array(
+					'enabled' => true,
+					'site_id' => self::SITE,
+				)
+			);
 		};
-		$outer = Pixel::state();
+		$outer                = Pixel::state();
 		$this->assertFalse( $inner['enabled'], 'the second request sees off while the first one waits' );
 		$this->assertCount( 1, $this->http, 'and does not call the API' );
 		$this->assertTrue( $outer['enabled'] );
@@ -818,8 +979,19 @@ class PixelTest extends TestCase {
 		$this->connect_store( 'st_1' );
 		$this->pixel_answer();
 		Functions\when( 'wp_script_is' )->justReturn( false );
-		Functions\when( 'WC' )->justReturn( (object) array( 'cart' => null, 'session' => null ) );
-		$order = new \WC_Order( array( 'id' => 330, 'total' => '10', 'currency' => 'EUR' ) );
+		Functions\when( 'WC' )->justReturn(
+			(object) array(
+				'cart'    => null,
+				'session' => null,
+			)
+		);
+		$order = new \WC_Order(
+			array(
+				'id'       => 330,
+				'total'    => '10',
+				'currency' => 'EUR',
+			)
+		);
 		Functions\when( 'wc_get_order' )->justReturn( $order );
 		$pixel = new Pixel();
 		$pixel->purchase( 330 );

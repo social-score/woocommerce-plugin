@@ -37,9 +37,11 @@ class BotGuardTest extends TestCase {
 		Functions\when( 'has_action' )->alias( fn( $tag ) => in_array( $tag, $this->hooked, true ) );
 		Functions\when( 'wp_doing_cron' )->justReturn( false );
 		Functions\when( 'is_user_logged_in' )->justReturn( false );
-		Functions\when( 'nocache_headers' )->alias( function () {
-			++$this->nocache;
-		} );
+		Functions\when( 'nocache_headers' )->alias(
+			function () {
+				++$this->nocache;
+			}
+		);
 		Functions\when( 'wc_get_order' )->alias( fn( $id ) => $this->orders[ (int) $id ] ?? false );
 		Functions\when( 'wc_price' )->alias( fn( $p ) => '<span class="amount">' . number_format( (float) $p, 2, '.', '' ) . '</span>' );
 		Functions\when( 'wp_die' )->alias(
@@ -68,7 +70,15 @@ class BotGuardTest extends TestCase {
 	}
 
 	private function server_says( $mode, $enabled = true ) {
-		$this->http_responder = fn() => self::response( 200, array( 'enabled' => $enabled, 'site_id' => self::SITE, 'snippet_url' => 'x', 'bot_mode' => $mode ) );
+		$this->http_responder = fn() => self::response(
+			200,
+			array(
+				'enabled'     => $enabled,
+				'site_id'     => self::SITE,
+				'snippet_url' => 'x',
+				'bot_mode'    => $mode,
+			)
+		);
 		unset( $this->transients[ Pixel::TRANSIENT . md5( '42' ) ] );
 	}
 
@@ -120,7 +130,14 @@ class BotGuardTest extends TestCase {
 	}
 
 	public function test_the_mode_is_flag_when_the_server_does_not_say() {
-		$this->http_responder = fn() => self::response( 200, array( 'enabled' => true, 'site_id' => self::SITE, 'snippet_url' => 'x' ) );
+		$this->http_responder = fn() => self::response(
+			200,
+			array(
+				'enabled'     => true,
+				'site_id'     => self::SITE,
+				'snippet_url' => 'x',
+			)
+		);
 		$this->request( 'curl/8.4.0' );
 		$this->assertSame( 'served', $this->inspect() );
 		$this->assertSame( 'flag', Pixel::state()['bot_mode'] );
@@ -142,7 +159,14 @@ class BotGuardTest extends TestCase {
 
 	public function test_a_person_is_not_asked_about_and_costs_no_request_to_socialscore() {
 		$this->server_says( 'block' );
-		$this->request( 'Mozilla/5.0 (Windows NT 10.0) Chrome/126.0', '/', array( 'HTTP_ACCEPT' => 'text/html', 'HTTP_ACCEPT_LANGUAGE' => 'en' ) );
+		$this->request(
+			'Mozilla/5.0 (Windows NT 10.0) Chrome/126.0',
+			'/',
+			array(
+				'HTTP_ACCEPT'          => 'text/html',
+				'HTTP_ACCEPT_LANGUAGE' => 'en',
+			)
+		);
 		$this->assertSame( 'served', $this->inspect() );
 		$this->assertSame( array(), $this->http, 'no lookup for a visitor who is not a bot' );
 		$this->assertArrayNotHasKey( Bot_Stats::OPTION, $this->options, 'nothing is written for a visitor who is not a bot' );
@@ -248,7 +272,14 @@ class BotGuardTest extends TestCase {
 		$bot( '/wp-json/wp/v2/types' );
 		$this->assertNull( ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( '/wc/store/v1/cart' ) ) );
 		$this->server_says( 'block' );
-		$this->request( 'Mozilla/5.0 Chrome/126.0', '/wp-json/wp/v2/types', array( 'HTTP_ACCEPT' => 'text/html', 'HTTP_ACCEPT_LANGUAGE' => 'en' ) );
+		$this->request(
+			'Mozilla/5.0 Chrome/126.0',
+			'/wp-json/wp/v2/types',
+			array(
+				'HTTP_ACCEPT'          => 'text/html',
+				'HTTP_ACCEPT_LANGUAGE' => 'en',
+			)
+		);
 		$this->assertNull( ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( '/wc/store/v1/cart' ) ) );
 	}
 
@@ -302,7 +333,15 @@ class BotGuardTest extends TestCase {
 		Functions\when( 'wp_doing_ajax' )->justReturn( true );
 		$_REQUEST['action'] = 'woocommerce_get_variation';
 		$this->request( 'curl/8.4.0', '/wp-admin/admin-ajax.php' );
-		$data = ( new Bot_Guard() )->variation( array( 'display_price' => 20, 'max_qty' => 5, 'availability_html' => '5 in stock' ), null, $this->product( true, '20.00', 7 ) );
+		$data = ( new Bot_Guard() )->variation(
+			array(
+				'display_price'     => 20,
+				'max_qty'           => 5,
+				'availability_html' => '5 in stock',
+			),
+			null,
+			$this->product( true, '20.00', 7 )
+		);
 		unset( $_REQUEST['action'] );
 		$this->assertSame( Bot_Guard::substitute_price( 20, 7 ), $data['display_price'] );
 		$this->assertSame( '', $data['max_qty'] );
@@ -314,7 +353,7 @@ class BotGuardTest extends TestCase {
 		$this->server_says( 'substitute' );
 		$this->request( 'curl/8.4.0', '/product/shirt/?wc-api=x' );
 		$_GET['wc-api'] = 'x';
-		$html = ( new Bot_Guard() )->price_html( '<span>20.00</span>', $this->product() );
+		$html           = ( new Bot_Guard() )->price_html( '<span>20.00</span>', $this->product() );
 		unset( $_GET['wc-api'] );
 		$this->assertSame( '<span>20.00</span>', $html );
 	}
@@ -337,7 +376,14 @@ class BotGuardTest extends TestCase {
 
 	public function test_a_person_response_is_not_marked_uncacheable() {
 		$this->server_says( 'substitute' );
-		$this->request( 'Mozilla/5.0 Chrome/126.0', '/', array( 'HTTP_ACCEPT' => 'text/html', 'HTTP_ACCEPT_LANGUAGE' => 'en' ) );
+		$this->request(
+			'Mozilla/5.0 Chrome/126.0',
+			'/',
+			array(
+				'HTTP_ACCEPT'          => 'text/html',
+				'HTTP_ACCEPT_LANGUAGE' => 'en',
+			)
+		);
 		( new Bot_Guard() )->price_html( 'x', $this->product() );
 		( new Bot_Guard() )->availability_text( 'x', $this->product() );
 		$this->assertSame( 0, $this->nocache );
@@ -368,7 +414,11 @@ class BotGuardTest extends TestCase {
 		$this->request( 'Mozilla/5.0 (compatible; Googlebot/2.1)' );
 		$this->inspect();
 		$this->assertSame(
-			array( 'bad_bot' => 2, 'ai_agent' => 0, 'info_bot' => 1 ),
+			array(
+				'bad_bot'  => 2,
+				'ai_agent' => 0,
+				'info_bot' => 1,
+			),
 			Bot_Stats::totals( 30 )
 		);
 		$stored = json_encode( $this->options[ Bot_Stats::OPTION ] );
@@ -401,7 +451,14 @@ class BotGuardTest extends TestCase {
 
 	public function test_a_person_sees_the_shops_own_stock_text_and_prices() {
 		$this->server_says( 'substitute' );
-		$this->request( 'Mozilla/5.0 Chrome/126.0', '/', array( 'HTTP_ACCEPT' => 'text/html', 'HTTP_ACCEPT_LANGUAGE' => 'en' ) );
+		$this->request(
+			'Mozilla/5.0 Chrome/126.0',
+			'/',
+			array(
+				'HTTP_ACCEPT'          => 'text/html',
+				'HTTP_ACCEPT_LANGUAGE' => 'en',
+			)
+		);
 		$guard = new Bot_Guard();
 		$this->assertSame( '5 in stock', $guard->availability_text( '5 in stock', $this->product() ) );
 		$this->assertSame( '<span>20.00</span>', $guard->price_html( '<span>20.00</span>', $this->product() ) );
@@ -413,7 +470,15 @@ class BotGuardTest extends TestCase {
 		$this->request( 'curl/8.4.0' );
 		$guard = new Bot_Guard();
 		$this->assertSame( '<span>20.00</span>', $guard->price_html( '<span>20.00</span>', $this->product() ) );
-		$data = $guard->variation( array( 'max_qty' => 3, 'display_price' => 20, 'availability_html' => '<p>3 left</p>' ), null, $this->product() );
+		$data = $guard->variation(
+			array(
+				'max_qty'           => 3,
+				'display_price'     => 20,
+				'availability_html' => '<p>3 left</p>',
+			),
+			null,
+			$this->product()
+		);
 		$this->assertSame( 20, $data['display_price'] );
 		$this->assertSame( '', $data['max_qty'] );
 		$this->assertStringNotContainsString( '3 left', $data['availability_html'] );
@@ -434,13 +499,28 @@ class BotGuardTest extends TestCase {
 			$factors[ (string) Bot_Guard::substitute_price( 100, $id ) ] = true;
 		}
 		$this->assertGreaterThan( 5, count( $factors ), 'products get different factors' );
-		$data = $guard->variation( array( 'display_price' => 20, 'display_regular_price' => 25, 'price_html' => 'x' ), null, $this->product( true, '20.00', 7 ) );
+		$data = $guard->variation(
+			array(
+				'display_price'         => 20,
+				'display_regular_price' => 25,
+				'price_html'            => 'x',
+			),
+			null,
+			$this->product( true, '20.00', 7 )
+		);
 		$this->assertSame( Bot_Guard::substitute_price( 20, 7 ), $data['display_price'] );
 		$this->assertSame( Bot_Guard::substitute_price( 25, 7 ), $data['display_regular_price'] );
 	}
 
 	public function test_substitute_mode_also_changes_the_price_in_the_structured_data() {
-		$markup = array( 'price' => '20.00', 'priceSpecification' => array( 'price' => '20.00', 'priceCurrency' => 'EUR' ), 'availability' => 'https://schema.org/InStock' );
+		$markup = array(
+			'price'              => '20.00',
+			'priceSpecification' => array(
+				'price'         => '20.00',
+				'priceCurrency' => 'EUR',
+			),
+			'availability'       => 'https://schema.org/InStock',
+		);
 
 		$this->server_says( 'flag' );
 		$this->request( 'curl/8.4.0' );
@@ -454,12 +534,28 @@ class BotGuardTest extends TestCase {
 		$this->assertSame( 'EUR', $out['priceSpecification']['priceCurrency'] );
 
 		// WooCommerce's own shape: a list of specifications.
-		$listed = array( 'price' => '20.00', 'priceSpecification' => array( array( '@type' => 'UnitPriceSpecification', 'price' => '20.00', 'priceCurrency' => 'USD' ) ) );
+		$listed = array(
+			'price'              => '20.00',
+			'priceSpecification' => array(
+				array(
+					'@type'         => 'UnitPriceSpecification',
+					'price'         => '20.00',
+					'priceCurrency' => 'USD',
+				),
+			),
+		);
 		$out    = ( new Bot_Guard() )->structured_offer( $listed, $this->product( true, '20.00', 7 ) );
 		$this->assertSame( (string) Bot_Guard::substitute_price( 20, 7 ), $out['priceSpecification'][0]['price'] );
 		$this->assertSame( 'UnitPriceSpecification', $out['priceSpecification'][0]['@type'] );
 
-		$this->request( 'Mozilla/5.0 Chrome/126.0', '/', array( 'HTTP_ACCEPT' => 'text/html', 'HTTP_ACCEPT_LANGUAGE' => 'en' ) );
+		$this->request(
+			'Mozilla/5.0 Chrome/126.0',
+			'/',
+			array(
+				'HTTP_ACCEPT'          => 'text/html',
+				'HTTP_ACCEPT_LANGUAGE' => 'en',
+			)
+		);
 		$this->assertSame( $markup, ( new Bot_Guard() )->structured_offer( $markup, $this->product() ), 'a person gets the real one' );
 		$this->assertSame( $listed, ( new Bot_Guard() )->structured_offer( $listed, $this->product() ) );
 	}
@@ -483,7 +579,16 @@ class BotGuardTest extends TestCase {
 		};
 		unset( $request );
 		$products = array(
-			array( 'id' => 7, 'low_stock_remaining' => 2, 'prices' => array( 'price' => '2000', 'regular_price' => '2500', 'sale_price' => '2000', 'currency_code' => 'EUR' ) ),
+			array(
+				'id'                  => 7,
+				'low_stock_remaining' => 2,
+				'prices'              => array(
+					'price'         => '2000',
+					'regular_price' => '2500',
+					'sale_price'    => '2000',
+					'currency_code' => 'EUR',
+				),
+			),
 		);
 		$response = new class( $products ) {
 			public $data;
@@ -513,7 +618,7 @@ class BotGuardTest extends TestCase {
 	}
 
 	public function test_a_store_api_answer_for_a_person_or_another_route_is_untouched() {
-		$route = new class() extends \WP_REST_Request {
+		$route    = new class() extends \WP_REST_Request {
 			public function get_route() {
 				return '/wc/v3/products';
 			}
@@ -541,9 +646,9 @@ class BotGuardTest extends TestCase {
 		$this->request( 'python-requests/2.31.0', '/checkout/', array( 'REQUEST_METHOD' => 'POST' ) );
 		$this->assertSame( 'served', $this->inspect() );
 
-		$order = new \WC_Order( array( 'id' => 77 ) );
+		$order            = new \WC_Order( array( 'id' => 77 ) );
 		$this->orders[77] = $order;
-		$flag = new Not_Human();
+		$flag             = new Not_Human();
 		$flag->flag_classic( $order, array() );
 		$flag->note_new_order( 77 );
 
@@ -599,10 +704,18 @@ class BotGuardTest extends TestCase {
 				'price'         => '990',
 				'regular_price' => '1290',
 				'sale_price'    => '990',
-				'price_range'   => (object) array( 'min_amount' => '990', 'max_amount' => '1990' ),
+				'price_range'   => (object) array(
+					'min_amount' => '990',
+					'max_amount' => '1990',
+				),
 				'currency_code' => 'USD',
 			),
-			'variations'          => array( array( 'id' => 25, 'attributes' => array() ) ),
+			'variations'          => array(
+				array(
+					'id'         => 25,
+					'attributes' => array(),
+				),
+			),
 		);
 	}
 
@@ -661,7 +774,12 @@ class BotGuardTest extends TestCase {
 			$this->server_says( $mode );
 			$this->request( 'curl/8.4.0' );
 			$product                = $this->real_product();
-			$product['add_to_cart'] = (object) array( 'text' => 'Add to cart', 'minimum' => 1, 'maximum' => 37, 'multiple_of' => 1 );
+			$product['add_to_cart'] = (object) array(
+				'text'        => 'Add to cart',
+				'minimum'     => 1,
+				'maximum'     => 37,
+				'multiple_of' => 1,
+			);
 			$out                    = ( new Bot_Guard() )->store_api( $this->store_api_response( $product ), null, $this->store_route( '/wc/store/v1/products/24' ) )->data;
 			$this->assertNull( $out['low_stock_remaining'], $mode );
 			$this->assertSame( 9999, $out['add_to_cart']->maximum, $mode );
@@ -691,7 +809,14 @@ class BotGuardTest extends TestCase {
 	public function test_the_collection_data_price_range_has_no_real_price_in_substitute_mode() {
 		$this->server_says( 'substitute' );
 		$this->request( 'curl/8.4.0' );
-		$data = array( 'price_range' => (object) array( 'min_price' => '990', 'max_price' => '1990', 'currency_code' => 'USD' ), 'attribute_counts' => array() );
+		$data = array(
+			'price_range'      => (object) array(
+				'min_price'     => '990',
+				'max_price'     => '1990',
+				'currency_code' => 'USD',
+			),
+			'attribute_counts' => array(),
+		);
 		$out  = ( new Bot_Guard() )->store_api( $this->store_api_response( $data ), null, $this->store_route( '/wc/store/v1/products/collection-data' ) )->data;
 		$this->assertNotSame( '990', $out['price_range']->min_price );
 		$this->assertNotSame( '1990', $out['price_range']->max_price );
@@ -782,17 +907,264 @@ class BotGuardTest extends TestCase {
 		$this->assertStringContainsString( '"price":"4747"', $out, 'flag mode shows the selling price' );
 	}
 
-	public function test_the_hydrated_json_of_a_block_theme_page_gets_substitute_prices_in_substitute_mode() {
+	public function test_the_hydrated_json_of_a_block_theme_page_loses_what_the_data_level_did_not_produce() {
 		$this->server_says( 'substitute' );
 		$this->request( 'curl/8.4.0' );
 		$out = ( new Bot_Guard() )->clean_page( $this->hydrated_page() );
-		$this->assertStringNotContainsString( '4747', $out );
-		$this->assertStringNotContainsString( '1990', $out );
-		$this->assertStringNotContainsString( '2990', $out );
-		$this->assertStringContainsString( '"price":"' . (int) round( Bot_Guard::substitute_price( 4747, 24 ) ) . '"', $out, 'the factor of the product id before the prices' );
-		$this->assertStringContainsString( '&quot;min_amount&quot;:&quot;' . (int) round( Bot_Guard::substitute_price( 1990, 30 ) ) . '&quot;', $out );
+		foreach ( array( '4747', '1990', '2990' ) as $real ) {
+			$this->assertStringNotContainsString( $real, $out );
+		}
+		$this->assertStringContainsString( '"price":"0"', $out );
+		$this->assertStringContainsString( '&quot;min_amount&quot;:&quot;0&quot;', $out );
 		$this->assertStringContainsString( '"currency_code":"USD"', $out );
 		$this->assertStringContainsString( '"low_stock_remaining":null', $out );
+	}
+
+	public function test_what_the_data_level_produced_for_the_product_is_kept_in_the_page_and_nothing_is_scaled() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		$guard = new Bot_Guard();
+		$api   = $guard->store_api(
+			$this->store_api_response(
+				array(
+					'id'     => 24,
+					'prices' => (object) array(
+						'price'         => '4747',
+						'regular_price' => '5000',
+					),
+				)
+			),
+			null,
+			$this->store_route( '/wc/store/v1/products/24' )
+		)->data['prices'];
+		$page  = '<script>{"id":24,"prices":{"price":"' . $api->price . '","regular_price":"' . $api->regular_price . '"}}</script>';
+		$this->assertSame( $page, $guard->clean_page( $page ), 'the numbers the server produced stay as they are' );
+		$this->assertNotSame( '4747', $api->price );
+		$other = '<script>{"id":25,"prices":{"price":"' . $api->price . '"}}</script>';
+		$this->assertStringContainsString( '"price":"0"', $guard->clean_page( $other ), 'the same number for another product is not kept' );
+		$real = '<script>{"id":24,"prices":{"price":"4747","regular_price":"5000"}}</script>';
+		$this->assertSame( '<script>{"id":24,"prices":{"price":"0","regular_price":"0"}}</script>', $guard->clean_page( $real ), 'a real price that reaches the page is removed, not scaled' );
+	}
+
+	public function test_text_with_a_price_and_an_id_gives_a_bot_nothing_to_measure() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		$guard = new Bot_Guard();
+		$seen  = array();
+		foreach ( array( 5, 24, 777, 123456 ) as $id ) {
+			$out    = $guard->clean_page( '<p>"price":"10000","id":' . $id . '</p><p>"id":' . $id . ',"price":"10000"</p>' );
+			$seen[] = str_replace( (string) $id, 'ID', $out );
+			$this->assertStringNotContainsString( '10000', $out );
+		}
+		$this->assertCount( 1, array_unique( $seen ), 'the same for every id: the number is removed, never scaled, so there is no factor to read' );
+		$this->assertSame( '<p>"price":"0","id":ID</p><p>"id":ID,"price":"0"</p>', $seen[0] );
+	}
+
+	public function test_a_promotion_equal_to_the_substitute_of_the_regular_price_never_comes_out_as_a_real_price() {
+		// Pick a product whose factor today is exactly 0.85, so the substitute of 100 is 85, the same as the sale price.
+		$id = null;
+		for ( $i = 1; $i < 400 && null === $id; $i++ ) {
+			if ( 85.0 === Bot_Guard::substitute_price( 100, $i ) ) {
+				$id = $i;
+			}
+		}
+		$this->assertNotNull( $id, 'a product with the lowest factor exists among 400' );
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		$guard = new Bot_Guard();
+		$api   = $guard->store_api(
+			$this->store_api_response(
+				array(
+					'id'     => $id,
+					'prices' => (object) array(
+						'price'         => '8500',
+						'regular_price' => '10000',
+						'sale_price'    => '8500',
+					),
+				)
+			),
+			null,
+			$this->store_route( '/wc/store/v1/products/' . $id )
+		)->data['prices'];
+		$this->assertSame( (string) (int) round( Bot_Guard::substitute_price( 8500, $id ) ), $api->sale_price, 'the real sale price is replaced' );
+		$page = $guard->clean_page( '<script>{"id":' . $id . ',"prices":{"price":"8500","sale_price":"8500"}}</script>' );
+		$this->assertStringNotContainsString( '8500', $page, 'the real 85 is not in the page, because 85 is also a substitute and cannot be told apart' );
+	}
+
+	/**
+	 * A product stand-in: prices as the getters give them, a parent for a variation, children for a variable product.
+	 */
+	private function fake_product( $id, $regular, $sale, $parent = 0, array $children = array(), $sold_individually = false ) {
+		return new class( $id, $regular, $sale, $parent, $children, $sold_individually ) {
+			public function __construct( private $id, private $regular, private $sale, private $parent, private array $children, private bool $single ) {}
+			public function get_id() {
+				return $this->id;
+			}
+			public function get_parent_id() {
+				return $this->parent;
+			}
+			public function get_regular_price() {
+				return $this->regular;
+			}
+			public function get_sale_price() {
+				return $this->sale;
+			}
+			public function get_price() {
+				return '' !== (string) $this->sale ? $this->sale : $this->regular;
+			}
+			public function is_type( $type ) {
+				return 'variable' === $type && array() !== $this->children;
+			}
+			public function get_children() {
+				return $this->children;
+			}
+			public function is_in_stock() {
+				return true;
+			}
+			public function is_sold_individually() {
+				return $this->single;
+			}
+		};
+	}
+
+	public function test_a_substitute_is_never_equal_to_another_real_price_of_the_same_product() {
+		$products = array();
+		Functions\when( 'wc_get_product' )->alias(
+			function ( $id ) use ( &$products ) {
+				return $products[ (int) $id ] ?? false;
+			}
+		);
+		$id = null;
+		for ( $i = 1; $i < 400 && null === $id; $i++ ) {
+			if ( 85.0 === Bot_Guard::substitute_price( 100, $i ) ) {
+				$id = $i; // Without the rule, the regular price 100 would be shown as the real sale price 85.
+			}
+		}
+		$this->assertNotNull( $id );
+		$products[ $id ] = $this->fake_product( $id, '100', '85' );
+		Bot_Guard::reset();
+		$regular = Bot_Guard::substitute_price( 100, $id );
+		$sale    = Bot_Guard::substitute_price( 85, $id );
+		$this->assertNotSame( 85.0, $regular, 'the real 85 does not appear as the substitute of the regular price' );
+		$this->assertNotSame( 100.0, $regular );
+		$this->assertNotSame( 100.0, $sale, 'nor the real 100 as the substitute of the sale price' );
+		$this->assertNotSame( 85.0, $sale );
+		$this->assertGreaterThanOrEqual( 85.0, $regular );
+		$this->assertLessThanOrEqual( 115.0, $regular );
+		$this->assertSame( $regular, Bot_Guard::substitute_price( 100, $id ), 'and it is the same all day' );
+	}
+
+	public function test_the_answer_and_the_page_agree_on_a_variable_product() {
+		$products = array(
+			10 => $this->fake_product( 10, '60', '', 0, array( 11, 12 ) ),
+			11 => $this->fake_product( 11, '60', '', 10 ),
+			12 => $this->fake_product( 12, '70', '', 10 ),
+		);
+		Functions\when( 'wc_get_product' )->alias( fn( $id ) => $products[ (int) $id ] ?? false );
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		$guard = new Bot_Guard();
+		$api   = $guard->store_api(
+			$this->store_api_response(
+				array(
+					'id'     => 10,
+					'prices' => (object) array(
+						'price'       => '6000',
+						'price_range' => (object) array(
+							'min_amount' => '6000',
+							'max_amount' => '7000',
+						),
+					),
+				)
+			),
+			null,
+			$this->store_route( '/wc/store/v1/products/10' )
+		)->data['prices'];
+		$page  = array();
+		foreach ( array(
+			11 => 60,
+			12 => 70,
+		) as $vid => $real ) {
+			$data   = $guard->variation(
+				array(
+					'display_price'         => $real,
+					'display_regular_price' => $real,
+				),
+				$products[10],
+				$products[ $vid ]
+			);
+			$page[] = (int) round( $data['display_price'] * 100 );
+		}
+		$this->assertSame( (int) $api->price_range->min_amount, $page[0], 'the lowest variation on the page is the minimum of the answer' );
+		$this->assertSame( (int) $api->price_range->max_amount, $page[1], 'the highest variation on the page is the maximum of the answer' );
+		$this->assertNotSame( '6000', $api->price_range->min_amount );
+	}
+
+	public function test_the_page_keeps_a_variation_price_the_data_level_produced_and_removes_any_other() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		$guard = new Bot_Guard();
+		$data  = $guard->variation(
+			array(
+				'variation_id'          => 11,
+				'display_price'         => 60,
+				'display_regular_price' => 60,
+				'variation_description' => '',
+			),
+			null,
+			$this->fake_product( 11, '60', '', 10 )
+		);
+		$this->assertSame( 'variation_id', array_key_first( $data ) );
+		$json = wp_json_encode( $data );
+		$out  = $guard->clean_page( '<form data-product_variations="' . esc_attr( $json ) . '"></form><p>{"display_price":77,"variation_id":11}</p>' );
+		$this->assertStringContainsString( '"display_price":' . $data['display_price'], html_entity_decode( $out ), 'the substitute of the data level stays' );
+		$this->assertStringContainsString( '"display_price":0', $out, 'a number the data level did not produce is removed' );
+	}
+
+	public function test_the_quantity_field_shows_no_stock_to_a_bad_bot() {
+		$this->server_says( 'flag' );
+		$this->request( 'curl/8.4.0' );
+		$guard = new Bot_Guard();
+		$this->assertSame( -1, $guard->quantity_max( 2, $this->fake_product( 5, '10', '' ) ) );
+		$args = $guard->quantity_args(
+			array(
+				'max_value' => 2,
+				'min_value' => 1,
+			),
+			$this->fake_product( 5, '10', '' )
+		);
+		$this->assertSame( '', $args['max_value'] );
+		$this->assertSame( 1, $args['min_value'] );
+		$this->assertSame( 1, $guard->quantity_max( 1, $this->fake_product( 5, '10', '', 0, array(), true ) ), 'sold one at a time says nothing about the stock' );
+		$this->request(
+			'Mozilla/5.0 Chrome/126.0',
+			'/',
+			array(
+				'HTTP_ACCEPT'          => 'text/html',
+				'HTTP_ACCEPT_LANGUAGE' => 'en',
+				'HTTP_SEC_FETCH_MODE'  => 'navigate',
+				'HTTP_SEC_FETCH_SITE'  => 'none',
+			)
+		);
+		$this->assertSame( 2, ( new Bot_Guard() )->quantity_max( 2, $this->fake_product( 5, '10', '' ) ), 'a visitor still sees the limit' );
+	}
+
+	public function test_the_factor_of_a_product_cannot_be_worked_out_without_the_secret_of_the_site() {
+		$factors = array();
+		foreach ( array( 'salt-one', 'salt-two', 'salt-three' ) as $salt ) {
+			Functions\when( 'wp_salt' )->alias( fn() => $salt );
+			$factors[ $salt ] = array();
+			for ( $id = 1; $id <= 40; $id++ ) {
+				$factors[ $salt ][ $id ] = Bot_Guard::substitute_price( 100, $id );
+			}
+		}
+		$same = count( array_filter( array_keys( $factors['salt-one'] ), fn( $id ) => $factors['salt-one'][ $id ] === $factors['salt-two'][ $id ] ) );
+		$this->assertLessThan( 10, $same, 'another secret gives other factors' );
+		$this->assertGreaterThan( 5, count( array_unique( $factors['salt-one'] ) ), 'and the factors differ between products' );
+		$source = file_get_contents( dirname( __DIR__, 3 ) . '/includes/class-bot-guard.php' );
+		$this->assertStringContainsString( "hash_hmac( 'sha256'", $source );
+		$this->assertStringContainsString( "wp_salt( 'auth' )", $source );
+		$this->assertStringNotContainsString( 'crc32', $source, 'no unkeyed checksum decides a factor' );
 	}
 
 	public function test_a_page_with_nothing_to_clean_is_returned_as_it_is() {
@@ -806,7 +1178,14 @@ class BotGuardTest extends TestCase {
 	public function test_the_buffer_is_started_only_for_a_bad_bot_that_the_module_acts_on() {
 		$this->server_says( 'substitute' );
 		$level = ob_get_level();
-		$this->request( 'Mozilla/5.0 Chrome/126.0', '/', array( 'HTTP_ACCEPT' => 'text/html', 'HTTP_ACCEPT_LANGUAGE' => 'en' ) );
+		$this->request(
+			'Mozilla/5.0 Chrome/126.0',
+			'/',
+			array(
+				'HTTP_ACCEPT'          => 'text/html',
+				'HTTP_ACCEPT_LANGUAGE' => 'en',
+			)
+		);
 		( new Bot_Guard() )->start_buffer();
 		$this->assertSame( $level, ob_get_level(), 'a person: no buffer' );
 		$this->request( 'curl/8.4.0' );
@@ -836,7 +1215,14 @@ class BotGuardTest extends TestCase {
 		$this->request( 'curl/8.4.0' );
 		$guard = new Bot_Guard();
 		$inner = $guard->store_api( $this->store_api_response( $this->real_product() ), null, $this->store_route( '/wc/store/v1/products/24' ) )->data;
-		$batch = array( 'responses' => array( array( 'status' => 200, 'body' => $inner ) ) );
+		$batch = array(
+			'responses' => array(
+				array(
+					'status' => 200,
+					'body'   => $inner,
+				),
+			),
+		);
 		$out   = $guard->store_api( $this->store_api_response( $batch ), null, $this->store_route( '/wc/store/v1/batch' ) )->data;
 		$this->assertSame( $inner['prices']->price, $out['responses'][0]['body']['prices']->price, 'not substituted a second time' );
 		$this->assertNull( $out['responses'][0]['body']['low_stock_remaining'] );
@@ -845,7 +1231,16 @@ class BotGuardTest extends TestCase {
 	public function test_every_key_of_the_one_list_is_covered_by_the_api_filter() {
 		$this->server_says( 'flag' );
 		$this->request( 'curl/8.4.0' );
-		$data = array( 'low_stock_remaining' => 2, 'stock_quantity' => 12, 'quantity_in_stock' => 3, 'quantity_limits' => (object) array( 'minimum' => 1, 'maximum' => 12 ), 'add_to_cart' => array( 'maximum' => '5' ) );
+		$data = array(
+			'low_stock_remaining' => 2,
+			'stock_quantity'      => 12,
+			'quantity_in_stock'   => 3,
+			'quantity_limits'     => (object) array(
+				'minimum' => 1,
+				'maximum' => 12,
+			),
+			'add_to_cart'         => array( 'maximum' => '5' ),
+		);
 		$out  = ( new Bot_Guard() )->store_api( $this->store_api_response( $data ), null, $this->store_route( '/wc/store/v1/products/24' ) )->data;
 		foreach ( Bot_Guard::NULL_KEYS as $key ) {
 			$this->assertNull( $out[ $key ], $key );
@@ -866,14 +1261,14 @@ class BotGuardTest extends TestCase {
 
 	public function dresses() {
 		return array(
-			'plain'        => array( '"' ),
-			'escaped'      => array( '\\"' ),
-			'double'       => array( '\\\\"' ),
-			'entity name'  => array( '&quot;' ),
-			'entity num'   => array( '&#34;' ),
-			'entity hex'   => array( '&#x22;' ),
-			'percent'      => array( '%22' ),
-			'unicode'      => array( '\\u0022' ),
+			'plain'       => array( '"' ),
+			'escaped'     => array( '\\"' ),
+			'double'      => array( '\\\\"' ),
+			'entity name' => array( '&quot;' ),
+			'entity num'  => array( '&#34;' ),
+			'entity hex'  => array( '&#x22;' ),
+			'percent'     => array( '%22' ),
+			'unicode'     => array( '\\u0022' ),
 		);
 	}
 
@@ -901,7 +1296,7 @@ class BotGuardTest extends TestCase {
 		foreach ( array( '4747', '5000' ) as $real ) {
 			$this->assertStringNotContainsString( $real, $out, $quote );
 		}
-		$this->assertStringContainsString( 'price' . $quote . ':' . $quote . (int) round( Bot_Guard::substitute_price( 4747, 24 ) ) . $quote, $out );
+		$this->assertStringContainsString( 'price' . $quote . ':' . $quote . '0' . $quote, $out );
 		$this->assertStringNotContainsString( 'socialscore', $out, 'nothing in the page says it was changed' );
 		// A second pass changes nothing.
 		$this->assertSame( $out, ( new Bot_Guard() )->clean_page( $out ) );
@@ -926,7 +1321,7 @@ class BotGuardTest extends TestCase {
 			$this->assertStringNotContainsString( $real, $out, $real );
 		}
 		$this->assertSame( 2, substr_count( $out, 'null' ) );
-		$this->assertMatchesRegularExpression( '/"sale_price":"\d+\.\d{2}"/', $out, 'a decimal stays a decimal with its places' );
+		$this->assertStringContainsString( '"sale_price":"0"', $out );
 	}
 
 	public function test_quantities_go_wherever_the_page_writes_them_in_any_dress_of_the_braces_too() {
@@ -936,7 +1331,7 @@ class BotGuardTest extends TestCase {
 			. '<i data-y="%7b%22add_to_cart%22:%7b%22maximum%22:3%7d,%22quantity_limits%22:%7b%22maximum%22:4%7d%7d">y</i>'
 			. '<script>{"add_to_cart":&lbrace;"maximum":5}</script><b>"quantity_limits"&lbrace;"maximum":6</b>'
 			. '<u>"low_stock_remaining&#34;:&#x32;"</u><s>stock_quantity&lbrace;&quot;:12</s>';
-		$out = ( new Bot_Guard() )->clean_page( $page );
+		$out  = ( new Bot_Guard() )->clean_page( $page );
 		$this->assertSame( 5, substr_count( $out, '9999' ), 'every maximum' );
 		foreach ( array( 'maximum&quot;:2', 'maximum%22:3', 'maximum%22:4', '"maximum":5', '"maximum":6' ) as $real ) {
 			$this->assertStringNotContainsString( $real, $out, $real );
@@ -1005,14 +1400,12 @@ class BotGuardTest extends TestCase {
 		$this->no_real_price_in( $out, array( '4747', '5000', '47.47' ) );
 	}
 
-	public function test_a_price_with_no_id_at_all_is_replaced_by_the_value_and_the_day() {
+	public function test_a_price_with_no_id_at_all_is_removed_not_scaled() {
 		$this->server_says( 'substitute' );
 		$this->request( 'curl/8.4.0' );
-		$guard = new Bot_Guard();
-		$out   = $guard->clean_page( '<p>"price":"4747"</p>' );
-		$this->assertStringContainsString( '"price":"' . (int) round( Bot_Guard::substitute_price( 4747, 0 ) ) . '"', $out );
-		Bot_Guard::reset();
-		$this->assertSame( $out, $guard->clean_page( '<p>"price":"4747"</p>' ), 'the same value on another run of the same day' );
+		$this->assertSame( '<p>"price":"0"</p>', ( new Bot_Guard() )->clean_page( '<p>"price":"4747"</p>' ) );
+		$this->assertSame( '0', Bot_Guard::page_value( '4747', null ) );
+		$this->assertFalse( method_exists( Bot_Guard::class, 'substitute_price_by_value' ) );
 	}
 
 	public function test_two_hundred_and_one_variations_and_more_are_all_replaced() {
@@ -1072,18 +1465,6 @@ class BotGuardTest extends TestCase {
 		$once  = $guard->clean_page( $page );
 		$this->assertSame( $once, $guard->clean_page( $once ) );
 		$this->assertSame( $once, $guard->clean_page( $once ) );
-	}
-
-	public function test_the_page_price_equals_the_api_price_whichever_ran_first() {
-		$this->server_says( 'substitute' );
-		$this->request( 'curl/8.4.0' );
-		$api_first = ( new Bot_Guard() )->store_api( $this->store_api_response( array( 'id' => 24, 'prices' => (object) array( 'price' => '990' ) ) ), null, $this->store_route( '/wc/store/v1/products/24' ) )->data['prices']->price;
-		$page      = ( new Bot_Guard() )->clean_page( '<script>{"id":24,"prices":{"price":"990"}}</script><script>{"id":24,"prices":{"price":"' . $api_first . '"}}</script>' );
-		$this->assertSame( 2, substr_count( $page, '"price":"' . $api_first . '"' ), 'the real price becomes what the API gave, and the API\'s own number stays' );
-		Bot_Guard::reset();
-		$page_first = ( new Bot_Guard() )->clean_page( '<script>{"id":24,"prices":{"price":"990"}}</script>' );
-		$api_second = ( new Bot_Guard() )->store_api( $this->store_api_response( array( 'id' => 24, 'prices' => (object) array( 'price' => '990' ) ) ), null, $this->store_route( '/wc/store/v1/products/24' ) )->data['prices']->price;
-		$this->assertStringContainsString( '"price":"' . $api_second . '"', $page_first );
 	}
 
 	public function test_the_api_answer_run_twice_is_the_same_as_once_and_leaves_no_real_price() {

@@ -50,17 +50,39 @@ class IdentityTest extends TestCase {
 				return $value;
 			}
 		);
-		Functions\when( 'get_userdata' )->alias( fn( $id ) => (object) array( 'ID' => $id, 'user_email' => ' Ivan.Petrov@Example.COM ' ) );
+		Functions\when( 'get_userdata' )->alias(
+			fn( $id ) => (object) array(
+				'ID'         => $id,
+				'user_email' => ' Ivan.Petrov@Example.COM ',
+			)
+		);
 		$this->connect_store();
-		$this->http_responder = fn() => self::response( 200, array( 'enabled' => true, 'site_id' => self::SITE, 'snippet_url' => 'x', 'level2' => $this->server_level2 ) );
+		$this->http_responder = fn() => self::response(
+			200,
+			array(
+				'enabled'     => true,
+				'site_id'     => self::SITE,
+				'snippet_url' => 'x',
+				'level2'      => $this->server_level2,
+			)
+		);
 	}
 
 	private function user() {
-		return (object) array( 'ID' => 3, 'user_email' => 'Ivan.Petrov@example.com' );
+		return (object) array(
+			'ID'         => 3,
+			'user_email' => 'Ivan.Petrov@example.com',
+		);
 	}
 
 	private function order() {
-		return new \WC_Order( array( 'id' => 9, 'billing_email' => 'ivan.petrov@example.com', 'billing_phone' => '+359 88 123 4567' ) );
+		return new \WC_Order(
+			array(
+				'id'            => 9,
+				'billing_email' => 'ivan.petrov@example.com',
+				'billing_phone' => '+359 88 123 4567',
+			)
+		);
 	}
 
 	public function test_the_hash_is_the_sha256_of_the_normalised_value_and_nothing_else() {
@@ -151,7 +173,11 @@ class IdentityTest extends TestCase {
 	public function test_a_queued_event_goes_to_the_identity_route_with_the_hashes_in_the_body() {
 		$this->plugin_switch = true;
 		$this->server_level2 = true;
-		$event               = array( 'type' => 'login', 'at' => '2026-11-13T10:00:00+00:00', 'email_sha256' => str_repeat( 'a', 64 ) );
+		$event               = array(
+			'type'         => 'login',
+			'at'           => '2026-11-13T10:00:00+00:00',
+			'email_sha256' => str_repeat( 'a', 64 ),
+		);
 		( new Identity() )->send( $event );
 		$this->assertSame( 'POST', $this->http[ count( $this->http ) - 1 ]['args']['method'] );
 		$this->assertStringEndsWith( '/api/v2/stores/42/pixel/identity', $this->http[ count( $this->http ) - 1 ]['url'] );
@@ -159,7 +185,11 @@ class IdentityTest extends TestCase {
 	}
 
 	public function test_a_queued_event_is_dropped_when_level_two_was_switched_off_while_it_waited() {
-		$event = array( 'type' => 'login', 'at' => '2026-11-13T10:00:00+00:00', 'email_sha256' => str_repeat( 'a', 64 ) );
+		$event = array(
+			'type'         => 'login',
+			'at'           => '2026-11-13T10:00:00+00:00',
+			'email_sha256' => str_repeat( 'a', 64 ),
+		);
 		foreach ( array( array( false, true ), array( true, false ) ) as $case ) {
 			$this->plugin_switch = $case[0];
 			$this->server_level2 = $case[1];
@@ -181,7 +211,7 @@ class IdentityTest extends TestCase {
 
 	public function test_the_pixel_state_carries_level2_false_unless_socialscore_says_true() {
 		$this->assertFalse( Pixel::state()['level2'] );
-		$this->transients = array();
+		$this->transients    = array();
 		$this->server_level2 = true;
 		$this->assertTrue( Pixel::state()['level2'] );
 	}

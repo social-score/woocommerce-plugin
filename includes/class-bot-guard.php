@@ -37,31 +37,50 @@ class Bot_Guard {
 	const NULL_KEYS     = array( 'low_stock_remaining', 'stock_quantity', 'quantity_in_stock' );
 	const LIMIT_PARENTS = array( 'add_to_cart', 'quantity_limits' );
 	const LIMIT_KEY     = 'maximum';
-	const PRICE_KEYS    = array( 'price', 'regular_price', 'sale_price', 'min_amount', 'max_amount', 'min_price', 'max_price' );
+	const PRICE_KEYS    = array( 'price', 'regular_price', 'sale_price', 'min_amount', 'max_amount', 'min_price', 'max_price', 'display_price', 'display_regular_price' );
 	const FACTOR_BASE   = 85;
 	// 30 steps: 0.85 to 0.99 and 1.01 to 1.15. Never exactly 1.00, which would show the real price.
 	const FACTOR_SPREAD = 30;
 
 	/**
-	 * What THIS request has put in place of a price, kept on the server only (nothing of it reaches the visitor): the numbers
-	 * that came out of substitute_price, in minor units and as decimal text, each with the product it was made for (so a real price
-	 * of another product that happens to equal a substitute is still replaced). A number after a price key that is in here is a
-	 * substitute already and stays; every other number is replaced. So running twice changes nothing, and anything unknown
-	 * (a product no code has seen, any number of variations, text from a review) is replaced rather than skipped.
+	 * What the data-level substitution did in THIS request, kept on the server only (nothing of it reaches the visitor): the
+	 * numbers it produced (`out`) and the real numbers it was given (`in`), each with the product, in minor units and as
+	 * decimal text. Keys are product|number. The page cleaner (a safety net, never a scaler) keeps a number only if the data
+	 * level produced it for that product and it was never also a real number there.
 	 *
-	 * @var array{minor:array<string,bool>,dec:array<string,bool>} Keys are product|number.
+	 * @var array{out:array{minor:array<string,bool>,dec:array<string,bool>},in:array{minor:array<string,bool>,dec:array<string,bool>}}
 	 */
-	private static $out = array(
-		'minor' => array(),
-		'dec'   => array(),
+	private static $seen = array(
+		'out' => array(
+			'minor' => array(),
+			'dec'   => array(),
+		),
+		'in'  => array(
+			'minor' => array(),
+			'dec'   => array(),
+		),
 	);
 
 	/**
-	 * Set when the registry grew past its limit: from then on every number is replaced and nothing is recorded.
+	 * Set when the registry grew past its limit: from then on the page cleaner keeps no number.
 	 *
 	 * @var bool
 	 */
 	private static $overflow = false;
+
+	/**
+	 * Variable product of a variation, and the real prices of a product, by id (kept for the request).
+	 *
+	 * @var array
+	 */
+	private static $roots = array();
+
+	/**
+	 * Real prices by product.
+	 *
+	 * @var array
+	 */
+	private static $real_cache = array();
 
 	/**
 	 * Classification of this request, made once.
@@ -259,12 +278,20 @@ class Bot_Guard {
 	 * @return void
 	 */
 	public static function reset() {
-		self::$current  = null;
-		self::$out      = array(
-			'minor' => array(),
-			'dec'   => array(),
+		self::$current    = null;
+		self::$seen       = array(
+			'out' => array(
+				'minor' => array(),
+				'dec'   => array(),
+			),
+			'in'  => array(
+				'minor' => array(),
+				'dec'   => array(),
+			),
 		);
-		self::$overflow = false;
+		self::$overflow   = false;
+		self::$roots      = array();
+		self::$real_cache = array();
 	}
 
 	/**
@@ -293,6 +320,10 @@ class Bot_Guard {
 		add_filter( 'woocommerce_get_availability_text', array( $this, 'availability_text' ), 10, 2 );
 		add_filter( 'woocommerce_get_price_html', array( $this, 'price_html' ), 10, 2 );
 		add_filter( 'woocommerce_available_variation', array( $this, 'variation' ), 10, 3 );
+		// The quantity field's `max` is the stock: WC_Product::get_max_purchase_quantity applies this filter, and the classic
+		// template, the block theme's quantity selector and the grouped product list all read it from there.
+		add_filter( 'woocommerce_quantity_input_max', array( $this, 'quantity_max' ), 10, 2 );
+		add_filter( 'woocommerce_quantity_input_args', array( $this, 'quantity_args' ), 10, 2 );
 		add_filter( 'woocommerce_structured_data_product_offer', array( $this, 'structured_offer' ), 10, 2 );
 		add_action( 'template_redirect', array( $this, 'start_buffer' ), 0 );
 		add_filter( 'rest_pre_dispatch', array( $this, 'guard_rest' ), 10, 3 );
@@ -301,6 +332,22 @@ class Bot_Guard {
 		add_filter( 'rest_request_after_callbacks', array( $this, 'store_api' ), 10, 3 );
 		// And the served answer as a second line; the scrub is safe to run twice.
 		add_filter( 'rest_post_dispatch', array( $this, 'store_api' ), 10, 3 );
+		// WooCommerce Blocks' hydration (Interactivity API state, preloaded JSON) calls the route handler directly, so neither
+		// REST filter above runs for it; it has its own twin of rest_request_after_callbacks.
+		add_filter( 'woocommerce_hydration_request_after_callbacks', array( $this, 'hydration' ), 10, 3 );
+	}
+
+	/**
+	 * The data level for WooCommerce Blocks' hydration: same scrub as the Store API answers.
+	 *
+	 * @param  mixed            $response Response of the handler.
+	 * @param  mixed            $handler  Route handler (unused).
+	 * @param  \WP_REST_Request $request  Request.
+	 * @return mixed
+	 */
+	public function hydration( $response, $handler, $request ) {
+		unset( $handler );
+		return $this->store_api( $response, null, $request );
 	}
 
 	/**
@@ -514,7 +561,7 @@ class Bot_Guard {
 		if ( '' !== (string) $price ) {
 			self::no_cache();
 		}
-		return '' === (string) $price ? $html : '<span class="price">' . wc_price( self::substitute_price( $price, $product->get_id() ) ) . '</span>';
+		return '' === (string) $price ? $html : '<span class="price">' . wc_price( self::substitute_and_note( $price, $product->get_id() ) ) . '</span>';
 	}
 
 	/**
@@ -532,7 +579,7 @@ class Bot_Guard {
 		$id = $product->get_id();
 		foreach ( array( 'price', 'lowPrice', 'highPrice' ) as $key ) {
 			if ( isset( $markup[ $key ] ) && is_numeric( $markup[ $key ] ) ) {
-				$markup[ $key ] = (string) self::substitute_price( $markup[ $key ], $id );
+				$markup[ $key ] = (string) self::substitute_and_note( $markup[ $key ], $id );
 			}
 		}
 		// WooCommerce prints `priceSpecification` as a list of specifications; a single one is also taken.
@@ -544,7 +591,7 @@ class Bot_Guard {
 			}
 			foreach ( $specs as $i => $spec ) {
 				if ( is_array( $spec ) && isset( $spec['price'] ) && is_numeric( $spec['price'] ) ) {
-					$specs[ $i ]['price'] = (string) self::substitute_price( $spec['price'], $id );
+					$specs[ $i ]['price'] = (string) self::substitute_and_note( $spec['price'], $id );
 				}
 			}
 			$markup['priceSpecification'] = isset( $one ) ? $specs[0] : $specs;
@@ -563,9 +610,41 @@ class Bot_Guard {
 	public function shown_price( $price, $product_id ) {
 		if ( Bot_Detector::BAD_BOT === self::current()['class'] && $this->should_inspect() && $this->acts() && self::MODE_SUBSTITUTE === $this->mode() ) {
 			self::no_cache();
-			return self::substitute_price( $price, $product_id );
+			return self::substitute_and_note( $price, $product_id );
 		}
 		return (float) $price;
+	}
+
+	/**
+	 * The most a visitor can put in the quantity field is the stock; a bad bot gets no limit shown (the shop still checks the
+	 * stock when the item is added). An item sold one at a time keeps its 1, which says nothing about the stock.
+	 *
+	 * @param  int|float|string $max     Maximum.
+	 * @param  \WC_Product      $product Product.
+	 * @return int|float|string
+	 */
+	public function quantity_max( $max, $product = null ) {
+		if ( ! $this->should_inspect() || ! $this->acts() || ( is_object( $product ) && method_exists( $product, 'is_sold_individually' ) && $product->is_sold_individually() ) ) {
+			return $max;
+		}
+		self::no_cache();
+		return -1;
+	}
+
+	/**
+	 * The arguments of the quantity field (the classic template): no `max_value`, no `max`.
+	 *
+	 * @param  array       $args    Arguments.
+	 * @param  \WC_Product $product Product.
+	 * @return array
+	 */
+	public function quantity_args( $args, $product = null ) {
+		if ( ! is_array( $args ) || ! $this->should_inspect() || ! $this->acts() || ( is_object( $product ) && method_exists( $product, 'is_sold_individually' ) && $product->is_sold_individually() ) ) {
+			return $args;
+		}
+		self::no_cache();
+		$args['max_value'] = '';
+		return $args;
 	}
 
 	/**
@@ -589,12 +668,14 @@ class Bot_Guard {
 		$data['availability_html'] = '<p class="stock ' . ( $in_stock ? 'in-stock' : 'out-of-stock' ) . '">' . esc_html( $in_stock ? __( 'In stock', 'socialscore' ) : __( 'Out of stock', 'socialscore' ) ) . '</p>';
 		if ( self::MODE_SUBSTITUTE === $this->mode() ) {
 			$id = $variation->get_id();
+			// The id first: the page cleaner (a net) finds the product of a price by the id written before it.
+			$data = array( 'variation_id' => $id ) + $data;
 			foreach ( array( 'display_price', 'display_regular_price' ) as $key ) {
 				if ( isset( $data[ $key ] ) && is_numeric( $data[ $key ] ) ) {
-					$data[ $key ] = self::substitute_price( $data[ $key ], $id );
+					$data[ $key ] = self::substitute_and_note( $data[ $key ], $id );
 				}
 			}
-			$data['price_html'] = '<span class="price">' . wc_price( self::substitute_price( $variation->get_price(), $id ) ) . '</span>';
+			$data['price_html'] = '<span class="price">' . wc_price( self::substitute_and_note( $variation->get_price(), $id ) ) . '</span>';
 		}
 		return $data;
 	}
@@ -607,6 +688,11 @@ class Bot_Guard {
 	 * @return void
 	 */
 	public function start_buffer() {
+		// The data level (the REST filter, the price HTML, the JSON-LD, the variation data, the Pixel events) is the first line. This
+		// is the safety net; a test can switch it off to see what the data level alone leaves.
+		if ( ! (bool) apply_filters( 'socialscore_clean_pages', true ) ) {
+			return;
+		}
 		if ( Bot_Detector::BAD_BOT !== self::current()['class'] || ! $this->should_inspect() || ! $this->acts() ) {
 			return;
 		}
@@ -800,54 +886,129 @@ class Bot_Guard {
 	}
 
 	/**
-	 * What to show instead of a number that stands where a price does, or null to leave it as it is. A number this request
-	 * already produced is left; any other number, whoever it belongs to, is replaced with the substitute of the product named
-	 * by `$hint` (an id the answer or the page names; 0 when there is none: then the value alone, and the day, decide), and the
-	 * result is remembered. The id is only a way to give the same product the same factor in the API and in the page: it can
-	 * never keep a real price from being replaced.
+	 * The two forms a number is remembered in: minor units when it is whole, and decimal text.
 	 *
-	 * @param  string          $text Number as written (digits, maybe a decimal point).
-	 * @param  int|string|null $hint Product id, or null.
+	 * @param  string|float|int $text Number.
+	 * @return array<int,array{0:string,1:string}> Pairs of kind and key.
+	 */
+	private static function forms( $text ) {
+		$text  = (string) $text;
+		$forms = array( array( 'dec', self::dec_key( $text ) ) );
+		if ( false === strpos( $text, '.' ) || floor( (float) $text ) === (float) $text ) {
+			$forms[] = array( 'minor', (string) (int) round( (float) $text ) );
+		}
+		return $forms;
+	}
+
+	/**
+	 * Remembers a number the data level produced (`out`) or was given (`in`) for a product.
+	 *
+	 * @param  string           $which out or in.
+	 * @param  int|string       $product_id Product id.
+	 * @param  string|float|int $text       Number.
+	 * @return void
+	 */
+	private static function remember( $which, $product_id, $text ) {
+		if ( self::$overflow ) {
+			return;
+		}
+		if ( count( self::$seen[ $which ]['minor'] ) + count( self::$seen[ $which ]['dec'] ) >= self::REGISTRY_LIMIT ) {
+			self::$overflow = true;
+			return;
+		}
+		foreach ( self::forms( $text ) as $form ) {
+			self::$seen[ $which ][ $form[0] ][ $product_id . '|' . $form[1] ] = true;
+		}
+	}
+
+	/**
+	 * Whether the data level produced this number for this product and it was never also a real number of that product.
+	 *
+	 * @param  int|string       $product_id Product id.
+	 * @param  string|float|int $text       Number.
+	 * @return bool
+	 */
+	private static function produced( $product_id, $text ) {
+		if ( self::$overflow ) {
+			return false;
+		}
+		foreach ( self::forms( $text ) as $form ) {
+			$key = $product_id . '|' . $form[1];
+			if ( isset( self::$seen['out'][ $form[0] ][ $key ] ) && ! isset( self::$seen['in'][ $form[0] ][ $key ] ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * DATA LEVEL: what to show instead of a price the server read from the product, or null when the number is one this very
+	 * request already produced for the product (a second pass). The factor comes from the product alone, so the text of a page
+	 * can never be made to scale anything, and every substitute is remembered together with the real number it replaced.
+	 *
+	 * @param  string     $text       Number as written (digits, maybe a decimal point).
+	 * @param  int|string $product_id Product id of the answer.
 	 * @return string|null
 	 */
-	public static function shown_value( $text, $hint = null ) {
+	public static function shown_value( $text, $product_id ) {
 		if ( 1 !== preg_match( '/^\d+(?:\.\d+)?$/', (string) $text ) || (float) $text <= 0 ) {
 			return null;
 		}
-		$is_dec = false !== strpos( $text, '.' );
-		$id     = null === $hint || '' === $hint ? 0 : $hint;
-		if ( ! self::$overflow && ( $is_dec ? isset( self::$out['dec'][ $id . '|' . self::dec_key( $text ) ] ) : isset( self::$out['minor'][ $id . '|' . (int) $text ] ) ) ) {
+		if ( self::produced( $product_id, $text ) ) {
 			return null;
 		}
+		self::remember( 'in', $product_id, $text );
+		$is_dec = false !== strpos( $text, '.' );
 		if ( $is_dec ) {
 			$places = strlen( substr( $text, strpos( $text, '.' ) + 1 ) );
-			$shown  = number_format( self::substitute_price( (float) $text, $id ), $places, '.', '' );
-			self::remember( 'dec', $id . '|' . self::dec_key( $shown ) );
-			return $shown;
+			$shown  = number_format( self::substitute_price( (float) $text, $product_id ), $places, '.', '' );
+		} else {
+			$shown = (string) (int) round( self::substitute_price( (int) $text, $product_id ) );
 		}
-		$shown = (string) (int) round( self::substitute_price( (int) $text, $id ) );
-		self::remember( 'minor', $id . '|' . $shown );
+		self::remember( 'out', $product_id, $shown );
 		return $shown;
 	}
 
 	/**
-	 * Remembers a number this request produced; past the limit, stops remembering and replaces everything from then on.
+	 * DATA LEVEL, for a price the server computed itself (the Pixel events, the JSON-LD, a variation): remembers the real number
+	 * and the substitute, and returns the substitute.
 	 *
-	 * @param  string $kind minor or dec.
-	 * @param  string $key  The number.
-	 * @return void
+	 * @param  float|int|string $price      Real price.
+	 * @param  int|string       $product_id Product id.
+	 * @return float
 	 */
-	private static function remember( $kind, $key ) {
-		if ( count( self::$out['minor'] ) + count( self::$out['dec'] ) >= self::REGISTRY_LIMIT ) {
-			self::$overflow = true;
-			return;
+	public static function substitute_and_note( $price, $product_id ) {
+		$shown = self::substitute_price( $price, $product_id );
+		if ( (float) $price > 0 ) {
+			self::remember( 'in', $product_id, $price );
+			self::remember( 'out', $product_id, $shown );
 		}
-		self::$out[ $kind ][ $key ] = true;
+		return $shown;
+	}
+
+	/**
+	 * SAFETY NET for a page: what to put where a number stands after a price key. Never a scaled number, so there is nothing
+	 * to measure: a number the data level produced for this product is kept (null); any other is made `0`.
+	 *
+	 * @param  string          $text Number as written.
+	 * @param  int|string|null $hint Product id written near it in the page; with none, the number is not kept.
+	 * @return string|null
+	 */
+	public static function page_value( $text, $hint = null ) {
+		if ( 1 !== preg_match( '/^\d+(?:\.\d+)?$/', (string) $text ) || (float) $text <= 0 ) {
+			return null;
+		}
+		if ( null !== $hint && '' !== $hint && self::produced( $hint, $text ) ) {
+			return null;
+		}
+		return '0';
 	}
 
 	/**
 	 * The price shown instead of the real one: the real price times a factor between 0.85 and 1.15 that is the same for
-	 * a product all day and differs between sites, so it cannot be averaged out. A price of zero or less stays.
+	 * a product (a variation uses the factor of its variable product, so the answers and the page agree) all day and differs
+	 * between sites, so it cannot be averaged out. A factor that would give another real price of the same product (regular,
+	 * sale, a variation's, a minimum or maximum) is skipped for the next step. A price of zero or less stays.
 	 *
 	 * @param  float|int|string $price      Real price.
 	 * @param  int|string       $product_id Product id.
@@ -858,11 +1019,89 @@ class Bot_Guard {
 		if ( $price <= 0 ) {
 			return $price;
 		}
-		$seed    = abs( crc32( (string) $product_id . '|' . gmdate( 'Y-m-d' ) . '|' . wp_salt() ) );
-		$step    = $seed % self::FACTOR_SPREAD;
-		$percent = self::FACTOR_BASE + $step;
-		$percent = $percent >= 100 ? $percent + 1 : $percent; // Skip 100.
-		$factor  = $percent / 100;
-		return round( $price * $factor, 2 );
+		$root = self::root_id( $product_id );
+		// Keyed with a secret of the site: without it the factor of a product cannot be worked out from its id and the date, not
+		// even by someone who can see a real price and its substitute.
+		$seed                            = (int) hexdec( substr( hash_hmac( 'sha256', (string) $root . '|' . gmdate( 'Y-m-d' ), wp_salt( 'auth' ) ), 0, 8 ) );
+		$real                            = self::real_prices( $root );
+		$real[ self::dec_key( $price ) ] = true;
+		for ( $i = 0; $i < self::FACTOR_SPREAD; $i++ ) {
+			$percent = self::FACTOR_BASE + ( ( $seed + $i ) % self::FACTOR_SPREAD );
+			$percent = $percent >= 100 ? $percent + 1 : $percent; // Skip 100.
+			$shown   = round( $price * $percent / 100, 2 );
+			if ( ! isset( $real[ self::dec_key( $shown ) ] ) && ! isset( $real[ self::dec_key( round( $shown ) ) ] ) ) {
+				return $shown;
+			}
+		}
+		return round( $price * ( self::FACTOR_BASE + ( $seed % self::FACTOR_SPREAD ) + 1 ) / 100, 2 );
+	}
+
+	/**
+	 * The product whose factor a product uses: a variation uses its variable product's.
+	 *
+	 * @param  int|string $product_id Product id.
+	 * @return int|string
+	 */
+	private static function root_id( $product_id ) {
+		if ( ! isset( self::$roots[ $product_id ] ) ) {
+			$root = $product_id;
+			if ( function_exists( 'wc_get_product' ) && is_numeric( $product_id ) ) {
+				$product = wc_get_product( (int) $product_id );
+				if ( is_object( $product ) && method_exists( $product, 'get_parent_id' ) && (int) $product->get_parent_id() > 0 ) {
+					$root = (int) $product->get_parent_id();
+				}
+			}
+			self::$roots[ $product_id ] = $root;
+		}
+		return self::$roots[ $product_id ];
+	}
+
+	/**
+	 * Every real price of a product (and of its variations), as comparison keys, both as written and in minor units.
+	 *
+	 * @param  int|string $root Product id.
+	 * @return array<string,bool>
+	 */
+	private static function real_prices( $root ) {
+		if ( isset( self::$real_cache[ $root ] ) ) {
+			return self::$real_cache[ $root ];
+		}
+		$set = array();
+		if ( function_exists( 'wc_get_product' ) && is_numeric( $root ) ) {
+			$product = wc_get_product( (int) $root );
+			if ( is_object( $product ) ) {
+				$values   = array();
+				$products = array( $product );
+				if ( method_exists( $product, 'is_type' ) && $product->is_type( 'variable' ) && method_exists( $product, 'get_children' ) ) {
+					foreach ( (array) $product->get_children() as $child ) {
+						$child_product = wc_get_product( (int) $child );
+						if ( is_object( $child_product ) ) {
+							$products[] = $child_product;
+						}
+					}
+				}
+				$decimals = function_exists( 'wc_get_price_decimals' ) ? (int) wc_get_price_decimals() : 2;
+				foreach ( $products as $one ) {
+					foreach ( array( 'get_regular_price', 'get_sale_price', 'get_price' ) as $getter ) {
+						if ( method_exists( $one, $getter ) ) {
+							$values[] = $one->$getter();
+						}
+					}
+				}
+				foreach ( $values as $value ) {
+					if ( is_numeric( $value ) && (float) $value > 0 ) {
+						$set[ self::dec_key( $value ) ]                                = true;
+						$set[ self::dec_key( (float) $value * pow( 10, $decimals ) ) ] = true;
+						if ( function_exists( 'wc_get_price_to_display' ) ) {
+							$shown                          = wc_get_price_to_display( $product, array( 'price' => $value ) );
+							$set[ self::dec_key( $shown ) ] = true;
+							$set[ self::dec_key( (float) $shown * pow( 10, $decimals ) ) ] = true;
+						}
+					}
+				}
+			}
+		}
+		self::$real_cache[ $root ] = $set;
+		return $set;
 	}
 }

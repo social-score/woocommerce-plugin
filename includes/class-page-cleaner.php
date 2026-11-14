@@ -21,11 +21,12 @@ defined( 'ABSPATH' ) || exit;
  * - every `low_stock_remaining`, `stock_quantity` and `quantity_in_stock` with a number gets `null`;
  * - every `maximum` with a number below the no-limit value gets the no-limit value (any other `maximum` in the page too: the
  *   price of that is a slider that stops at 9999);
- * - in substitute mode, every number after a price key is replaced with its substitute, unless it is a number this request
- *   already produced (the registry in Bot_Guard, server side, holds only what the server made). So whatever is unknown is
- *   replaced, a second pass changes nothing, and what the text of the page says (an `id` in a review, a figure in a
- *   description) cannot keep a real price in place: the id only picks the factor, so the same product gets the same value in
- *   the API and in the page.
+ * - in substitute mode, every number after a price key is made `0`, unless the data level (the REST filter, the price HTML, the
+ *   JSON-LD, the variation data, the Pixel events: Bot_Guard) produced it for the product whose `id` stands before it. The
+ *   cleaner never scales a number: text from a review or a description, which a bot can write, is only removed, so there is
+ *   no factor to measure. A number the data level produced is kept, a second pass changes nothing; a number that is also a
+ *   real number of that product (a promotion that equals the regular price's substitute) is not kept, as nothing can tell the
+ *   two apart.
  */
 class Page_Cleaner {
 
@@ -77,8 +78,10 @@ class Page_Cleaner {
 	}
 
 	/**
-	 * Replaces every number after a price key that this request did not produce itself. The id written last before it only
-	 * picks the factor (the same product gets the same value in the API and in the page).
+	 * The safety net for prices. Every number after a price key is made `0`, unless the data level produced it for the
+	 * product whose `id` stands before it (and it was never also a real number of that product). Nothing here ever scales a
+	 * number, so what the page's own text says (a review with a price and an id) can only be removed, and nobody can
+	 * measure a factor from it.
 	 *
 	 * @param  string $html Page.
 	 * @return string
@@ -87,14 +90,14 @@ class Page_Cleaner {
 		$keys = implode( '|', array_map( 'preg_quote', Bot_Guard::PRICE_KEYS ) );
 		$last = null;
 		return (string) preg_replace_callback(
-			'/(?<![a-z_])id' . self::GAP . '(\d+)|((?<![a-z_])(?:' . $keys . ')' . self::GAP . ')(\d+(?:\.\d+)?)/i',
+			'/(?<![a-z_])(?:variation_)?id' . self::GAP . '(\d+)|((?<![a-z_])(?:' . $keys . ')' . self::GAP . ')(\d+(?:\.\d+)?)/i',
 			static function ( $m ) use ( &$last ) {
 				if ( ! isset( $m[3] ) || '' === $m[3] ) {
 					$last = $m[1];
 					return $m[0];
 				}
-				$shown = Bot_Guard::shown_value( $m[3], $last );
-				return null === $shown ? $m[0] : $m[2] . $shown;
+				$replacement = Bot_Guard::page_value( $m[3], $last );
+				return null === $replacement ? $m[0] : $m[2] . $replacement;
 			},
 			$html
 		);

@@ -146,11 +146,11 @@ class BotVerifierTest extends TestCase {
 
 	public function test_the_daily_job_downloads_the_published_files_into_one_option() {
 		$by_url = array(
-			'https://developers.google.com/static/crawling/ipranges/common-crawlers.json'  => array( 'prefixes' => array( array( 'ipv4Prefix' => '66.249.64.0/19' ) ) ),
+			'https://developers.google.com/static/crawling/ipranges/common-crawlers.json' => array( 'prefixes' => array( array( 'ipv4Prefix' => '66.249.64.0/19' ) ) ),
 			'https://developers.google.com/static/crawling/ipranges/special-crawlers.json' => array( 'prefixes' => array( array( 'ipv4Prefix' => '66.249.90.0/27' ) ) ),
-			'https://www.bing.com/toolbox/bingbot.json'                                   => array( 'prefixes' => array( array( 'ipv4Prefix' => '157.55.39.0/24' ) ) ),
-			'https://www.cloudflare.com/ips-v4'                                           => "173.245.48.0/20\n103.21.244.0/22\n",
-			'https://www.cloudflare.com/ips-v6'                                           => "2400:cb00::/32\njunk\n",
+			'https://www.bing.com/toolbox/bingbot.json' => array( 'prefixes' => array( array( 'ipv4Prefix' => '157.55.39.0/24' ) ) ),
+			'https://www.cloudflare.com/ips-v4'         => "173.245.48.0/20\n103.21.244.0/22\n",
+			'https://www.cloudflare.com/ips-v6'         => "2400:cb00::/32\njunk\n",
 		);
 		$this->files( $by_url );
 		unset( $this->options[ Bot_Verifier::OPTION ] );
@@ -300,8 +300,20 @@ class BotVerifierTest extends TestCase {
 	}
 
 	public function test_another_header_name_can_be_chosen_for_a_trusted_proxy() {
-		$this->settings( array( 'trusted_proxies' => array( '198.51.100.0/24' ), 'header' => 'X-Real-IP' ) );
-		$this->as_bot( self::GOOGLEBOT, '198.51.100.7', array( 'HTTP_X_REAL_IP' => self::GOOGLE_IP, 'HTTP_X_FORWARDED_FOR' => self::OTHER_IP ) );
+		$this->settings(
+			array(
+				'trusted_proxies' => array( '198.51.100.0/24' ),
+				'header'          => 'X-Real-IP',
+			)
+		);
+		$this->as_bot(
+			self::GOOGLEBOT,
+			'198.51.100.7',
+			array(
+				'HTTP_X_REAL_IP'       => self::GOOGLE_IP,
+				'HTTP_X_FORWARDED_FOR' => self::OTHER_IP,
+			)
+		);
 		$this->assertSame( self::GOOGLE_IP, Bot_Guard::client_ip() );
 	}
 

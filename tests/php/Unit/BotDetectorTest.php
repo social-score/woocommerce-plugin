@@ -30,21 +30,26 @@ class BotDetectorTest extends TestCase {
 	 * @dataProvider scripts
 	 */
 	public function test_a_script_without_javascript_is_a_bad_bot( $ua, $signal ) {
-		$result = Bot_Detector::classify( array( 'HTTP_USER_AGENT' => $ua, 'HTTP_ACCEPT' => '*/*' ) );
+		$result = Bot_Detector::classify(
+			array(
+				'HTTP_USER_AGENT' => $ua,
+				'HTTP_ACCEPT'     => '*/*',
+			)
+		);
 		$this->assertSame( Bot_Detector::BAD_BOT, $result['class'] );
 		$this->assertContains( $signal, $result['signals'] );
 	}
 
 	public function scripts() {
 		return array(
-			'curl'             => array( 'curl/8.4.0', 'http_client_ua' ),
-			'python requests'  => array( 'python-requests/2.31.0', 'http_client_ua' ),
-			'go client'        => array( 'Go-http-client/1.1', 'http_client_ua' ),
-			'scrapy'           => array( 'Scrapy/2.11 (+https://scrapy.org)', 'http_client_ua' ),
-			'headless chrome'  => array( 'Mozilla/5.0 HeadlessChrome/126.0.0.0 Safari/537.36', 'headless_ua' ),
-			'playwright'       => array( 'Mozilla/5.0 Playwright/1.45', 'headless_ua' ),
-			'sqlmap'           => array( 'sqlmap/1.7#stable (https://sqlmap.org)', 'scanner_ua' ),
-			'empty'            => array( '', 'empty_ua' ),
+			'curl'            => array( 'curl/8.4.0', 'http_client_ua' ),
+			'python requests' => array( 'python-requests/2.31.0', 'http_client_ua' ),
+			'go client'       => array( 'Go-http-client/1.1', 'http_client_ua' ),
+			'scrapy'          => array( 'Scrapy/2.11 (+https://scrapy.org)', 'http_client_ua' ),
+			'headless chrome' => array( 'Mozilla/5.0 HeadlessChrome/126.0.0.0 Safari/537.36', 'headless_ua' ),
+			'playwright'      => array( 'Mozilla/5.0 Playwright/1.45', 'headless_ua' ),
+			'sqlmap'          => array( 'sqlmap/1.7#stable (https://sqlmap.org)', 'scanner_ua' ),
+			'empty'           => array( '', 'empty_ua' ),
 		);
 	}
 
@@ -65,10 +70,23 @@ class BotDetectorTest extends TestCase {
 	}
 
 	public function test_fetch_metadata_is_only_expected_on_https_and_from_modern_chromium() {
-		$http = $this->browser_headers( array( 'HTTPS' => '', 'HTTP_SEC_FETCH_MODE' => '', 'HTTP_SEC_FETCH_SITE' => '', 'HTTP_ACCEPT_LANGUAGE' => '' ) );
+		$http = $this->browser_headers(
+			array(
+				'HTTPS'                => '',
+				'HTTP_SEC_FETCH_MODE'  => '',
+				'HTTP_SEC_FETCH_SITE'  => '',
+				'HTTP_ACCEPT_LANGUAGE' => '',
+			)
+		);
 		$this->assertSame( Bot_Detector::UNKNOWN, Bot_Detector::classify( $http )['class'] );
 
-		$https = $this->browser_headers( array( 'HTTP_SEC_FETCH_MODE' => '', 'HTTP_SEC_FETCH_SITE' => '', 'HTTP_ACCEPT_LANGUAGE' => '' ) );
+		$https  = $this->browser_headers(
+			array(
+				'HTTP_SEC_FETCH_MODE'  => '',
+				'HTTP_SEC_FETCH_SITE'  => '',
+				'HTTP_ACCEPT_LANGUAGE' => '',
+			)
+		);
 		$result = Bot_Detector::classify( $https );
 		$this->assertSame( Bot_Detector::BAD_BOT, $result['class'] );
 		$this->assertSame( array( 'no_accept_language', 'no_fetch_metadata' ), $result['signals'] );
@@ -125,7 +143,12 @@ class BotDetectorTest extends TestCase {
 	}
 
 	public function test_it_reads_nothing_but_the_headers_it_is_given() {
-		$result = Bot_Detector::classify( array( 'HTTP_USER_AGENT' => 'curl/8', 'REMOTE_ADDR' => '203.0.113.9' ) );
+		$result = Bot_Detector::classify(
+			array(
+				'HTTP_USER_AGENT' => 'curl/8',
+				'REMOTE_ADDR'     => '203.0.113.9',
+			)
+		);
 		$this->assertSame( array( 'class', 'signals', 'agent_system', 'agent_purpose' ), array_keys( $result ) );
 		$this->assertStringNotContainsString( '203.0.113.9', wp_json_encode( $result ) );
 	}
