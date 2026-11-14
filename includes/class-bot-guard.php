@@ -83,6 +83,13 @@ class Bot_Guard {
 	private static $real_cache = array();
 
 	/**
+	 * The multiplier of a product, by id (kept for the request).
+	 *
+	 * @var array
+	 */
+	private static $factors = array();
+
+	/**
 	 * Classification of this request, made once.
 	 *
 	 * @var array|null
@@ -292,6 +299,7 @@ class Bot_Guard {
 		self::$overflow   = false;
 		self::$roots      = array();
 		self::$real_cache = array();
+		self::$factors    = array();
 	}
 
 	/**
@@ -493,9 +501,27 @@ class Bot_Guard {
 			return;
 		}
 		Bot_Stats::record( $class );
-		if ( Bot_Detector::BAD_BOT === $class && self::MODE_BLOCK === $this->mode() ) {
+		if ( Bot_Detector::BAD_BOT === $class && ( self::MODE_BLOCK === $this->mode() || ( self::MODE_SUBSTITUTE === $this->mode() && self::closes_cart() ) ) ) {
 			$this->block();
 		}
+	}
+
+	/**
+	 * Whether the request puts something in the cart or places an order (the address, wc-ajax, admin-ajax and the checkout form).
+	 * In substitute mode a bad bot gets 403 on these: one add-to-cart shows the real price, and from it the factor of the day
+	 * (and, through the variable product, of every variation) could be worked out. A person and a verified bot are not touched.
+	 *
+	 * @return bool
+	 */
+	private static function closes_cart() {
+		// phpcs:disable WordPress.Security.NonceVerification -- Only the names of the request are read, nothing is changed.
+		if ( ! empty( $_REQUEST['add-to-cart'] ) || isset( $_POST['woocommerce-process-checkout-nonce'] ) || isset( $_POST['woocommerce_checkout_place_order'] ) ) {
+			return true;
+		}
+		$ajax   = isset( $_GET['wc-ajax'] ) && is_string( $_GET['wc-ajax'] ) ? sanitize_key( wp_unslash( $_GET['wc-ajax'] ) ) : '';
+		$action = isset( $_REQUEST['action'] ) && is_string( $_REQUEST['action'] ) ? sanitize_key( wp_unslash( $_REQUEST['action'] ) ) : '';
+		// phpcs:enable WordPress.Security.NonceVerification
+		return in_array( $ajax, array( 'add_to_cart', 'checkout', 'update_order_review' ), true ) || in_array( $action, array( 'woocommerce_add_to_cart', 'woocommerce_checkout', 'woocommerce_update_order_review' ), true );
 	}
 
 	/**
@@ -727,7 +753,12 @@ class Bot_Guard {
 		if ( null !== $result || ! is_object( $request ) || ! self::is_store_route( (string) $request->get_route() ) ) {
 			return $result;
 		}
-		if ( Bot_Detector::BAD_BOT !== self::current()['class'] || ! $this->should_inspect( true ) || ! $this->acts() || self::MODE_BLOCK !== $this->mode() ) {
+		if ( Bot_Detector::BAD_BOT !== self::current()['class'] || ! $this->should_inspect( true ) || ! $this->acts() ) {
+			return $result;
+		}
+		// Substitute mode also closes the cart, the checkout and the order routes: see `closes_cart`.
+		$closed = self::MODE_SUBSTITUTE === $this->mode() && 1 === preg_match( '#^/wc/store(/v\d+)?/(cart|checkout|order)(/|$)#', '/' . trim( (string) preg_replace( '#/+#', '/', strtolower( rawurldecode( (string) $request->get_route() ) ) ), '/' ) );
+		if ( ! $closed && self::MODE_BLOCK !== $this->mode() ) {
 			return $result;
 		}
 		self::no_cache();
@@ -1004,36 +1035,51 @@ class Bot_Guard {
 		return '0';
 	}
 
-	/**
-	 * The price shown instead of the real one: the real price times a factor between 0.85 and 1.15 that is the same for
-	 * a product (a variation uses the factor of its variable product, so the answers and the page agree) all day and differs
-	 * between sites, so it cannot be averaged out. A factor that would give another real price of the same product (regular,
-	 * sale, a variation's, a minimum or maximum) is skipped for the next step. A price of zero or less stays.
-	 *
-	 * @param  float|int|string $price      Real price.
-	 * @param  int|string       $product_id Product id.
-	 * @return float
-	 */
 	public static function substitute_price( $price, $product_id ) {
 		$price = (float) $price;
 		if ( $price <= 0 ) {
 			return $price;
 		}
-		$root = self::root_id( $product_id );
-		// Keyed with a secret of the site: without it the factor of a product cannot be worked out from its id and the date, not
-		// even by someone who can see a real price and its substitute.
-		$seed                            = (int) hexdec( substr( hash_hmac( 'sha256', (string) $root . '|' . gmdate( 'Y-m-d' ), wp_salt( 'auth' ) ), 0, 8 ) );
-		$real                            = self::real_prices( $root );
-		$real[ self::dec_key( $price ) ] = true;
-		for ( $i = 0; $i < self::FACTOR_SPREAD; $i++ ) {
+		return round( $price * self::factor( self::root_id( $product_id ) ), 2 );
+	}
+
+	/**
+	 * The one multiplier of a product (a variation uses its variable product's), worked out once per request: the same for
+	 * every price of the product, in whatever unit it is written, so the answers and the page cannot disagree. Between 0.85
+	 * and 1.15, never 1.00, the same all day and keyed with a secret of the site. The steps are tried from the one the secret
+	 * gives, and the first that turns none of the product's real prices (regular, sale, a variation's, minimum, maximum, also
+	 * as displayed and in minor units) into another real price, as written or rounded, is taken.
+	 *
+	 * @param  int|string $root Product id.
+	 * @return float
+	 */
+	private static function factor( $root ) {
+		if ( isset( self::$factors[ $root ] ) ) {
+			return self::$factors[ $root ];
+		}
+		$day  = (string) apply_filters( 'socialscore_factor_day', gmdate( 'Y-m-d' ) );
+		$seed = (int) hexdec( substr( hash_hmac( 'sha256', (string) $root . '|' . $day, wp_salt( 'auth' ) ), 0, 8 ) );
+		$real = self::real_prices( $root );
+		$pick = null;
+		for ( $i = 0; $i < self::FACTOR_SPREAD && null === $pick; $i++ ) {
 			$percent = self::FACTOR_BASE + ( ( $seed + $i ) % self::FACTOR_SPREAD );
 			$percent = $percent >= 100 ? $percent + 1 : $percent; // Skip 100.
-			$shown   = round( $price * $percent / 100, 2 );
-			if ( ! isset( $real[ self::dec_key( $shown ) ] ) && ! isset( $real[ self::dec_key( round( $shown ) ) ] ) ) {
-				return $shown;
+			$clash   = false;
+			foreach ( array_keys( $real ) as $key ) {
+				$shown = round( (float) $key * $percent / 100, 2 );
+				if ( isset( $real[ self::dec_key( $shown ) ] ) || isset( $real[ self::dec_key( round( $shown ) ) ] ) ) {
+					$clash = true;
+					break;
+				}
 			}
+			$pick = $clash ? null : $percent;
 		}
-		return round( $price * ( self::FACTOR_BASE + ( $seed % self::FACTOR_SPREAD ) + 1 ) / 100, 2 );
+		if ( null === $pick ) {
+			$pick = self::FACTOR_BASE + ( $seed % self::FACTOR_SPREAD );
+			$pick = $pick >= 100 ? $pick + 1 : $pick;
+		}
+		self::$factors[ $root ] = $pick / 100;
+		return self::$factors[ $root ];
 	}
 
 	/**

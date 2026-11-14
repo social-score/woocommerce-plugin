@@ -270,7 +270,8 @@ class BotGuardTest extends TestCase {
 		$this->assertSame( 'already', ( new Bot_Guard() )->guard_rest( 'already', null, $this->store_route( '/wc/store/v1/cart' ) ) );
 		$this->server_says( 'substitute' );
 		$bot( '/wp-json/wp/v2/types' );
-		$this->assertNull( ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( '/wc/store/v1/cart' ) ) );
+		$this->assertNull( ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( '/wc/store/v1/products' ) ), 'substitute mode still answers the products' );
+		$this->assertInstanceOf( \WP_Error::class, ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( '/wc/store/v1/cart/add-item' ) ), 'but the cart is closed' );
 		$this->server_says( 'block' );
 		$this->request(
 			'Mozilla/5.0 Chrome/126.0',
@@ -1054,13 +1055,33 @@ class BotGuardTest extends TestCase {
 		$this->assertSame( $regular, Bot_Guard::substitute_price( 100, $id ), 'and it is the same all day' );
 	}
 
-	public function test_the_answer_and_the_page_agree_on_a_variable_product() {
+	/** @return array<int,object> */
+	private function variable_products( $a = '60', $b = '70' ) {
 		$products = array(
-			10 => $this->fake_product( 10, '60', '', 0, array( 11, 12 ) ),
-			11 => $this->fake_product( 11, '60', '', 10 ),
-			12 => $this->fake_product( 12, '70', '', 10 ),
+			10 => $this->fake_product( 10, $a, '', 0, array( 11, 12 ) ),
+			11 => $this->fake_product( 11, $a, '', 10 ),
+			12 => $this->fake_product( 12, $b, '', 10 ),
 		);
-		Functions\when( 'wc_get_product' )->alias( fn( $id ) => $products[ (int) $id ] ?? false );
+		Functions\when( 'wc_get_product' )->alias(
+			function ( $id ) use ( &$products ) {
+				return $products[ (int) $id ] ?? false;
+			}
+		);
+		return $products;
+	}
+
+	/**
+	 * What a bad bot is shown for a variable product (variations 11 and 12, prices $a and $b) on one day: the minimum and maximum
+	 * of the Store API answer in minor units, and the display prices of the variations on the page in minor units.
+	 */
+	private function variable_shown( array $products, $day, $a, $b ) {
+		Bot_Guard::reset();
+		$day_filter = fn() => $day;
+		Functions\when( 'apply_filters' )->alias(
+			function ( $tag, $value = null ) use ( $day_filter ) {
+				return 'socialscore_factor_day' === $tag ? $day_filter() : $value;
+			}
+		);
 		$this->server_says( 'substitute' );
 		$this->request( 'curl/8.4.0' );
 		$guard = new Bot_Guard();
@@ -1069,10 +1090,10 @@ class BotGuardTest extends TestCase {
 				array(
 					'id'     => 10,
 					'prices' => (object) array(
-						'price'       => '6000',
+						'price'       => (string) ( $a * 100 ),
 						'price_range' => (object) array(
-							'min_amount' => '6000',
-							'max_amount' => '7000',
+							'min_amount' => (string) ( $a * 100 ),
+							'max_amount' => (string) ( $b * 100 ),
 						),
 					),
 				)
@@ -1082,11 +1103,12 @@ class BotGuardTest extends TestCase {
 		)->data['prices'];
 		$page  = array();
 		foreach ( array(
-			11 => 60,
-			12 => 70,
+			11 => $a,
+			12 => $b,
 		) as $vid => $real ) {
 			$data   = $guard->variation(
 				array(
+					'variation_id'          => $vid,
 					'display_price'         => $real,
 					'display_regular_price' => $real,
 				),
@@ -1095,9 +1117,25 @@ class BotGuardTest extends TestCase {
 			);
 			$page[] = (int) round( $data['display_price'] * 100 );
 		}
-		$this->assertSame( (int) $api->price_range->min_amount, $page[0], 'the lowest variation on the page is the minimum of the answer' );
-		$this->assertSame( (int) $api->price_range->max_amount, $page[1], 'the highest variation on the page is the maximum of the answer' );
-		$this->assertNotSame( '6000', $api->price_range->min_amount );
+		return array( (int) $api->price_range->min_amount, (int) $api->price_range->max_amount, $page[0], $page[1] );
+	}
+
+	public function test_the_answer_and_the_page_agree_on_a_variable_product_on_every_day_and_show_no_real_price() {
+		foreach ( array( array( 60, 70 ), array( 60, 60.2 ), array( 100, 85 ) ) as list( $a, $b ) ) {
+			$products = $this->variable_products( (string) $a, (string) $b );
+			for ( $d = 0; $d < 60; $d++ ) {
+				$day = gmdate( 'Y-m-d', 1767225600 + $d * 86400 );
+				list( $api_min, $api_max, $page_min, $page_max ) = $this->variable_shown( $products, $day, $a, $b );
+				$msg = $a . '/' . $b . ' on ' . $day;
+				$this->assertSame( $api_min, $page_min, 'minimum: answer and page agree, ' . $msg );
+				$this->assertSame( $api_max, $page_max, 'maximum: answer and page agree, ' . $msg );
+				$real = array( (int) round( $a * 100 ), (int) round( $b * 100 ), (int) round( $a ), (int) round( $b ) );
+				foreach ( array( $api_min, $api_max ) as $shown ) {
+					$this->assertNotContains( $shown, $real, 'no real price is shown, ' . $msg );
+					$this->assertNotContains( (int) round( $shown / 100 ), array( (int) round( $a ), (int) round( $b ) ), 'nor its rounded form, ' . $msg );
+				}
+			}
+		}
 	}
 
 	public function test_the_page_keeps_a_variation_price_the_data_level_produced_and_removes_any_other() {
@@ -1119,6 +1157,47 @@ class BotGuardTest extends TestCase {
 		$out  = $guard->clean_page( '<form data-product_variations="' . esc_attr( $json ) . '"></form><p>{"display_price":77,"variation_id":11}</p>' );
 		$this->assertStringContainsString( '"display_price":' . $data['display_price'], html_entity_decode( $out ), 'the substitute of the data level stays' );
 		$this->assertStringContainsString( '"display_price":0', $out, 'a number the data level did not produce is removed' );
+	}
+
+	public function test_substitute_mode_closes_the_cart_and_the_checkout_to_a_bad_bot_only() {
+		$this->server_says( 'substitute' );
+		$this->request( 'curl/8.4.0' );
+		foreach ( array( '/wc/store/v1/cart/add-item', '/wc/store/v1/checkout', '/wc/store/V1/Order/5', '/wc/store/cart' ) as $route ) {
+			$this->assertInstanceOf( \WP_Error::class, ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( $route ) ), $route );
+		}
+		$this->assertNull( ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( '/wc/store/v1/products/5' ) ) );
+		$closes = new \ReflectionMethod( Bot_Guard::class, 'closes_cart' );
+		$closes->setAccessible( true );
+		$this->assertFalse( $closes->invoke( null ) );
+		$_REQUEST['add-to-cart'] = '5';
+		$this->assertTrue( $closes->invoke( null ), '?add-to-cart=' );
+		unset( $_REQUEST['add-to-cart'] );
+		$_GET['wc-ajax'] = 'add_to_cart';
+		$this->assertTrue( $closes->invoke( null ), 'wc-ajax add_to_cart' );
+		$_GET['wc-ajax'] = 'get_refreshed_fragments';
+		$this->assertFalse( $closes->invoke( null ) );
+		unset( $_GET['wc-ajax'] );
+		$_REQUEST['action'] = 'woocommerce_add_to_cart';
+		$this->assertTrue( $closes->invoke( null ), 'admin-ajax add to cart' );
+		unset( $_REQUEST['action'] );
+		$_POST['woocommerce-process-checkout-nonce'] = 'x';
+		$this->assertTrue( $closes->invoke( null ), 'the checkout form' );
+		unset( $_POST['woocommerce-process-checkout-nonce'] );
+		// A person and another mode: not closed.
+		$this->request(
+			'Mozilla/5.0 Chrome/126.0',
+			'/',
+			array(
+				'HTTP_ACCEPT'          => 'text/html',
+				'HTTP_ACCEPT_LANGUAGE' => 'en',
+				'HTTP_SEC_FETCH_MODE'  => 'navigate',
+				'HTTP_SEC_FETCH_SITE'  => 'none',
+			)
+		);
+		$this->assertNull( ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( '/wc/store/v1/cart/add-item' ) ), 'a person adds to the cart' );
+		$this->server_says( 'flag' );
+		$this->request( 'curl/8.4.0' );
+		$this->assertNull( ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( '/wc/store/v1/cart/add-item' ) ), 'flag mode does not close it' );
 	}
 
 	public function test_the_quantity_field_shows_no_stock_to_a_bad_bot() {
@@ -1153,6 +1232,7 @@ class BotGuardTest extends TestCase {
 		$factors = array();
 		foreach ( array( 'salt-one', 'salt-two', 'salt-three' ) as $salt ) {
 			Functions\when( 'wp_salt' )->alias( fn() => $salt );
+			Bot_Guard::reset();
 			$factors[ $salt ] = array();
 			for ( $id = 1; $id <= 40; $id++ ) {
 				$factors[ $salt ][ $id ] = Bot_Guard::substitute_price( 100, $id );

@@ -426,12 +426,20 @@ ss_assert( 2 === count( $shown ) && $shown[0] === $min && $shown[1] === $max, 's
 
 // V. A promotion whose regular price, at today's factor, would give the sale price: the bot never sees the real sale price,
 //    nor a value equal to a real price of the product.
-$promo = new WC_Product_Simple();
-$promo->set_name( 'Promo mug' );
-$promo->set_regular_price( '100' );
-$promo->set_status( 'publish' );
-$promo->save();
-Bot_Guard::reset();
+// A promotion needs a factor below 1 for the regular price 100 (the sale price is lower): try products until one has it.
+$promo = null;
+for ( $try = 0; $try < 30 && null === $promo; $try++ ) {
+	$cand = new WC_Product_Simple();
+	$cand->set_name( 'Promo mug ' . $try );
+	$cand->set_regular_price( '100' );
+	$cand->set_status( 'publish' );
+	$cand->save();
+	Bot_Guard::reset();
+	if ( Bot_Guard::substitute_price( 100, $cand->get_id() ) < 100 ) {
+		$promo = $cand;
+	}
+}
+ss_assert( null !== $promo, 'a promotion product with a factor below 1 was found' );
 $sale = Bot_Guard::substitute_price( 100, $promo->get_id() );
 $promo->set_sale_price( (string) $sale );
 $promo->save();
@@ -462,6 +470,20 @@ $page_body  = wp_remote_retrieve_body(
 $api_prices = json_decode( $api_body, true )['prices'] ?? array();
 ss_assert( $sale_minor !== ( $api_prices['regular_price'] ?? '' ) && '10000' !== ( $api_prices['regular_price'] ?? '' ) && '10000' !== ( $api_prices['sale_price'] ?? '' ), 'substitute mode: the API shows neither the real sale price nor the real regular price of the promotion' );
 ss_assert( false === strpos( $page_body, '"' . $sale_minor . '"' ) && false === strpos( $page_body, '>' . $real_sale . '<' ) && false === strpos( $page_body, '"10000"' ), 'substitute mode: the page shows neither the real sale price ' . $real_sale . ' nor 100.00' );
+
+// X. Substitute mode closes the cart and the checkout to a bad bot (one add-to-cart would show the real price); a person adds normally.
+$pid_cart = $product->get_id();
+ss_assert( 403 === ss_as( $BOT, $url . '?add-to-cart=' . $pid_cart ), 'substitute mode: ?add-to-cart= is 403 for a bad bot' );
+$res = wp_remote_post( 'http://wordpress/wp-json/wc/store/v1/cart/add-item', array( 'timeout' => 60, 'user-agent' => $BOT, 'headers' => array( 'Content-Type' => 'application/json' ), 'body' => wp_json_encode( array( 'id' => $pid_cart, 'quantity' => 1 ) ) ) );
+ss_assert( 403 === wp_remote_retrieve_response_code( $res ) && false !== strpos( wp_remote_retrieve_body( $res ), 'socialscore_blocked' ), 'substitute mode: the Store API add-item is 403 for a bad bot' );
+$res = wp_remote_post( 'http://wordpress/?wc-ajax=add_to_cart', array( 'timeout' => 60, 'user-agent' => $BOT, 'body' => array( 'product_id' => $pid_cart, 'quantity' => 1 ) ) );
+ss_assert( 403 === wp_remote_retrieve_response_code( $res ), 'substitute mode: wc-ajax add_to_cart is 403 for a bad bot' );
+$res = wp_remote_post( 'http://wordpress/wp-admin/admin-ajax.php', array( 'timeout' => 60, 'user-agent' => $BOT, 'body' => array( 'action' => 'woocommerce_add_to_cart', 'product_id' => $pid_cart ) ) );
+ss_assert( 403 === wp_remote_retrieve_response_code( $res ), 'substitute mode: admin-ajax add to cart is 403 for a bad bot' );
+$res = wp_remote_post( wc_get_checkout_url(), array( 'timeout' => 60, 'user-agent' => $BOT, 'body' => array( 'woocommerce-process-checkout-nonce' => 'x', 'billing_email' => 'a@b.test' ) ) );
+ss_assert( 403 === wp_remote_retrieve_response_code( $res ), 'substitute mode: the checkout form is 403 for a bad bot' );
+$code = ss_as( $PERSON, $url . '?add-to-cart=' . $pid_cart, $person_headers );
+ss_assert( 403 !== $code && $code < 400, 'substitute mode: a person adds to the cart normally (' . $code . ')' );
 
 // The page and the API show the bot the same substitute, and nothing in either says it was changed.
 $low_page = wp_remote_retrieve_body(
