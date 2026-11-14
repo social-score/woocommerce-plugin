@@ -45,6 +45,8 @@ class Mapper {
 	}
 
 	const MAX_ORDER_LINES = 200;
+	// Order meta the MCP Store module sets (value `yes`) on an order an AI agent placed.
+	const META_AGENT_ORDER = '_mcpstore_agent_order';
 
 	/**
 	 * Shortens a value to the length the API accepts; it answers 422 for the whole batch otherwise.
@@ -186,8 +188,20 @@ class Mapper {
 				'shipping_postcode'    => self::cut( $ship_postcode, 32 ),
 				'shipping_country'     => self::country( $ship_country ),
 				'cart_token'           => self::checkout_ref( $order ),
+				'placed_by_agent'      => self::placed_by_agent( $order ) ? true : null,
 			)
 		);
+	}
+
+	/**
+	 * Whether the MCP Store module marked the order as made by an AI agent (order meta `_mcpstore_agent_order` = `yes`).
+	 * Without that module the meta is never there and nothing is sent.
+	 *
+	 * @param \WC_Order $order Order.
+	 * @return bool
+	 */
+	private static function placed_by_agent( $order ) {
+		return 'yes' === (string) $order->get_meta( self::META_AGENT_ORDER );
 	}
 
 	/**

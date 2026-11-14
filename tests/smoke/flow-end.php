@@ -20,7 +20,13 @@ function ss_log() {
 Connect::disconnect();
 ss_assert( ! Connection::is_connected(), 'disconnected' );
 ss_assert( 'DELETE' === ss_log()[0]['method'], 'DELETE /stores/{id} sent' );
-$pending = as_get_scheduled_actions( array( 'group' => 'socialscore', 'status' => \ActionScheduler_Store::STATUS_PENDING ), 'ids' );
+$pending = as_get_scheduled_actions(
+	array(
+		'group'  => 'socialscore',
+		'status' => \ActionScheduler_Store::STATUS_PENDING,
+	),
+	'ids'
+);
 ss_assert( array() === $pending, 'no pending actions after disconnect' );
 
 // A store key SocialScore no longer accepts (uninstalled there): the 401 drops the key and the admin page asks to connect again.
@@ -33,10 +39,18 @@ ob_start();
 ( new \SocialScore\Admin_Page() )->render();
 $page = ob_get_clean();
 ss_assert( false !== strpos( $page, 'no longer accepts' ) && false !== strpos( $page, 'data-connected="0"' ), 'admin page shows the connect screen with the reason' );
-ss_assert( 'connected' === ( new Connect() )->complete( ( function () {
-	parse_str( (string) wp_parse_url( Connect::begin( 1 ), PHP_URL_QUERY ), $q );
-	return $q['state'];
-} )(), 'auth-code', '', 1 ), 'connecting again works' );
+ss_assert(
+	'connected' === ( new Connect() )->complete(
+		( function () {
+			parse_str( (string) wp_parse_url( Connect::begin( 1 ), PHP_URL_QUERY ), $q );
+			return $q['state'];
+		} )(),
+		'auth-code',
+		'',
+		1
+	),
+	'connecting again works'
+);
 ss_assert( ! Connection::was_lost(), 'connecting again clears the lost flag' );
 
 // Deactivate and uninstall cleanup.

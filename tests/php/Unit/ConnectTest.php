@@ -16,7 +16,7 @@ class ConnectTest extends TestCase {
 	}
 
 	public function test_begin_builds_connect_url_with_state_and_challenge() {
-		$url = Connect::begin( 7 );
+		$url   = Connect::begin( 7 );
 		$parts = parse_url( $url );
 		parse_str( $parts['query'], $q );
 		$this->assertSame( 'https://api.socialscore.io/api/v2/stores/connect', $parts['scheme'] . '://' . $parts['host'] . $parts['path'] );
@@ -43,7 +43,13 @@ class ConnectTest extends TestCase {
 		Functions\when( 'admin_url' )->alias( fn( $p = '' ) => 'https://wp.shop.test/wp-admin/' . $p );
 		$state = $this->started_state();
 		Functions\when( 'admin_url' )->alias( fn( $p = '' ) => 'https://changed.test/wp-admin/' . $p );
-		$this->http_responder = fn() => self::response( 200, array( 'store_id' => 'st_9', 'api_key' => 'sk_new_key' ) );
+		$this->http_responder = fn() => self::response(
+			200,
+			array(
+				'store_id' => 'st_9',
+				'api_key'  => 'sk_new_key',
+			)
+		);
 		Functions\when( 'as_enqueue_async_action' )->justReturn( 1 );
 		$this->assertSame( 'connected', ( new Connect() )->complete( $state, 'c', '', 7 ) );
 		$this->assertSame( 'https://wp.shop.test/wp-admin/admin-post.php?action=socialscore_connect_callback', json_decode( $this->http[0]['args']['body'], true )['redirect_uri'] );
@@ -70,8 +76,8 @@ class ConnectTest extends TestCase {
 	}
 
 	public function test_state_is_single_use() {
-		$connect = new Connect();
-		$state   = $this->started_state();
+		$connect              = new Connect();
+		$state                = $this->started_state();
 		$this->http_responder = fn() => self::response( 500, '' );
 		$this->assertSame( 'exchange', $connect->complete( $state, 'code', '', 7 ) );
 		$this->assertSame( 'state', $connect->complete( $state, 'code', '', 7 ) );
@@ -84,9 +90,15 @@ class ConnectTest extends TestCase {
 	}
 
 	public function test_successful_exchange_sends_verifier_stores_key_and_starts_import() {
-		$state = $this->started_state();
-		$verifier = $this->transients[ 'socialscore_pkce_' . hash( 'sha256', $state ) ]['verifier'];
-		$this->http_responder = fn() => self::response( 200, array( 'store_id' => 'st_9', 'api_key' => 'sk_new_key' ) );
+		$state                = $this->started_state();
+		$verifier             = $this->transients[ 'socialscore_pkce_' . hash( 'sha256', $state ) ]['verifier'];
+		$this->http_responder = fn() => self::response(
+			200,
+			array(
+				'store_id' => 'st_9',
+				'api_key'  => 'sk_new_key',
+			)
+		);
 		Functions\expect( 'as_enqueue_async_action' )->once()->with( 'socialscore_import', array( 'customers', 1, 0 ), 'socialscore' );
 
 		$this->assertSame( 'connected', ( new Connect() )->complete( $state, 'the-code', '', 7 ) );
@@ -106,7 +118,7 @@ class ConnectTest extends TestCase {
 	}
 
 	public function test_exchange_with_unexpected_body_fails() {
-		$state = $this->started_state();
+		$state                = $this->started_state();
 		$this->http_responder = fn() => self::response( 200, array( 'nope' => 1 ) );
 		$this->assertSame( 'exchange', ( new Connect() )->complete( $state, 'c', '', 7 ) );
 		$this->assertFalse( Connection::is_connected() );

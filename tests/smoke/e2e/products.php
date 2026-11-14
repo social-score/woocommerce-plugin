@@ -22,7 +22,10 @@ $attr->set_visible( true );
 $attr->set_variation( true );
 $tee->set_attributes( array( $attr ) );
 $tee->save();
-foreach ( array( 'S' => '20.00', 'M' => '22.00' ) as $size => $price ) {
+foreach ( array(
+	'S' => '20.00',
+	'M' => '22.00',
+) as $size => $price ) {
 	$v = new WC_Product_Variation();
 	$v->set_parent_id( $tee->get_id() );
 	$v->set_attributes( array( 'size' => $size ) );
@@ -31,4 +34,10 @@ foreach ( array( 'S' => '20.00', 'M' => '22.00' ) as $size => $price ) {
 	$v->save();
 }
 WC_Product_Variable::sync( $tee->get_id() );
-echo wp_json_encode( array( 'mug' => $mug->get_id(), 'tee' => $tee->get_id(), 'variations' => $tee->get_children() ) ), "\n";
+echo wp_json_encode(
+	array(
+		'mug'        => $mug->get_id(),
+		'tee'        => $tee->get_id(),
+		'variations' => $tee->get_children(),
+	)
+), "\n";

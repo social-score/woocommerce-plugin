@@ -18,7 +18,13 @@ function ss_run_queue() {
 	// Chained actions (the import) are queued while the runner works, so run until nothing is pending.
 	for ( $i = 0; $i < 20; $i++ ) {
 		\ActionScheduler::runner()->run();
-		$pending = as_get_scheduled_actions( array( 'group' => 'socialscore', 'status' => \ActionScheduler_Store::STATUS_PENDING ), 'ids' );
+		$pending = as_get_scheduled_actions(
+			array(
+				'group'  => 'socialscore',
+				'status' => \ActionScheduler_Store::STATUS_PENDING,
+			),
+			'ids'
+		);
 		if ( ! $pending ) {
 			break;
 		}
@@ -33,7 +39,7 @@ ss_assert( ! Connection::is_connected() && ! file_exists( '/shared/api.log' ), '
 
 // Existing data to import.
 $customer_id = wc_create_new_customer( 'old@example.test', 'oldcustomer', 'pw-Old-123456' );
-$old = wc_create_order( array( 'customer_id' => $customer_id ) );
+$old         = wc_create_order( array( 'customer_id' => $customer_id ) );
 $old->set_billing_email( 'old@example.test' );
 $old->set_total( 30 );
 $old->save();
@@ -96,11 +102,22 @@ $probe->save();
 \SocialScore\Sync::resume();
 $GLOBALS['wpdb']->update( $GLOBALS['wpdb']->prefix . 'wc_orders', array( 'date_updated_gmt' => '2020-01-01 00:00:00' ), array( 'id' => $probe->get_id() ) );
 $GLOBALS['ss_probe_updates'] = 0;
-$counter = function () {
+$counter                     = function () {
 	++$GLOBALS['ss_probe_updates'];
 };
 add_action( 'woocommerce_update_order', $counter );
-$answer = array( 'status' => 200, 'retry_after' => null, 'data' => array( 'ids' => array( array( 'external_id' => (string) $probe->get_id(), 'id' => 8001 ) ) ) );
+$answer = array(
+	'status'      => 200,
+	'retry_after' => null,
+	'data'        => array(
+		'ids' => array(
+			array(
+				'external_id' => (string) $probe->get_id(),
+				'id'          => 8001,
+			),
+		),
+	),
+);
 \SocialScore\Sync::record_order_ids( $answer );
 $answer['data']['ids'][0]['id'] = 8002;
 \SocialScore\Sync::record_order_ids( $answer );

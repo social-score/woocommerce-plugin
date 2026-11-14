@@ -282,12 +282,17 @@ class Pixel {
 	 * Pixel state of the connected store: array( enabled, site_id ). Cached for ten minutes; a failed or running lookup
 	 * counts as off for one minute, and the lookup waits at most two seconds, so a slow API cannot slow every page.
 	 *
-	 * @return array{enabled:bool,site_id:string}
+	 * `bot_mode` is what SocialScore decided to do with a bad bot (flag, substitute or block; flag when it did not say) and
+	 * `level2` whether Level 2 is on for the store (false when SocialScore did not say).
+	 *
+	 * @return array{enabled:bool,site_id:string,bot_mode:string,level2:bool}
 	 */
 	public static function state() {
 		$off = array(
-			'enabled' => false,
-			'site_id' => '',
+			'enabled'  => false,
+			'site_id'  => '',
+			'bot_mode' => 'flag',
+			'level2'   => false,
 		);
 		if ( ! Connection::is_connected() ) {
 			return $off;
@@ -306,9 +311,12 @@ class Pixel {
 		$ttl      = self::FAILED_TTL;
 		if ( ! is_wp_error( $response ) && 200 === $response['status'] && is_array( $response['data'] ) ) {
 			$site_id = isset( $response['data']['site_id'] ) && is_string( $response['data']['site_id'] ) ? $response['data']['site_id'] : '';
+			$mode    = isset( $response['data']['bot_mode'] ) && is_string( $response['data']['bot_mode'] ) ? $response['data']['bot_mode'] : '';
 			$state   = array(
-				'enabled' => ! empty( $response['data']['enabled'] ) && 1 === preg_match( self::SITE_ID_PATTERN, $site_id ),
-				'site_id' => 1 === preg_match( self::SITE_ID_PATTERN, $site_id ) ? $site_id : '',
+				'enabled'  => ! empty( $response['data']['enabled'] ) && 1 === preg_match( self::SITE_ID_PATTERN, $site_id ),
+				'site_id'  => 1 === preg_match( self::SITE_ID_PATTERN, $site_id ) ? $site_id : '',
+				'bot_mode' => in_array( $mode, array( 'flag', 'substitute', 'block' ), true ) ? $mode : 'flag',
+				'level2'   => ! empty( $response['data']['level2'] ),
 			);
 			$ttl     = self::STATE_TTL;
 		}
@@ -435,7 +443,7 @@ class Pixel {
 					'view_item',
 					array(
 						'item_id'  => (string) $product->get_id(),
-						'price'    => (float) $product->get_price(),
+						'price'    => self::price( $product ),
 						'currency' => (string) get_woocommerce_currency(),
 					)
 				);
@@ -551,7 +559,7 @@ class Pixel {
 	 * @return float
 	 */
 	private static function price( $product ) {
-		return $product ? (float) $product->get_price() : 0.0;
+		return $product ? ( new Bot_Guard() )->shown_price( $product->get_price(), $product->get_id() ) : 0.0;
 	}
 
 	/**

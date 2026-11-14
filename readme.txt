@@ -19,6 +19,8 @@ SocialScore for WooCommerce connects your store to your SocialScore account. Aft
 * Every order screen and customer profile gets a **Check panel** with the result, and the orders list gets a risk column.
 * New and updated orders and customers are sent to SocialScore in the background, and your existing customers and orders are imported in batches of up to 500.
 * Orders get a note and a label such as "Review before shipping" or "Possible business buyer" from the check result.
+* Orders that did not come from a person (a bad bot, a known bot or an AI agent) are flagged in the orders list, on the order screen and with an order note.
+* A **Reports** page under SocialScore shows your traffic from the SocialScore Pixel, what your server caught without JavaScript, the flagged orders, and lets you choose what happens to a bad bot: flag it (default), show it substitute data, or block it.
 * Export and erase requests for a customer (Tools > Export / Erase Personal Data) also reach SocialScore.
 * You choose when checks run automatically (new account, every account, new customer's order, every order, or manual only).
 
@@ -31,6 +33,10 @@ Compatible with High-Performance Order Storage (custom order tables).
 This plugin connects to the SocialScore service (https://socialscore.io), operated by SocialScore, to check customers and orders. It is a paid service with a free tier; an account is required.
 
 **When data is sent:** nothing is sent until an administrator clicks "Connect" on the SocialScore admin page and approves the connection in SocialScore. Before that the plugin makes no request to SocialScore. After connecting, data is sent when an order or customer is created or updated, once for the first import of existing data, and when a check is run (manually or by the automatic checks you enabled).
+
+**Pixel:** only after you connect and switch the SocialScore Pixel on, a script from https://pixel.socialscore.io is loaded on your storefront. It sends page-level events (page views, product, cart, checkout and the order total) to SocialScore. On the default level it writes no cookie or other data to the visitor's device and sends no name, email, phone or address.
+
+**Bots:** to recognise a bot that runs no JavaScript the plugin reads the user agent and a few other headers of each storefront request of a visitor who is not logged in. It keeps no cookie, no address and no user agent: only a count per day and kind of visitor, on your own site. Nothing about the visitor is sent to SocialScore for this. The Reports page asks SocialScore for your traffic totals (no personal data) and the order screen asks for the kind of visit behind an order (a class and signal codes). The plugin can send a hash of a customer's email at login, registration and order only if you switch on Level 2 in SocialScore, in the plugin, and the visitor has given consent; it is off by default. If your store is behind Cloudflare or another proxy you can tell the plugin on the Reports page; "Behind Cloudflare" is safe only when your server accepts requests from Cloudflare alone. Do not let your web server trust `X-Forwarded-For` from anyone but your own proxy: the official WordPress Docker image enables Apache `RemoteIPInternalProxy` for private networks, so when Apache sees a private peer the visitor's own `X-Forwarded-For` becomes the address the plugin reads, before the plugin sees the request.
 
 **What is sent:** your store address; for customers: email, phone, first and last name, city, postcode, country, number of orders, total paid and the date of the last order; for orders: order number, total, currency, date, the products (id, name, quantity, price), and shipping city, postcode and country. Payment details, passwords and street addresses are not sent. The store key SocialScore issues stays on your server and is never sent to the browser.
 

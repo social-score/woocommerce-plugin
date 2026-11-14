@@ -31,10 +31,17 @@ class Plugin {
 		( new Enrichment() )->register();
 		( new Privacy() )->register();
 		( new Pixel() )->register();
+		( new Bot_Guard() )->register();
+		add_action( Bot_Verifier::HOOK, array( Bot_Verifier::class, 'refresh' ) );
+		// On init: scheduling reads the cron schedules, and WooCommerce translates their names, which is too early before init.
+		add_action( 'init', array( Bot_Verifier::class, 'schedule' ) );
+		( new Not_Human() )->register();
+		( new Identity() )->register();
 
 		if ( is_admin() ) {
 			( new Admin_Page() )->register();
 			( new Check_Panels() )->register();
+			( new Reports_Page() )->register();
 		}
 	}
 
@@ -57,5 +64,6 @@ class Plugin {
 	 */
 	public static function deactivate() {
 		Sync::unschedule_all();
+		wp_clear_scheduled_hook( Bot_Verifier::HOOK );
 	}
 }

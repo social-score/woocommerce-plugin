@@ -75,6 +75,7 @@ class Check_Panels {
 		if ( ! $order ) {
 			return;
 		}
+		echo wp_kses_post( Not_Human::notice_html( $order ) );
 		echo wp_kses_post( self::panel_markup( 'order', (string) $order->get_id() ) );
 	}
 
@@ -183,16 +184,18 @@ class Check_Panels {
 	}
 
 	/**
-	 * Text of the cell: the label names, or a dash.
+	 * Text of the cell: "Not human" with its class first when the order is flagged, then the label names, or a dash.
 	 *
 	 * @param \WC_Order $order Order.
 	 * @return string
 	 */
 	public static function column_text( $order ) {
-		$labels = Labels::for_order( $order );
-		if ( ! $labels ) {
-			return '–';
+		$parts = array_map( array( Labels::class, 'text' ), Labels::for_order( $order ) );
+		$flag  = Not_Human::for_order( $order );
+		if ( $flag ) {
+			/* translators: %s: class such as "Bad bot". */
+			array_unshift( $parts, sprintf( __( 'Not human: %s', 'socialscore' ), Not_Human::text( $flag['class'] ) ) );
 		}
-		return implode( ', ', array_map( array( Labels::class, 'text' ), $labels ) );
+		return $parts ? implode( ', ', $parts ) : '–';
 	}
 }

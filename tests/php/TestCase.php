@@ -44,30 +44,54 @@ abstract class TestCase extends PHPUnitTestCase {
 
 		Functions\stubs(
 			array(
-				'__'                    => static function ( $t ) { return $t; },
-				'esc_html__'            => static function ( $t ) { return $t; },
-				'esc_html'              => static function ( $t ) { return htmlspecialchars( (string) $t, ENT_QUOTES ); },
-				'esc_attr'              => static function ( $t ) { return htmlspecialchars( (string) $t, ENT_QUOTES ); },
-				'esc_url'               => static function ( $t ) { return (string) $t; },
-				'esc_url_raw'           => static function ( $t ) { return (string) $t; },
-				'sanitize_text_field'   => static function ( $t ) { return trim( strip_tags( (string) $t ) ); },
-				'sanitize_key'          => static function ( $t ) { return strtolower( preg_replace( '/[^a-z0-9_\-]/i', '', (string) $t ) ); },
-				'wp_unslash'            => static function ( $t ) { return $t; },
-				'wp_json_encode'        => static function ( $d, $flags = 0 ) { return json_encode( $d, $flags ); },
-				'untrailingslashit'     => static function ( $t ) { return rtrim( $t, '/' ); },
-				'home_url'              => static function () { return 'https://shop.test'; },
-				'wp_parse_url'          => static function ( $url, $component = -1 ) { return parse_url( $url, $component ); },
-				'admin_url'             => static function ( $p = '' ) { return 'https://shop.test/wp-admin/' . $p; },
-				'rest_url'              => static function ( $p = '' ) { return 'https://shop.test/wp-json/' . $p; },
-				'wp_create_nonce'       => static function () { return 'nonce123'; },
-				'is_wp_error'           => static function ( $t ) { return $t instanceof \WP_Error; },
-				'wp_salt'               => static function () { return 'unit-test-salt-unit-test-salt-unit-test-salt'; },
-				'get_woocommerce_currency' => static function () { return 'EUR'; },
-				'add_query_arg'         => static function ( $args, $url ) { return $url . ( false === strpos( $url, '?' ) ? '?' : '&' ) . http_build_query( $args ); },
-				'apply_filters'         => static function ( $tag, $value ) { return $value; },
-				'wp_remote_retrieve_response_code' => static function ( $r ) { return $r['response']['code']; },
-				'wp_remote_retrieve_body'          => static function ( $r ) { return $r['body']; },
-				'wp_remote_retrieve_header'        => static function ( $r, $h ) { return $r['headers'][ $h ] ?? ''; },
+				'__'                               => static function ( $t ) {
+					return $t; },
+				'esc_html__'                       => static function ( $t ) {
+					return $t; },
+				'esc_html'                         => static function ( $t ) {
+					return htmlspecialchars( (string) $t, ENT_QUOTES ); },
+				'esc_attr'                         => static function ( $t ) {
+					return htmlspecialchars( (string) $t, ENT_QUOTES ); },
+				'esc_url'                          => static function ( $t ) {
+					return (string) $t; },
+				'esc_url_raw'                      => static function ( $t ) {
+					return (string) $t; },
+				'sanitize_text_field'              => static function ( $t ) {
+					return trim( strip_tags( (string) $t ) ); },
+				'sanitize_key'                     => static function ( $t ) {
+					return strtolower( preg_replace( '/[^a-z0-9_\-]/i', '', (string) $t ) ); },
+				'wp_unslash'                       => static function ( $t ) {
+					return $t; },
+				'wp_json_encode'                   => static function ( $d, $flags = 0 ) {
+					return json_encode( $d, $flags ); },
+				'untrailingslashit'                => static function ( $t ) {
+					return rtrim( $t, '/' ); },
+				'home_url'                         => static function () {
+					return 'https://shop.test'; },
+				'wp_parse_url'                     => static function ( $url, $component = -1 ) {
+					return parse_url( $url, $component ); },
+				'admin_url'                        => static function ( $p = '' ) {
+					return 'https://shop.test/wp-admin/' . $p; },
+				'rest_url'                         => static function ( $p = '' ) {
+					return 'https://shop.test/wp-json/' . $p; },
+				'wp_create_nonce'                  => static function () {
+					return 'nonce123'; },
+				'is_wp_error'                      => static function ( $t ) {
+					return $t instanceof \WP_Error; },
+				'wp_salt'                          => static function () {
+					return 'unit-test-salt-unit-test-salt-unit-test-salt'; },
+				'get_woocommerce_currency'         => static function () {
+					return 'EUR'; },
+				'add_query_arg'                    => static function ( $args, $url ) {
+					return $url . ( false === strpos( $url, '?' ) ? '?' : '&' ) . http_build_query( $args ); },
+				'apply_filters'                    => static function ( $tag, $value ) {
+					return $value; },
+				'wp_remote_retrieve_response_code' => static function ( $r ) {
+					return $r['response']['code']; },
+				'wp_remote_retrieve_body'          => static function ( $r ) {
+					return $r['body']; },
+				'wp_remote_retrieve_header'        => static function ( $r, $h ) {
+					return $r['headers'][ $h ] ?? ''; },
 			)
 		);
 
@@ -117,7 +141,10 @@ abstract class TestCase extends PHPUnitTestCase {
 
 		Functions\when( 'wp_remote_request' )->alias(
 			function ( $url, $args ) {
-				$this->http[] = array( 'url' => $url, 'args' => $args );
+				$this->http[] = array(
+					'url'  => $url,
+					'args' => $args,
+				);
 				return $this->http_responder ? ( $this->http_responder )( $url, $args ) : self::response( 200, array() );
 			}
 		);

@@ -362,6 +362,7 @@ class Sync {
 		// was rejected). The order is not in SocialScore then, so a check for it would only 404.
 		if ( self::settle( $result, self::HOOK_ORDER, array( (int) $order_id ), (int) $attempt ) && ! self::has_rejected( $result ) ) {
 			Enrichment::after_order_sync( $order );
+			Not_Human::after_order_sync( $order );
 		}
 	}
 
