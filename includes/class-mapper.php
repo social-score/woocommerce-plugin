@@ -205,6 +205,16 @@ class Mapper {
 	}
 
 	/**
+	 * Whether the order was placed by an AI agent through the MCP Store module (the same mark `orders:batch` sends).
+	 *
+	 * @param \WC_Order $order Order.
+	 * @return bool
+	 */
+	public static function is_agent_order( $order ) {
+		return self::placed_by_agent( $order );
+	}
+
+	/**
 	 * The checkout reference kept on an order, or an empty string when it has none or the value is not a UUIDv4.
 	 *
 	 * @param \WC_Order $order Order.
