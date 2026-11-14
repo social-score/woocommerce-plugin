@@ -998,7 +998,20 @@ class BotGuardTest extends TestCase {
 	 */
 	private function fake_product( $id, $regular, $sale, $parent = 0, array $children = array(), $sold_individually = false ) {
 		return new class( $id, $regular, $sale, $parent, $children, $sold_individually ) {
-			public function __construct( private $id, private $regular, private $sale, private $parent, private array $children, private bool $single ) {}
+			private $id;
+			private $regular;
+			private $sale;
+			private $parent;
+			private $children;
+			private $single;
+			public function __construct( $id, $regular, $sale, $parent, array $children, $single ) {
+				$this->id       = $id;
+				$this->regular  = $regular;
+				$this->sale     = $sale;
+				$this->parent   = $parent;
+				$this->children = $children;
+				$this->single   = (bool) $single;
+			}
 			public function get_id() {
 				return $this->id;
 			}

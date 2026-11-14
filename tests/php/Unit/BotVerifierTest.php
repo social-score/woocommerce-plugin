@@ -382,7 +382,7 @@ class BotVerifierTest extends TestCase {
 		foreach ( $refused as $cidr ) {
 			$this->assertSame( array(), Bot_Settings::ranges( $cidr ), $cidr );
 		}
-		foreach ( array( '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '192.168.1.0/24', '127.0.0.1', 'fd00::/8', 'fc00::/7', '198.51.100.0/24', '203.0.113.9', '2001:db8::/32', '66.249.0.0/16' ) as $cidr ) {
+		foreach ( array( '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '192.168.1.0/24', '127.0.0.1', 'fd00::/8', 'fc00::/7', '198.51.100.0/24', '203.0.113.9', '2a00:1450::/32', '66.249.0.0/16' ) as $cidr ) {
 			$this->assertNotSame( array(), Bot_Settings::ranges( $cidr ), $cidr );
 		}
 		Bot_Settings::save( false, "0.0.0.0/0\n::/0\n198.51.100.0/24", 'X-Forwarded-For' );
