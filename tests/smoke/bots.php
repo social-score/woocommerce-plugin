@@ -474,14 +474,81 @@ ss_assert( false === strpos( $page_body, '"' . $sale_minor . '"' ) && false === 
 // X. Substitute mode closes the cart and the checkout to a bad bot (one add-to-cart would show the real price); a person adds normally.
 $pid_cart = $product->get_id();
 ss_assert( 403 === ss_as( $BOT, $url . '?add-to-cart=' . $pid_cart ), 'substitute mode: ?add-to-cart= is 403 for a bad bot' );
-$res = wp_remote_post( 'http://wordpress/wp-json/wc/store/v1/cart/add-item', array( 'timeout' => 60, 'user-agent' => $BOT, 'headers' => array( 'Content-Type' => 'application/json' ), 'body' => wp_json_encode( array( 'id' => $pid_cart, 'quantity' => 1 ) ) ) );
+$res = wp_remote_post(
+	'http://wordpress/wp-json/wc/store/v1/cart/add-item',
+	array(
+		'timeout'    => 60,
+		'user-agent' => $BOT,
+		'headers'    => array( 'Content-Type' => 'application/json' ),
+		'body'       => wp_json_encode(
+			array(
+				'id'       => $pid_cart,
+				'quantity' => 1,
+			)
+		),
+	)
+);
 ss_assert( 403 === wp_remote_retrieve_response_code( $res ) && false !== strpos( wp_remote_retrieve_body( $res ), 'socialscore_blocked' ), 'substitute mode: the Store API add-item is 403 for a bad bot' );
-$res = wp_remote_post( 'http://wordpress/?wc-ajax=add_to_cart', array( 'timeout' => 60, 'user-agent' => $BOT, 'body' => array( 'product_id' => $pid_cart, 'quantity' => 1 ) ) );
+$res = wp_remote_post(
+	'http://wordpress/?wc-ajax=add_to_cart',
+	array(
+		'timeout'    => 60,
+		'user-agent' => $BOT,
+		'body'       => array(
+			'product_id' => $pid_cart,
+			'quantity'   => 1,
+		),
+	)
+);
 ss_assert( 403 === wp_remote_retrieve_response_code( $res ), 'substitute mode: wc-ajax add_to_cart is 403 for a bad bot' );
-$res = wp_remote_post( 'http://wordpress/wp-admin/admin-ajax.php', array( 'timeout' => 60, 'user-agent' => $BOT, 'body' => array( 'action' => 'woocommerce_add_to_cart', 'product_id' => $pid_cart ) ) );
+$res = wp_remote_post(
+	'http://wordpress/wp-admin/admin-ajax.php',
+	array(
+		'timeout'    => 60,
+		'user-agent' => $BOT,
+		'body'       => array(
+			'action'     => 'woocommerce_add_to_cart',
+			'product_id' => $pid_cart,
+		),
+	)
+);
 ss_assert( 403 === wp_remote_retrieve_response_code( $res ), 'substitute mode: admin-ajax add to cart is 403 for a bad bot' );
-$res = wp_remote_post( wc_get_checkout_url(), array( 'timeout' => 60, 'user-agent' => $BOT, 'body' => array( 'woocommerce-process-checkout-nonce' => 'x', 'billing_email' => 'a@b.test' ) ) );
+$res = wp_remote_post(
+	wc_get_checkout_url(),
+	array(
+		'timeout'    => 60,
+		'user-agent' => $BOT,
+		'body'       => array(
+			'woocommerce-process-checkout-nonce' => 'x',
+			'billing_email'                      => 'a@b.test',
+		),
+	)
+);
 ss_assert( 403 === wp_remote_retrieve_response_code( $res ), 'substitute mode: the checkout form is 403 for a bad bot' );
+$res   = wp_remote_post(
+	'http://wordpress/wp-json/batch/v1',
+	array(
+		'timeout'    => 60,
+		'user-agent' => $BOT,
+		'headers'    => array( 'Content-Type' => 'application/json' ),
+		'body'       => wp_json_encode(
+			array(
+				'requests' => array(
+					array(
+						'method' => 'POST',
+						'path'   => '/wc/store/v1/cart/add-item',
+						'body'   => array(
+							'id'       => $pid_cart,
+							'quantity' => 1,
+						),
+					),
+				),
+			)
+		),
+	)
+);
+$batch = json_decode( wp_remote_retrieve_body( $res ), true );
+ss_assert( 207 === wp_remote_retrieve_response_code( $res ) && 403 === ( $batch['responses'][0]['status'] ?? 0 ), 'substitute mode: core batch with a cart add-item gives the bot a 403 inside, no 500 (' . wp_remote_retrieve_response_code( $res ) . ')' );
 $code = ss_as( $PERSON, $url . '?add-to-cart=' . $pid_cart, $person_headers );
 ss_assert( 403 !== $code && $code < 400, 'substitute mode: a person adds to the cart normally (' . $code . ')' );
 

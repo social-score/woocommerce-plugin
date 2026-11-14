@@ -762,7 +762,14 @@ class Bot_Guard {
 			return $result;
 		}
 		self::no_cache();
-		return new \WP_Error( 'socialscore_blocked', 'Access denied.', array( 'status' => 403 ) );
+		// A response, not a WP_Error: core's /batch/v1 and the connectors dispatch filter expect a WP_REST_Response from a sub-request.
+		return new \WP_REST_Response(
+			array(
+				'code'    => 'socialscore_blocked',
+				'message' => 'Access denied.',
+			),
+			403
+		);
 	}
 
 	/**

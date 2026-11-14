@@ -261,8 +261,9 @@ class BotGuardTest extends TestCase {
 		foreach ( array( '/wc/store/v1/products/24', '/WC/STORE/v1/cart', '//wc/store//v1/cart/add-item', '/Wc/Store/V1/Cart/Add-Item/' ) as $route ) {
 			$bot( '/wp-json/wp/v2/types' );
 			$out = ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( $route ) );
-			$this->assertInstanceOf( \WP_Error::class, $out, $route );
-			$this->assertSame( 403, $out->get_error_data()['status'] ?? null, $route );
+			$this->assertInstanceOf( \WP_REST_Response::class, $out, $route );
+			$this->assertSame( 403, $out->get_status(), $route );
+			$this->assertSame( 'socialscore_blocked', $out->get_data()['code'], $route );
 		}
 		// Not a Store API route, a person, another mode, or a result already decided: untouched.
 		$bot( '/wp-json/wp/v2/types' );
@@ -271,7 +272,7 @@ class BotGuardTest extends TestCase {
 		$this->server_says( 'substitute' );
 		$bot( '/wp-json/wp/v2/types' );
 		$this->assertNull( ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( '/wc/store/v1/products' ) ), 'substitute mode still answers the products' );
-		$this->assertInstanceOf( \WP_Error::class, ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( '/wc/store/v1/cart/add-item' ) ), 'but the cart is closed' );
+		$this->assertInstanceOf( \WP_REST_Response::class, ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( '/wc/store/v1/cart/add-item' ) ), 'but the cart is closed' );
 		$this->server_says( 'block' );
 		$this->request(
 			'Mozilla/5.0 Chrome/126.0',
@@ -859,7 +860,7 @@ class BotGuardTest extends TestCase {
 		$_GET['wc-api'] = 'probe_gw';
 		$out            = ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( '/wc/store/v1/cart' ) );
 		unset( $_GET['wc-api'] );
-		$this->assertInstanceOf( \WP_Error::class, $out );
+		$this->assertInstanceOf( \WP_REST_Response::class, $out );
 	}
 
 	public function test_the_substitute_factor_is_never_exactly_one() {
@@ -1163,7 +1164,7 @@ class BotGuardTest extends TestCase {
 		$this->server_says( 'substitute' );
 		$this->request( 'curl/8.4.0' );
 		foreach ( array( '/wc/store/v1/cart/add-item', '/wc/store/v1/checkout', '/wc/store/V1/Order/5', '/wc/store/cart' ) as $route ) {
-			$this->assertInstanceOf( \WP_Error::class, ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( $route ) ), $route );
+			$this->assertInstanceOf( \WP_REST_Response::class, ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( $route ) ), $route );
 		}
 		$this->assertNull( ( new Bot_Guard() )->guard_rest( null, null, $this->store_route( '/wc/store/v1/products/5' ) ) );
 		$closes = new \ReflectionMethod( Bot_Guard::class, 'closes_cart' );
