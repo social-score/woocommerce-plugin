@@ -216,6 +216,130 @@ class IdentityTest extends TestCase {
 		$this->assertTrue( Pixel::state()['level2'] );
 	}
 
+	public function test_statistics_and_marketing_are_both_needed() {
+		$this->plugin_switch = true;
+		$this->server_level2 = true;
+		foreach ( array( array( true, false ), array( false, true ) ) as $case ) {
+			Functions\when( 'wp_has_consent' )->alias( fn( $category ) => 'statistics' === $category ? $case[0] : $case[1] );
+			( new Identity() )->on_login( 'ivan', $this->user() );
+		}
+		$this->assertSame( array(), $this->queued, 'one of the two is not enough' );
+		Functions\when( 'wp_has_consent' )->justReturn( true );
+		( new Identity() )->on_login( 'ivan', $this->user() );
+		$event = $this->queued[ Identity::HOOK_SEND ][0][0];
+		$this->assertSame(
+			array(
+				'analytics' => true,
+				'marketing' => true,
+				'source'    => 'wpca',
+			),
+			$event['consent']
+		);
+	}
+
+	public function test_the_cookie_id_of_the_request_goes_with_the_event_and_only_when_it_is_a_uuid() {
+		$this->plugin_switch = true;
+		$this->server_level2 = true;
+		$this->consent_api   = true;
+		$_COOKIE['ss_l2']    = '55555555-5555-4555-a555-555555555555';
+		( new Identity() )->on_login( 'ivan', $this->user() );
+		$_COOKIE['ss_l2'] = '<script>';
+		( new Identity() )->on_login( 'ivan', $this->user() );
+		unset( $_COOKIE['ss_l2'] );
+		( new Identity() )->on_login( 'ivan', $this->user() );
+		$events = $this->queued[ Identity::HOOK_SEND ];
+		$this->assertSame( '55555555-5555-4555-a555-555555555555', $events[0][0]['device_id'] );
+		$this->assertArrayNotHasKey( 'device_id', $events[1][0] );
+		$this->assertArrayNotHasKey( 'device_id', $events[2][0] );
+	}
+
+	public function test_the_job_sends_the_plain_email_for_a_login_and_drops_the_hash_it_replaces() {
+		$this->plugin_switch = true;
+		$this->server_level2 = true;
+		$this->consent_api   = true;
+		( new Identity() )->on_login( 'ivan', $this->user() );
+		$event = $this->queued[ Identity::HOOK_SEND ][0][0];
+		$this->assertSame( 'user:3', $event['ref'] );
+		Functions\when( 'get_userdata' )->justReturn( $this->user() );
+		( new Identity() )->send( $event );
+		$sent = json_decode( $this->http[ count( $this->http ) - 1 ]['args']['body'], true )['events'][0];
+		$this->assertSame( 'ivan.petrov@example.com', $sent['email'] );
+		$this->assertArrayNotHasKey( 'email_sha256', $sent );
+		$this->assertArrayNotHasKey( 'ref', $sent );
+		$this->assertSame( 'login', $sent['type'] );
+		$this->assertTrue( $sent['consent']['marketing'] );
+	}
+
+	public function test_an_order_sends_the_email_and_the_phone_digits_and_its_number() {
+		$this->plugin_switch = true;
+		$this->server_level2 = true;
+		$this->consent_api   = true;
+		Functions\when( 'wc_get_order' )->justReturn( $this->order() );
+		( new Identity() )->on_order( 9 );
+		$event = $this->queued[ Identity::HOOK_SEND ][0][0];
+		( new Identity() )->send( $event );
+		$sent = json_decode( $this->http[ count( $this->http ) - 1 ]['args']['body'], true )['events'][0];
+		$this->assertSame( array( 'order', 'ivan.petrov@example.com', '359881234567', '9' ), array( $sent['type'], $sent['email'], $sent['phone'], $sent['order_external_id'] ) );
+		$this->assertArrayNotHasKey( 'placed_by_agent', $sent );
+	}
+
+	public function test_a_value_that_changed_while_the_event_waited_is_not_sent_in_plain_form() {
+		$this->plugin_switch = true;
+		$this->server_level2 = true;
+		$this->consent_api   = true;
+		( new Identity() )->on_login( 'ivan', $this->user() );
+		$event = $this->queued[ Identity::HOOK_SEND ][0][0];
+		Functions\when( 'get_userdata' )->justReturn(
+			(object) array(
+				'ID'         => 3,
+				'user_email' => 'someone.else@example.com',
+			)
+		);
+		( new Identity() )->send( $event );
+		$sent = json_decode( $this->http[ count( $this->http ) - 1 ]['args']['body'], true )['events'][0];
+		$this->assertArrayNotHasKey( 'email', $sent );
+		$this->assertSame( hash( 'sha256', 'ivan.petrov@example.com' ), $sent['email_sha256'] );
+	}
+
+	public function test_an_order_an_agent_placed_is_queued_without_consent_marked_and_without_a_device() {
+		$this->plugin_switch = true;
+		$this->server_level2 = true;
+		$this->consent_api   = false;
+		$order               = $this->order();
+		$order->meta['_mcpstore_agent_order'] = 'yes';
+		Functions\when( 'wc_get_order' )->justReturn( $order );
+		$_COOKIE['ss_l2'] = '55555555-5555-4555-a555-555555555555';
+		( new Identity() )->on_order( 9 );
+		unset( $_COOKIE['ss_l2'] );
+		$event = $this->queued[ Identity::HOOK_SEND ][0][0];
+		$this->assertTrue( $event['placed_by_agent'] );
+		$this->assertArrayNotHasKey( 'consent', $event );
+		$this->assertArrayNotHasKey( 'device_id', $event );
+		( new Identity() )->send( $event );
+		$sent = json_decode( $this->http[ count( $this->http ) - 1 ]['args']['body'], true )['events'][0];
+		$this->assertTrue( $sent['placed_by_agent'] );
+		$this->assertSame( '9', $sent['order_external_id'] );
+	}
+
+	public function test_an_agent_order_needs_the_two_switches_and_a_person_order_needs_consent() {
+		$order                                = $this->order();
+		$order->meta['_mcpstore_agent_order'] = 'yes';
+		Functions\when( 'wc_get_order' )->justReturn( $order );
+		foreach ( array( array( false, true ), array( true, false ) ) as $case ) {
+			$this->plugin_switch = $case[0];
+			$this->server_level2 = $case[1];
+			$this->transients    = array();
+			( new Identity() )->on_order( 9 );
+		}
+		$this->assertSame( array(), $this->queued );
+		$this->plugin_switch = true;
+		$this->server_level2 = true;
+		$this->transients    = array();
+		Functions\when( 'wc_get_order' )->justReturn( $this->order() ); // not an agent order, no consent.
+		( new Identity() )->on_order( 9 );
+		$this->assertSame( array(), $this->queued );
+	}
+
 	public function test_level_one_pixel_events_still_carry_no_user_id() {
 		$source = file_get_contents( dirname( __DIR__, 3 ) . '/includes/class-pixel.php' );
 		$this->assertStringNotContainsString( 'email', $source );
