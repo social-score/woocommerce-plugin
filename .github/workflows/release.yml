@@ -1,0 +1,94 @@
+name: Release
+
+# Every PR and every push to main builds the installable zip (workflow artifact, kept 30 days).
+# On main, a version that has no tag yet becomes a GitHub release v<version> with the zip attached.
+# To release: raise the version in socialscore.php (header + SOCIALSCORE_VERSION), readme.txt (Stable tag +
+# Changelog) and package.json, then merge to main.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Version (all places must agree)
+        id: v
+        run: |
+          header=$(sed -n 's/^ \* Version: *\([0-9][0-9.]*\).*/\1/p' socialscore.php)
+          const=$(sed -n "s/^define( 'SOCIALSCORE_VERSION', '\([^']*\)' );/\1/p" socialscore.php)
+          stable=$(sed -n 's/^Stable tag: *\([0-9][0-9.]*\).*/\1/p' readme.txt)
+          pkg=$(node -p "require('./package.json').version")
+          echo "header=$header const=$const stable=$stable package=$pkg"
+          if [ -z "$header" ] || [ "$header" != "$const" ] || [ "$header" != "$stable" ] || [ "$header" != "$pkg" ]; then
+            echo "::error::Version mismatch: header=$header SOCIALSCORE_VERSION=$const Stable tag=$stable package.json=$pkg"
+            exit 1
+          fi
+          if ! sed -n '/^== Changelog ==/,/^== /p' readme.txt | grep -q "^= $header =$"; then
+            echo "::error::readme.txt has no Changelog entry '= $header ='"
+            exit 1
+          fi
+          echo "version=$header" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$header" >/dev/null; then
+            echo "tagged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tagged=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Build the release layout
+        run: npm ci && npm run dist
+
+      - name: Zip
+        id: zip
+        run: |
+          name="socialscore-${{ steps.v.outputs.version }}"
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            name="$name-${GITHUB_SHA::7}"
+          fi
+          (cd dist && zip -qr "../$name.zip" socialscore)
+          unzip -l "$name.zip" | tail -1
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.zip.outputs.name }}
+          path: ${{ steps.zip.outputs.name }}.zip
+          retention-days: 30
+
+      - name: Smoke test before release
+        if: github.ref == 'refs/heads/main' && steps.v.outputs.tagged == 'false'
+        run: |
+          status=0
+          docker compose -f tests/smoke/docker-compose.yml run --rm smoke || status=$?
+          docker compose -f tests/smoke/docker-compose.yml down -v
+          exit $status
+
+      - name: GitHub release
+        if: github.ref == 'refs/heads/main' && steps.v.outputs.tagged == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ steps.v.outputs.version }}"
+          sed -n '/^== Changelog ==/,/^== /p' readme.txt \
+            | awk -v h="= $v =" '$0 == h {on=1; next} /^= / {on=0} on' > notes.md
+          gh release create "v$v" "${{ steps.zip.outputs.name }}.zip" \
+            --target "$GITHUB_SHA" --title "v$v" --notes-file notes.md

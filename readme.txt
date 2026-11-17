@@ -5,7 +5,7 @@ Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
 WC requires at least: 8.0
-Stable tag: 0.1.0
+Stable tag: 0.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -73,10 +73,18 @@ The `manage_woocommerce` capability (Shop manager and Administrator).
 
 == Changelog ==
 
+= 0.2.0 =
+* Pixel contract v4: no order cookies, login event.
+* Not-from-a-human flag, bot detection without JavaScript, bad-bot modes, reports page.
+* Level 2 identity from login, registration and orders (off until enabled on the SocialScore side).
+
 = 0.1.0 =
 * First release: connect, dashboard, check panel, order and customer sync, automatic checks, labels, personal data export and erase.
 
 == Upgrade Notice ==
+
+= 0.2.0 =
+Pixel v4, bot protection and Level 2 support.
 
 = 0.1.0 =
 First release.
