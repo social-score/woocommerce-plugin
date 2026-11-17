@@ -1,7 +1,10 @@
 name: Release
 
 # Every PR and every push to main builds the installable zip (workflow artifact, kept 30 days).
-# On main, a version that has no tag yet becomes a GitHub release v<version> with the zip attached.
+# On main, a version that has no tag yet becomes a GitHub release v<version> with the zip attached, twice: as
+# socialscore-<version>.zip and as socialscore.zip, so that
+# https://github.com/social-score/woocommerce-plugin/releases/latest/download/socialscore.zip is always the newest
+# (pixel.socialscore.io links to it).
 # To release: raise the version in socialscore.php (header + SOCIALSCORE_VERSION), readme.txt (Stable tag +
 # Changelog) and package.json, then merge to main.
 
@@ -90,5 +93,6 @@ jobs:
           v="${{ steps.v.outputs.version }}"
           sed -n '/^== Changelog ==/,/^== /p' readme.txt \
             | awk -v h="= $v =" '$0 == h {on=1; next} /^= / {on=0} on' > notes.md
-          gh release create "v$v" "${{ steps.zip.outputs.name }}.zip" \
+          cp "${{ steps.zip.outputs.name }}.zip" socialscore.zip
+          gh release create "v$v" "${{ steps.zip.outputs.name }}.zip" socialscore.zip \
             --target "$GITHUB_SHA" --title "v$v" --notes-file notes.md
