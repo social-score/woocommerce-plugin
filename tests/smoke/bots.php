@@ -525,30 +525,35 @@ $res = wp_remote_post(
 	)
 );
 ss_assert( 403 === wp_remote_retrieve_response_code( $res ), 'substitute mode: the checkout form is 403 for a bad bot' );
-$res   = wp_remote_post(
-	'http://wordpress/wp-json/batch/v1',
-	array(
-		'timeout'    => 60,
-		'user-agent' => $BOT,
-		'headers'    => array( 'Content-Type' => 'application/json' ),
-		'body'       => wp_json_encode(
-			array(
-				'requests' => array(
-					array(
-						'method' => 'POST',
-						'path'   => '/wc/store/v1/cart/add-item',
-						'body'   => array(
-							'id'       => $pid_cart,
-							'quantity' => 1,
-						),
+// WooCommerce 11.3.1 refuses Store API requests inside core's /batch/v1 (400, "must use the Store API batch endpoint"); before that
+// they ran and the plugin answered 403 inside. Either way the bot must not get an added item and nothing may be a 500.
+$batch_args = array(
+	'timeout'    => 60,
+	'user-agent' => $BOT,
+	'headers'    => array( 'Content-Type' => 'application/json' ),
+	'body'       => wp_json_encode(
+		array(
+			'requests' => array(
+				array(
+					'method' => 'POST',
+					'path'   => '/wc/store/v1/cart/add-item',
+					'body'   => array(
+						'id'       => $pid_cart,
+						'quantity' => 1,
 					),
 				),
-			)
-		),
-	)
+			),
+		)
+	),
 );
+$res        = wp_remote_post( 'http://wordpress/wp-json/batch/v1', $batch_args );
+$batch      = json_decode( wp_remote_retrieve_body( $res ), true );
+$core_ok    = ( 207 === wp_remote_retrieve_response_code( $res ) && 403 === ( $batch['responses'][0]['status'] ?? 0 ) )
+	|| ( 400 === wp_remote_retrieve_response_code( $res ) && 'woocommerce_rest_invalid_path' === ( $batch['code'] ?? '' ) );
+ss_assert( $core_ok, 'substitute mode: core batch with a cart add-item gives the bot a 403 inside or is refused by WooCommerce itself, no 500 (' . wp_remote_retrieve_response_code( $res ) . ')' );
+$res   = wp_remote_post( 'http://wordpress/wp-json/wc/store/v1/batch', $batch_args );
 $batch = json_decode( wp_remote_retrieve_body( $res ), true );
-ss_assert( 207 === wp_remote_retrieve_response_code( $res ) && 403 === ( $batch['responses'][0]['status'] ?? 0 ), 'substitute mode: core batch with a cart add-item gives the bot a 403 inside, no 500 (' . wp_remote_retrieve_response_code( $res ) . ')' );
+ss_assert( 207 === wp_remote_retrieve_response_code( $res ) && 403 === ( $batch['responses'][0]['status'] ?? 0 ), 'substitute mode: the Store API batch with a cart add-item gives the bot a 403 inside, no 500 (' . wp_remote_retrieve_response_code( $res ) . ')' );
 $code = ss_as( $PERSON, $url . '?add-to-cart=' . $pid_cart, $person_headers );
 ss_assert( 403 !== $code && $code < 400, 'substitute mode: a person adds to the cart normally (' . $code . ')' );
 

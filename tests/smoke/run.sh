@@ -10,7 +10,7 @@ i=0; until php -r 'mysqli_report(MYSQLI_REPORT_OFF); $m = new mysqli("db", "wp",
 
 echo "== install WordPress and WooCommerce"
 $WP core install --url=http://wordpress --title=Smoke --admin_user=admin --admin_password=admin --admin_email=a@example.test --skip-email
-$WP plugin install woocommerce --activate
+$WP plugin install woocommerce ${WC_VERSION:+--version=$WC_VERSION} --activate
 $WP --version; $WP plugin get woocommerce --field=version
 $WP option update woocommerce_custom_orders_table_enabled yes
 $WP option update woocommerce_custom_orders_table_data_sync_enabled no
