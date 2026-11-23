@@ -202,8 +202,8 @@ class PixelTest extends TestCase {
 
 	public function test_loader_gets_the_site_id_and_an_empty_source() {
 		$js = Pixel::render_loader( self::SITE );
-		$this->assertStringContainsString( 'setAttribute("data-site","' . self::SITE . '")', $js );
-		$this->assertStringContainsString( 'setAttribute("data-consent-source","")', $js );
+		$this->assertMatchesRegularExpression( '/"data-site",\s*"' . self::SITE . '"/', $js );
+		$this->assertMatchesRegularExpression( '/"data-consent-source",\s*""\)/', $js );
 		$this->assertStringNotContainsString( '{{', $js );
 		$this->assertStringContainsString( 'https://pixel.socialscore.io/v1/p.js', $js );
 	}
@@ -215,11 +215,11 @@ class PixelTest extends TestCase {
 		foreach ( array( 'x', 'SHOPIFY', 'shopify"', "shopify\n", '");alert(1);//' ) as $bad ) {
 			$this->assertSame( '', Pixel::render_loader( self::SITE, $bad ), 'source ' . json_encode( $bad ) );
 		}
-		$this->assertStringContainsString( 'data-consent-source","shopify"', Pixel::render_loader( self::SITE, 'shopify' ) );
+		$this->assertMatchesRegularExpression( '/"data-consent-source",\s*"shopify"/', Pixel::render_loader( self::SITE, 'shopify' ) );
 	}
 
 	public function test_the_shipped_loader_still_has_the_two_placeholders() {
-		$js = file_get_contents( SOCIALSCORE_DIR . 'assets/pixel/loader.min.js' );
+		$js = file_get_contents( SOCIALSCORE_DIR . 'assets/pixel/loader.js' );
 		$this->assertSame( 1, substr_count( $js, '{{SITE_ID}}' ) );
 		$this->assertSame( 1, substr_count( $js, '{{CONSENT_SOURCE}}' ) );
 	}
@@ -249,7 +249,7 @@ class PixelTest extends TestCase {
 		$this->connect_store( 'st_1' );
 		$this->pixel_answer();
 		( new Pixel() )->enqueue();
-		$this->assertStringContainsString( 'data-site","' . self::SITE . '"', $this->inline['socialscore-pixel'][0] );
+		$this->assertMatchesRegularExpression( '/"data-site",\s*"' . self::SITE . '"/', $this->inline['socialscore-pixel'][0] );
 		$this->assertCount( 1, $this->inline['socialscore-pixel'], 'no events on a plain page' );
 	}
 

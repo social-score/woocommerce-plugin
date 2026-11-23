@@ -171,6 +171,15 @@ class BotVerifierTest extends TestCase {
 		$this->assertContains( 'https://www.bing.com/toolbox/bingbot.json', $urls );
 	}
 
+	public function test_the_range_downloads_do_not_tell_the_site_address_in_the_user_agent() {
+		$this->files( array() );
+		Bot_Verifier::refresh();
+		$this->assertNotEmpty( $this->http );
+		foreach ( $this->http as $request ) {
+			$this->assertSame( 'SocialScore/' . SOCIALSCORE_VERSION, $request['args']['user-agent'] ?? null, $request['url'] );
+		}
+	}
+
 	public function test_an_engine_whose_download_fails_keeps_the_list_it_had() {
 		$this->files( array( 'https://www.bing.com/toolbox/bingbot.json' => array( 'prefixes' => array( array( 'ipv4Prefix' => '40.77.167.0/24' ) ) ) ) );
 		Bot_Verifier::refresh();

@@ -345,7 +345,7 @@ class Pixel {
 		if ( 1 !== preg_match( self::SITE_ID_PATTERN, (string) $site_id ) || 1 !== preg_match( self::SOURCE_PATTERN, (string) $source ) ) {
 			return '';
 		}
-		$file = SOCIALSCORE_DIR . 'assets/pixel/loader.min.js';
+		$file = SOCIALSCORE_DIR . 'assets/pixel/loader.js';
 		if ( ! is_readable( $file ) ) {
 			return '';
 		}

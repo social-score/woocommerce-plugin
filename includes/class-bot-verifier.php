@@ -222,6 +222,7 @@ class Bot_Verifier {
 					$url,
 					array(
 						'timeout'             => 15,
+						'user-agent'          => 'SocialScore/' . SOCIALSCORE_VERSION, // WordPress would add this site's address.
 						'redirection'         => 3,
 						'limit_response_size' => self::MAX_BODY,
 					)

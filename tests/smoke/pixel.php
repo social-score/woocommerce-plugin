@@ -67,7 +67,7 @@ Pixel::forget();
 
 // 1. Pixel on: product page has the loader with data-site, the view_item event, the events bundle; the key is nowhere.
 $body = wp_remote_retrieve_body( ss_get( $url ) );
-ss_assert( 1 === preg_match( '/setAttribute\("data-site","' . $SITE . '"\)/', $body ), 'product page has the loader with data-site' );
+ss_assert( 1 === preg_match( '/setAttribute\("data-site",\s*"' . $SITE . '"\)/', $body ), 'product page has the loader with data-site' );
 ss_assert( false !== strpos( $body, 'https://pixel.socialscore.io/v1/p.js' ) && false === strpos( $body, '{{' ), 'loader points at the Pixel script and no placeholder is left' );
 ss_assert( false !== strpos( $body, '"type":"view_item","data":{"item_id":"' . $product->get_id() . '","price":12.5,"currency":"' . get_woocommerce_currency() . '"}' ), 'product page pushes view_item' );
 ss_assert( false !== strpos( $body, 'build/pixel-events.js' ), 'the add-to-cart bundle is loaded' );
@@ -339,7 +339,7 @@ $html = wp_remote_retrieve_body( ss_get( $buy2->get_checkout_order_received_url(
 ss_assert( 1 === substr_count( $html, '"type":"purchase"' ), 'classic shortcode thank-you page pushes purchase once' );
 $html = wp_remote_retrieve_body( ss_get( wc_get_checkout_url(), $jar ) );
 ss_assert( 1 === substr_count( $html, '"type":"begin_checkout"' ), 'classic shortcode checkout page pushes begin_checkout once' );
-ss_assert( 1 === preg_match( '/setAttribute\("data-site","' . $SITE . '"\)/', $html ), 'classic checkout page has the loader with data-site' );
+ss_assert( 1 === preg_match( '/setAttribute\("data-site",\s*"' . $SITE . '"\)/', $html ), 'classic checkout page has the loader with data-site' );
 // 9. Login: the wp-login request itself makes no Pixel lookup, the next storefront page prints one data-less
 //    login event, and the page after that prints none.
 Pixel::forget();
