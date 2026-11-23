@@ -50,7 +50,7 @@ $WP eval 'if ( false !== get_option( "socialscore_bot_hits" ) || false !== get_o
 $WP eval 'global $wpdb; if ( (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE \"%socialscore\_pixel\_%\"" ) > 0 ) { exit( 1 ); } echo "Pixel state transient removed\n";' || fail "uninstall left the Pixel state transient"
 
 echo "== Plugin Check (WordPress.org checks) on the release layout"
-$WP plugin install plugin-check --activate >/dev/null 2>&1 || fail "could not install plugin-check"
+$WP plugin install plugin-check --version=2.2.0 --activate >/dev/null 2>&1 || fail "could not install plugin-check"
 $WP plugin check socialscore --format=table > /tmp/plugin-check.txt 2>&1 || true
 grep -v '^Deprecated' /tmp/plugin-check.txt || true
 if grep -q "ERROR" /tmp/plugin-check.txt; then fail "Plugin Check reported errors"; fi
