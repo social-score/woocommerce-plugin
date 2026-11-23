@@ -2,6 +2,8 @@
 # against a mock SocialScore API. Run from the repo root after `npm run dist` (the release layout is what runs):
 #   docker compose -f tests/smoke/docker-compose.yml run --rm smoke; docker compose -f tests/smoke/docker-compose.yml down -v
 name: socialscore-smoke
+# WordPress and WooCommerce are pinned so a new release cannot turn CI red by itself (WooCommerce 11.3.1 changed the core batch
+# behaviour). To try a newer WooCommerce: WC_VERSION=<x.y.z> docker compose ... run --rm smoke; then raise the pins here.
 x-wp-env: &wp-env
   WORDPRESS_DB_HOST: db
   WORDPRESS_DB_USER: wp
@@ -39,7 +41,7 @@ services:
       - ./:/smoke:ro
       - shared:/shared
   wordpress:
-    image: wordpress:php8.2-apache
+    image: wordpress:7.1.5-php8.2-apache
     depends_on:
       db:
         condition: service_healthy
@@ -51,7 +53,7 @@ services:
       - ../../dist/socialscore:/var/www/html/wp-content/plugins/socialscore:ro
       - shared:/shared
   smoke:
-    image: wordpress:cli-php8.2
+    image: wordpress:cli-2.12.0-php8.2
     user: "33:33"
     depends_on:
       db:
@@ -63,6 +65,7 @@ services:
     environment:
       <<: *wp-env
       WP_CLI_CACHE_DIR: /tmp/wpcli-cache
+      WC_VERSION: ${WC_VERSION:-11.3.1}
     volumes:
       - wp:/var/www/html
       - ../../dist/socialscore:/var/www/html/wp-content/plugins/socialscore:ro
