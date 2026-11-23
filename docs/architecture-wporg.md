@@ -19,7 +19,7 @@ Goal: the plugin passes the WordPress.org review the first time. Submission is d
 - The range downloads stay (they are documented, not removed); removal is the fallback if a reviewer objects.
 - Slug and text domain: left to the human at submission (`docs/wporg-submission.md`), because the slug can be changed once there.
 - Vendored packages keep their source in the source maps; extracting it into the zip is the fallback if a reviewer asks.
-- Not fixed, out of scope: the smoke test `bots.php` fails on `main` too with current WordPress/WooCommerce images (see test plan).
+- Not part of this branch: the smoke test `bots.php` failed on `main` because WooCommerce 11.3.1 refuses Store API calls inside core `/batch/v1`; fixed separately in `fix/smoke-core-batch`.
 
 ## Tasks
 
