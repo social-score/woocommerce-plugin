@@ -12,8 +12,12 @@ How Your Plugin Assets Work, How to Use Subversion) and the official Plugin Chec
   data, 8 outside code, 10 credits, 11 admin notices, 13 default libraries, 17 trademarks). What changed:
   - `assets/pixel/loader.min.js` (minified, no source) became the readable `assets/pixel/loader.js`.
   - `readme.txt` documents the daily download of the Google, Bing and Cloudflare address ranges (it was not listed
-    under "External services"), links the public source repository and adds `Requires Plugins: woocommerce`.
+    under "External services"), links the public source repository. The `Requires Plugins: woocommerce` header was already in `socialscore.php` (WordPress.org reads dependencies from there).
+  - The range downloads now send the user agent `SocialScore/<version>`; WordPress's default contains the site address.
   - `docs/` is no longer shipped in the zip (`.distignore`).
+- Known failure, not ours: the smoke test `tests/smoke/bots.php` fails on `main` too (HTTP 400 instead of 403 for a core
+  batch with a cart add-item), so the smoke run stops there and `flow-end.php` is not reached in CI. It blocks the next
+  release workflow (the smoke runs before a release) until fixed.
 - Not changed on purpose: the version (0.2.0 in `socialscore.php`, `readme.txt`, `package.json`), so merging does not
   start a GitHub release. `Tested up to: 7.1` is right: 7.1.5 is the current stable release (7.2 is still RC).
 

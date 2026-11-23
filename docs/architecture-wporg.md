@@ -8,7 +8,8 @@ Goal: the plugin passes the WordPress.org review the first time. Submission is d
 - Guideline 4 (readable code): `assets/pixel/loader.min.js` was minified with no source.
 - Guidelines 6, 7, 8 (documented external services): the daily download of Google, Bing and Cloudflare address ranges
   (`Bot_Verifier::refresh`) was not in `readme.txt`.
-- Readme: no `Requires Plugins` header, no link to the public source repository.
+- Readme: no link to the public source repository. (`Requires Plugins: woocommerce` is already in the `socialscore.php` header, which is what WordPress.org reads.)
+- The range downloads sent WordPress's default user agent, which contains the site address: now `SocialScore/<version>`.
 - `docs/` (internal) shipped inside the zip.
 
 ## Decisions
@@ -25,7 +26,8 @@ Goal: the plugin passes the WordPress.org review the first time. Submission is d
 - [x] T1 Run Plugin Check before and after
 - [x] T2 Review the guidelines by hand
 - [x] T3 Replace the minified loader with `assets/pixel/loader.js`
-- [x] T4 Document the range downloads, source link and `Requires Plugins` in `readme.txt`
+- [x] T4 Document the range downloads and the source link in `readme.txt`
+- [x] T8 {added} Send `SocialScore/<version>` as user agent in the range downloads, with a test
 - [x] T5 Keep `docs/` out of the zip
 - [x] T6 Write `docs/wporg-submission.md`
 - [x] T7 Run the repository's tests and linters
