@@ -10,7 +10,7 @@ i=0; until php -r 'mysqli_report(MYSQLI_REPORT_OFF); $m = new mysqli("db", "wp",
 
 echo "== install WordPress and WooCommerce"
 $WP core install --url=http://wordpress --title=Smoke --admin_user=admin --admin_password=admin --admin_email=a@example.test --skip-email
-$WP plugin install woocommerce --activate
+$WP plugin install woocommerce ${WC_VERSION:+--version=$WC_VERSION} --activate
 $WP --version; $WP plugin get woocommerce --field=version
 $WP option update woocommerce_custom_orders_table_enabled yes
 $WP option update woocommerce_custom_orders_table_data_sync_enabled no
@@ -50,7 +50,7 @@ $WP eval 'if ( false !== get_option( "socialscore_bot_hits" ) || false !== get_o
 $WP eval 'global $wpdb; if ( (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE \"%socialscore\_pixel\_%\"" ) > 0 ) { exit( 1 ); } echo "Pixel state transient removed\n";' || fail "uninstall left the Pixel state transient"
 
 echo "== Plugin Check (WordPress.org checks) on the release layout"
-$WP plugin install plugin-check --activate >/dev/null 2>&1 || fail "could not install plugin-check"
+$WP plugin install plugin-check --version=2.2.0 --activate >/dev/null 2>&1 || fail "could not install plugin-check"
 $WP plugin check socialscore --format=table > /tmp/plugin-check.txt 2>&1 || true
 grep -v '^Deprecated' /tmp/plugin-check.txt || true
 if grep -q "ERROR" /tmp/plugin-check.txt; then fail "Plugin Check reported errors"; fi
