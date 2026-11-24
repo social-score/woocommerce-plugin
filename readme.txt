@@ -5,7 +5,7 @@ Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
 WC requires at least: 8.0
-Stable tag: 0.2.0
+Stable tag: 0.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,9 @@ The `manage_woocommerce` capability (Shop manager and Administrator).
 
 == Changelog ==
 
+= 0.2.1 =
+* WordPress.org readiness: readable Pixel loader, external services documented, SocialScore/<version> user agent for address-range downloads.
+
 = 0.2.0 =
 * Pixel contract v4: no order cookies, login event.
 * Not-from-a-human flag, bot detection without JavaScript, bad-bot modes, reports page.
@@ -84,6 +87,9 @@ The `manage_woocommerce` capability (Shop manager and Administrator).
 * First release: connect, dashboard, check panel, order and customer sync, automatic checks, labels, personal data export and erase.
 
 == Upgrade Notice ==
+
+= 0.2.1 =
+WordPress.org readiness fixes, no change in behaviour.
 
 = 0.2.0 =
 Pixel v4, bot protection and Level 2 support.
