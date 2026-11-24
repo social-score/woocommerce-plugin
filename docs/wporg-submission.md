@@ -15,8 +15,7 @@ How Your Plugin Assets Work, How to Use Subversion) and the official Plugin Chec
     under "External services"), links the public source repository. The `Requires Plugins: woocommerce` header was already in `socialscore.php` (WordPress.org reads dependencies from there).
   - The range downloads now send the user agent `SocialScore/<version>`; WordPress's default contains the site address.
   - `docs/` is no longer shipped in the zip (`.distignore`).
-- Not changed on purpose: the version (0.2.0 in `socialscore.php`, `readme.txt`, `package.json`), so merging does not
-  start a GitHub release. `Tested up to: 7.1` is right: 7.1.5 is the current stable release (7.2 is still RC).
+- The version was then raised to 0.2.1 in a separate change, so the release workflow publishes a zip with these fixes. `Tested up to: 7.1` is right: 7.1.5 is the current stable release (7.2 is still RC).
 
 ## Before you submit
 
@@ -32,9 +31,8 @@ How Your Plugin Assets Work, How to Use Subversion) and the official Plugin Chec
      the `Text Domain:` header, and the tests), which is a code change and a new review round.
    The first is much cheaper. Both names were not found on WordPress.org on 23.11.2026 (API `plugins/info/1.0`), but
    that does not prove they are free: the system tells you on submission.
-4. **Build the zip from `main` after this branch is merged.** The GitHub release `v0.2.0` and the "latest" link were
-   built before these fixes, so do not upload them. Either download the `socialscore-0.2.0` artifact of the release
-   workflow run on the merge commit (kept 30 days), or build it yourself:
+4. **Upload the 0.2.1 zip.** The GitHub release `v0.2.0` was built before these fixes, so do not upload it. Take
+   `socialscore-0.2.1.zip` from the GitHub release `v0.2.1` (the "latest" link points to it), or build it yourself:
 
    ```
    npm ci && npm run dist && (cd dist && zip -qr ../socialscore.zip socialscore)
@@ -79,12 +77,12 @@ svn co https://plugins.svn.wordpress.org/<slug> wporg-svn
 # put the content of dist/socialscore/ (the files, not the folder) into trunk/ - socialscore.php must sit directly in trunk/
 rsync -a --delete dist/socialscore/ wporg-svn/trunk/
 svn add --force wporg-svn/trunk/*
-svn ci -m "Add SocialScore for WooCommerce 0.2.0" wporg-svn
-svn cp wporg-svn/trunk wporg-svn/tags/0.2.0
-svn ci -m "Tag 0.2.0" wporg-svn
+svn ci -m "Add SocialScore for WooCommerce 0.2.1" wporg-svn
+svn cp wporg-svn/trunk wporg-svn/tags/0.2.1
+svn ci -m "Tag 0.2.1" wporg-svn
 ```
 
-`Stable tag` in `trunk/readme.txt` must equal the tagged version (0.2.0). Later releases: raise the version in the four
+`Stable tag` in `trunk/readme.txt` must equal the tagged version (0.2.1). Later releases: raise the version in the four
 places (see Serena memory `woocommerce-plugin-release`), copy to `trunk`, `svn cp` a new tag, change `Stable tag`.
 Do not commit often: every commit rebuilds the zip (guideline 14). The page shows up in search in 6 to 14 days.
 

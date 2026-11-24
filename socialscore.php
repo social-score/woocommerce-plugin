@@ -3,7 +3,7 @@
  * Plugin Name:       SocialScore for WooCommerce
  * Plugin URI:        https://socialscore.io/
  * Description:       Check customers and orders with SocialScore: digital presence, email and phone quality, fraud signals and business-buyer detection, right inside WooCommerce.
- * Version:           0.2.0
+ * Version:           0.2.1
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Requires Plugins:  woocommerce
@@ -19,7 +19,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'SOCIALSCORE_VERSION', '0.2.0' );
+define( 'SOCIALSCORE_VERSION', '0.2.1' );
 define( 'SOCIALSCORE_FILE', __FILE__ );
 define( 'SOCIALSCORE_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SOCIALSCORE_URL', plugin_dir_url( __FILE__ ) );
